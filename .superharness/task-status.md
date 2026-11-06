@@ -1638,3 +1638,74 @@ receipts remain attributed; no new model-quality or live-runtime claims.
 Documentation formatting and referenced repository-path checks PASS. Product
 code/settings/prompts untouched; no provider run/deployment/commit performed.
 shux contract attempted, unavailable on PATH; protocol maintained directly.
+
+## 2026-11-06 - Recent dev work review (complete)
+
+Owner requested review of recent Sentry work. Reviewed today's ten commits,
+e7a1208..18af477, covering toolchain expansion/custom add-ons, assessments,
+revision findings and retest integration. No product code changed.
+
+Findings:
+- Blocker: ProjectDetail.tsx:174 passes effectiveRevisionId into retest, so choosing
+  an older Run revision launches retest against that old code while the confirmation
+  promises the current revision. Rendered temporary regression probe confirmed the
+  outbound runs.start payload. Use the project's current revision for retest.
+- Important: evidence-pipeline stage-prompts.ts:426-431 omits immutable mission
+  context during investigation compaction. Full retest descriptions, expected/actual
+  behavior and reproduction steps exist only in that context; the frozen check name
+  is truncated at 480 chars. Rotation/alternative approaches/second passes lose the
+  original reproduction. Temporary probe confirmed description/expected behavior
+  present at planning but absent after rotation. Carry retest items into fresh contexts.
+- Important: evidence-pipeline check-investigation.ts:760-762 still schedules
+  off-check lead follow-ups and hazard sweeps for retest plans in production depth
+  runs. Temporary probe with applyRetestPlan and the real investigateChecks loop
+  confirmed both LEAD FOLLOW-UP and HAZARD SWEEP turns for a single fixed retest.
+  Disable unrelated extension work for retests and preserve retest rules in retries.
+
+Verified: 162 existing tests passed, 4 skipped, across targeted evidence-pipeline,
+run-engine, runtime, desktop, Claude/DeepSeek adapters, shared and persistence tests.
+Three additional temporary probes reproduced the findings; removed after execution.
+Typecheck passed for evidence-pipeline, run-engine, harness-claude-code,
+harness-deepseek, harness-opencode, runtime and desktop (main/preload/renderer).
+No live provider calls, end-to-end SDK downloads, full CI or UI screenshot review.
+No separate data-loss/security defect established within this scope.
+shux contract attempted before review; shux is unavailable on PATH. Task status,
+ledger and handoff maintained directly. Follow-up is implementation of these fixes;
+no fixes, deployment, commit or branch change authorized/performed in this review.
+
+## 2026-11-06 - Retest fixes follow-up review (complete)
+
+Reviewed commit e728d12 against all three earlier findings. Current-revision launch
+is fixed: ProjectDetail calls retestStartOptions, which omits revisionId. Unrelated
+lead/deepening/hazard work is disabled for all-retest plans, with ordinary QA retained.
+One important (P2) finding remains: stage-prompts.ts:432 slices retest items by
+completedChecks, but check-investigation.ts:268 starts every second-pass retry with
+rotate(plan.plannedChecks.length). The new session therefore receives an empty list,
+losing the very finding it is retrying (full description/expected behavior/steps).
+Preserve full details of retried checks, e.g. include all assigned findings or pass
+explicit active-check indices. Do not count all first-pass checks as resolved.
+
+Verified: 74 existing targeted tests passed: evidence-pipeline retest (8), investigation
+(28), stage-prompts (14); desktop retest options (3), revision findings (8), project
+update (7); run-engine revision findings/retest (6). An additional temporary probe
+using the real investigateChecks loop and buildInvestigationCompactionContext proved
+that second-pass context contains an empty findings array and lacks the original
+full description/expected behavior. Probe removed after execution. Evidence-pipeline
+and desktop main/preload/renderer typechecks passed. No new separate security or
+data-loss defect established; no live paid provider run or full CI executed.
+Product code unchanged. Existing protocol notes preserved and these review results
+appended to task-status/ledger/handoff. shux contract attempted; shux still unavailable.
+
+## 2026-11-06 - Final retest retry fix review (complete)
+
+Reviewed 721daf8 (two-file diff) against the remaining second-pass finding.
+The compaction seed now includes all assigned findings when completedChecks is
+at least the plan length, so rotate(plan.plannedChecks.length) preserves the
+full description, expected behavior and reproduction steps for retries.
+No remaining actionable finding identified in this scoped fix; no separate
+security/data-loss issue found. Earlier current-revision and scope guards unchanged.
+Verified: evidence-pipeline retest (8), investigation (28), stage-prompts (14)
+tests passed, plus a temporary actual-loop second-pass regression probe (1):
+51 tests total. Evidence-pipeline typecheck passed. Probe removed after execution.
+No live provider run or full CI performed. Product code unchanged; only protocol
+records appended. shux contract attempted and remains unavailable on PATH.
