@@ -19,13 +19,46 @@ const SKIPPED_DIRS = new Set([
   'dist',
   '.sentry-cache',
   '.qa-tmp',
+  'vendor',
 ]);
 const MAX_DEPTH = 3;
 const MAX_FILES_READ = 40;
 const MAX_FILE_CHARS = 64_000;
 
 const PIN_FILE =
-  /^(?:global\.json|.+\.(?:cs|fs|vb)proj|\.python-version|go\.mod|rust-toolchain(?:\.toml)?|\.java-version|pom\.xml)$/i;
+  /^(?:global\.json|.+\.(?:cs|fs|vb)proj|\.python-version|go\.mod|rust-toolchain(?:\.toml)?|\.java-version|pom\.xml|\.nvmrc|\.node-version|\.ruby-version|composer\.json|\.tool-versions)$/i;
+
+/** asdf / mise `.tool-versions` tool names mapped to packs. */
+const TOOL_VERSIONS_PACKS: Readonly<Record<string, ToolchainPackId>> = {
+  nodejs: 'node',
+  node: 'node',
+  ruby: 'ruby',
+  php: 'php',
+  python: 'python',
+  golang: 'go',
+  java: 'java',
+  elixir: 'elixir',
+  dotnet: 'dotnet',
+  'dotnet-core': 'dotnet',
+  bun: 'bun',
+  deno: 'deno',
+  dart: 'dart',
+  kotlin: 'kotlin',
+  zig: 'zig',
+  postgres: 'postgres',
+  redis: 'redis',
+};
+
+/** Packs whose versions are a single number ("22", "17"); the rest are major.minor. */
+const MAJOR_ONLY = new Set<ToolchainPackId>(['node', 'java', 'deno', 'postgres', 'redis']);
+
+/** "v20.11.0" -> "20", "3.2.2" -> "3.2", "temurin-21.0.2" -> "21". */
+function versionHint(pack: ToolchainPackId, raw: string): string | undefined {
+  const match = raw.match(/(\d+)(?:\.(\d+))?/);
+  if (match === null) return undefined;
+  if (pack === 'java' && match[1] === '1' && match[2] !== undefined) return match[2];
+  return MAJOR_ONLY.has(pack) || match[2] === undefined ? match[1] : `${match[1]}.${match[2]}`;
+}
 
 /** Finds the small manifest files that pin a toolchain; never reads source code. */
 export async function readPinFiles(workspace: string): Promise<PinFile[]> {
@@ -101,15 +134,41 @@ export function toolchainHints(files: readonly PinFile[]): ToolchainHints {
     );
     if (pom !== null && pom !== undefined) hints.java = pom[1] as string;
   }
+
+  const node = (named(/^\.nvmrc$/i)[0] ?? named(/^\.node-version$/i)[0])?.text.trim();
+  if (node !== undefined) {
+    const hint = versionHint('node', node);
+    if (hint !== undefined) hints.node = hint;
+  }
+  const ruby = named(/^\.ruby-version$/i)[0]?.text.trim();
+  if (ruby !== undefined) {
+    const hint = versionHint('ruby', ruby);
+    if (hint !== undefined) hints.ruby = hint;
+  }
+  const php = named(/^composer\.json$/i)[0]?.text.match(/"php"\s*:\s*"[^"\d]*(\d+\.\d+)/);
+  if (php !== null && php !== undefined) hints.php = php[1] as string;
+
+  // .tool-versions only fills what the specific files above did not say.
+  for (const file of named(/^\.tool-versions$/i)) {
+    for (const line of file.text.split('\n')) {
+      const [tool, version] = line.trim().split(/\s+/);
+      const pack = tool === undefined ? undefined : TOOL_VERSIONS_PACKS[tool];
+      if (pack === undefined || version === undefined || hints[pack] !== undefined) continue;
+      const hint = versionHint(pack, version);
+      if (hint !== undefined) hints[pack] = hint;
+    }
+  }
   return hints;
 }
 
-/** The hinted version when installed, otherwise the first (newest) installed one. */
+/** The hinted version when installed, then the pack's default, otherwise the first (newest) installed one. */
 export function chooseVersion(
   installed: readonly string[],
   hint: string | undefined,
+  defaultVersion?: string,
 ): string | undefined {
   if (hint !== undefined && installed.includes(hint)) return hint;
+  if (defaultVersion !== undefined && installed.includes(defaultVersion)) return defaultVersion;
   return installed[0];
 }
 

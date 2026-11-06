@@ -23,12 +23,17 @@ product version stays `1.0.2`; no version numbers changed.
 
 ## Known limits in this beta
 
-- Toolchain installers for Rust, Go and Java are covered by unit tests with a fake
-  runner but have not been run end to end. Python and .NET have.
+- Only the Python and .NET installers have been run end to end. The others (Rust, Go,
+  Java and everything added later: C / C++, Node.js, Bun, Deno, Ruby, PHP, Swift, Dart,
+  Elixir, Kotlin, Scala, Zig, Gradle, utilities and the databases) are covered by unit
+  tests with a fake runner and shell syntax checks only. Swift is experimental.
+- No browsers, Haskell, Docker or SQL Server packs: browsers and Haskell need system
+  libraries that cannot be installed without root, and the other two need a daemon.
+- A pack that fails to install is deleted and the error is shown on the Toolchains page.
 - A single run-mode switch (Standard / Unrestricted) is not part of this beta; the
   per-run download option is the only widening control.
 - Pins for Gradle projects and `pyproject.toml` ranges are not read; those fall back
-  to the newest installed version.
+  to the pack default, or the newest installed version.
 - Which checks an agent plans varies between runs of the same project.
 
 ## Upgrade check

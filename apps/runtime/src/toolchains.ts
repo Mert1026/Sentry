@@ -7,11 +7,13 @@ import {
   toolchainEnvironment,
   toolchainPack,
   toolchainsRoot,
+  type ToolchainCategory,
   type ToolchainPackId,
   type ToolchainSetup,
 } from '@qa/shared';
 
 import { chooseVersion, projectToolchainHints, type ToolchainHints } from './toolchain-pins.js';
+import { CONDA_SCRIPT, PHP_SCRIPT, SWIFT_SCRIPT, condaRecipe } from './toolchain-installers.js';
 
 const INSTALL_TIMEOUT_MS = 30 * 60_000;
 const LOG_TAIL_CHARS = 2000;
@@ -159,6 +161,7 @@ export interface ToolchainVersionStatus {
 
 export interface ToolchainPackStatus {
   readonly id: ToolchainPackId;
+  readonly category: ToolchainCategory;
   readonly label: string;
   readonly description: string;
   readonly approxSizeMb: number;
@@ -219,6 +222,7 @@ export class ToolchainManager {
     return Promise.all(
       TOOLCHAIN_PACKS.map(async (pack) => ({
         id: pack.id,
+        category: pack.category,
         label: pack.label,
         description: pack.description,
         approxSizeMb: pack.approxSizeMb,
@@ -277,31 +281,43 @@ export class ToolchainManager {
     await mkdir(dir, { recursive: true });
     const env: Record<string, string> = { SENTRY_TC_DIR: dir, SENTRY_TC_VERSION: version };
     let script: string;
-    switch (id) {
-      case 'python':
-        script = PYTHON_SCRIPT;
-        break;
-      case 'dotnet':
-        script = DOTNET_SCRIPT;
-        break;
-      case 'rust':
-        script = RUST_SCRIPT;
-        break;
-      case 'java':
-        script = JAVA_SCRIPT;
-        break;
-      case 'go': {
-        const archive = pickGoArchive(
-          await this.goReleases(),
-          version,
-          process.arch === 'arm64' ? 'arm64' : 'x86_64',
-        );
-        if (archive === undefined)
-          throw new Error('No Go ' + version + ' release found for this machine.');
-        env['SENTRY_GO_FILE'] = archive.filename;
-        env['SENTRY_GO_SHA'] = archive.sha256;
-        script = GO_SCRIPT;
-        break;
+    const recipe = condaRecipe(id, version);
+    if (recipe !== undefined) {
+      env['SENTRY_CONDA_SPECS'] = recipe.specs.join(' ');
+      env['SENTRY_CONDA_CHECK'] = recipe.check;
+      script = CONDA_SCRIPT;
+    } else {
+      switch (id) {
+        case 'dotnet':
+          script = DOTNET_SCRIPT;
+          break;
+        case 'rust':
+          script = RUST_SCRIPT;
+          break;
+        case 'java':
+          script = JAVA_SCRIPT;
+          break;
+        case 'php':
+          script = PHP_SCRIPT;
+          break;
+        case 'swift':
+          script = SWIFT_SCRIPT;
+          break;
+        case 'go': {
+          const archive = pickGoArchive(
+            await this.goReleases(),
+            version,
+            process.arch === 'arm64' ? 'arm64' : 'x86_64',
+          );
+          if (archive === undefined)
+            throw new Error('No Go ' + version + ' release found for this machine.');
+          env['SENTRY_GO_FILE'] = archive.filename;
+          env['SENTRY_GO_SHA'] = archive.sha256;
+          script = GO_SCRIPT;
+          break;
+        }
+        default:
+          script = PYTHON_SCRIPT;
       }
     }
     const result = await this.runner(script, { cwd: dir, env });
@@ -346,7 +362,11 @@ export class ToolchainManager {
       const versions = installed
         .filter((item) => item.packId === pack.id)
         .map((item) => item.version);
-      const version = chooseVersion(versions, (hints as ToolchainHints)[pack.id]);
+      const version = chooseVersion(
+        versions,
+        (hints as ToolchainHints)[pack.id],
+        pack.defaultVersion,
+      );
       if (version === undefined) continue;
       const setup = toolchainEnvironment(pack.id, toolchainDir(this.dataRoot, pack.id, version));
       path.push(...setup.path);

@@ -46,7 +46,7 @@ export function Settings(): React.JSX.Element {
                   Toolchains
                 </span>
                 <span className="body-secondary">
-                  Install Python, .NET, Rust, Go and Java for the agents
+                  Install languages, compilers, build tools and databases for the agents
                 </span>
               </span>
               <ArrowRight size={15} aria-hidden="true" className="faint" />

@@ -120,6 +120,7 @@ export interface ToolchainVersionStatus {
 
 export interface ToolchainPackStatus {
   readonly id: string;
+  readonly category: 'language' | 'build' | 'database';
   readonly label: string;
   readonly description: string;
   readonly approxSizeMb: number;

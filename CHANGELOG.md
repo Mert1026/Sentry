@@ -19,7 +19,11 @@
 - Toolchain packs (Settings → Toolchains): host-side installs of Python (uv), .NET,
   Rust, Go and Java, mounted read-only into OpenCode tool shells. Each run picks the
   project's pinned version (global.json, target framework, go.mod, .python-version,
-  rust-toolchain, pom) and falls back to the newest installed version.
+  rust-toolchain, pom, .nvmrc, .ruby-version, composer.json, .tool-versions) and falls
+  back to the pack default. The library now also has newer versions of those five, plus
+  Node.js, Bun, Deno, Ruby, PHP, Swift, Dart, Elixir, Kotlin, Scala (sbt), a C / C++
+  toolchain (gcc, make, cmake, ninja), Zig, Gradle, utilities, PostgreSQL, MySQL, Redis
+  and SQLite. Most install with micromamba from conda-forge, with no root.
 - Per-run "Allow tool and SDK downloads" option widens the shell allowlist to
   official vendor hosts. Package registries stay allowed in every run.
 - OpenCode tool shells hide Windows drives, `/mnt` and the WSL interop socket, set
