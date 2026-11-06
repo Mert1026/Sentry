@@ -24,6 +24,10 @@
   Node.js, Bun, Deno, Ruby, PHP, Swift, Dart, Elixir, Kotlin, Scala (sbt), a C / C++
   toolchain (gcc, make, cmake, ninja), Zig, Gradle, utilities, PostgreSQL, MySQL, Redis
   and SQLite. Most install with micromamba from conda-forge, with no root.
+- "Toolchains the agents need" on the project page: every agent reads the project once and
+  names the Toolchains library entries it would need (runtime versions, compilers, build tools,
+  databases). The answers sit next to what is installed, with Install buttons. Advice only:
+  nothing installs until pressed and runs do not change.
 - Per-run "Allow tool and SDK downloads" option widens the shell allowlist to
   official vendor hosts. Package registries stay allowed in every run.
 - OpenCode tool shells hide Windows drives, `/mnt` and the WSL interop socket, set

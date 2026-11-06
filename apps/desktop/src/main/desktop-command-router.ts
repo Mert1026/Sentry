@@ -30,6 +30,13 @@ export const DesktopChannelSchemas: Record<string, z.ZodTypeAny> = {
       agentStackIds: z.array(z.string().min(1).max(200)).min(1).max(10).optional(),
     })
     .strict(),
+  'projects:toolchain-needs': z.object({ projectId: z.string().min(1).max(200) }).strict(),
+  'projects:assess-toolchains': z
+    .object({
+      projectId: z.string().min(1).max(200),
+      agentStackIds: z.array(z.string().min(1).max(200)).min(1).max(10).optional(),
+    })
+    .strict(),
   'runs:list': z.object({ projectId: z.string().min(1).max(200) }).strict(),
   'runs:get': z.object({ runId: z.string().min(1).max(100) }).strict(),
   'runs:status': z.object({ runId: z.string().min(1).max(100) }).strict(),
@@ -249,6 +256,13 @@ export async function dispatchDesktopCommand(
       return service.profileStatus(parsed['projectId'] as string);
     case 'projects:build-profile':
       return service.buildProfiles(
+        parsed['projectId'] as string,
+        parsed['agentStackIds'] as string[] | undefined,
+      );
+    case 'projects:toolchain-needs':
+      return service.toolchainNeedsStatus(parsed['projectId'] as string);
+    case 'projects:assess-toolchains':
+      return service.assessToolchains(
         parsed['projectId'] as string,
         parsed['agentStackIds'] as string[] | undefined,
       );

@@ -1,8 +1,9 @@
-import { composeProfileText } from '@qa/evidence-pipeline';
+import { composeProfileText, parseToolchainNeeds } from '@qa/evidence-pipeline';
 import type { HarnessAdapterRegistry } from '@qa/harness-protocol';
 import { rm } from 'node:fs/promises';
 import {
   ProjectProfileStore,
+  ToolchainNeedsStore,
   projectDataPaths,
   runDataPaths,
   type SentryRepository,
@@ -11,8 +12,11 @@ import type { ProjectManager } from '@qa/project-manager';
 import {
   HarnessRunRequestSchema,
   ProjectProfileSchema,
+  ToolchainNeedsSchema,
   type ProjectProfile,
   type ProjectRevision,
+  type ToolchainNeed,
+  type ToolchainNeeds,
 } from '@qa/schemas';
 import {
   createAgentRunId,
@@ -37,9 +41,17 @@ export interface ProfileStatus {
   readonly text?: string;
 }
 
+export interface ToolchainNeedsStatus {
+  readonly agentStackId: AgentStackId;
+  readonly state: ProfileState;
+  readonly createdAt?: string;
+  readonly summary?: string;
+  readonly needs?: readonly ToolchainNeed[];
+}
+
 /** A profile describes exactly one revision; any other content hash makes it stale. */
 export function profileState(
-  profile: ProjectProfile | undefined,
+  profile: { readonly contentHash: string } | undefined,
   revision: Pick<ProjectRevision, 'contentHash'>,
 ): ProfileState {
   if (profile === undefined) return 'none';
@@ -53,6 +65,7 @@ export function profileState(
  */
 export class ProjectProfileBuilder {
   readonly store: ProjectProfileStore;
+  readonly needsStore: ToolchainNeedsStore;
 
   constructor(
     private readonly dataRoot: string,
@@ -63,6 +76,25 @@ export class ProjectProfileBuilder {
     private readonly timeoutMs = PROFILE_TIMEOUT_MS,
   ) {
     this.store = new ProjectProfileStore(dataRoot);
+    this.needsStore = new ToolchainNeedsStore(dataRoot);
+  }
+
+  async needsStatus(projectId: ProjectId): Promise<ToolchainNeedsStatus[]> {
+    const record = this.projects.getProject(projectId);
+    if (record === undefined)
+      throw new RunEngineError('PROJECT_NOT_FOUND', 'Project not found: ' + projectId);
+    return Promise.all(
+      this.registry.list().map(async ({ stack }) => {
+        const stored = await this.needsStore.read(projectId, stack.id);
+        return {
+          agentStackId: stack.id,
+          state: profileState(stored, record.revision),
+          ...(stored === undefined
+            ? {}
+            : { createdAt: stored.createdAt, summary: stored.summary, needs: stored.needs }),
+        };
+      }),
+    );
   }
 
   async status(projectId: ProjectId): Promise<ProfileStatus[]> {
@@ -82,11 +114,24 @@ export class ProjectProfileBuilder {
     );
   }
 
-  async build(
+  /**
+   * Runs the agent's planning turn alone in a private copy of the project and hands back the
+   * plan it wrote. `what` names the job in error messages; `context` picks the prompt.
+   */
+  private async planOnce(
     projectId: ProjectId,
     agentStackId: AgentStackId,
+    job: {
+      readonly what: string;
+      readonly prompt: string;
+      readonly context: Record<string, unknown>;
+    },
     signal?: AbortSignal,
-  ): Promise<ProjectProfile> {
+  ): Promise<{
+    plan: { projectUnderstanding: string; criticalFlows?: string[] };
+    revision: ProjectRevision;
+    stack: { id: AgentStackId };
+  }> {
     const registration = this.registry.resolve(agentStackId);
     if (registration === undefined)
       throw new RunEngineError('AGENT_STACK_NOT_FOUND', 'Agent stack not found: ' + agentStackId);
@@ -145,10 +190,10 @@ export class ProjectProfileBuilder {
         model: stack.model,
         task: {
           type: 'qa',
-          prompt: 'PROJECT PROFILE. Write orientation notes only.',
+          prompt: job.prompt,
           policyId: stack.policy.id,
           policyVersion: stack.policy.version,
-          context: { profileOnly: true, agentStack: stack },
+          context: { ...job.context, agentStack: stack },
         },
       });
       let plan: { projectUnderstanding: string; criticalFlows?: string[] } | undefined;
@@ -168,27 +213,17 @@ export class ProjectProfileBuilder {
           'PROFILE_FAILED',
           failure ??
             (signal?.aborted === true
-              ? 'Profile building was cancelled.'
-              : 'The agent wrote no profile.'),
+              ? job.what + ' was cancelled.'
+              : 'The agent wrote no ' + job.what + '.'),
         );
       // The notes describe the copy that was read: refuse them if the project moved on meanwhile.
       const after = this.projects.getProject(projectId);
       if (after === undefined || after.revision.contentHash !== revision.contentHash)
         throw new RunEngineError(
           'PROFILE_FAILED',
-          'The project changed while the profile was written; build it again.',
+          'The project changed while the ' + job.what + ' was written; run it again.',
         );
-      const profile = ProjectProfileSchema.parse({
-        schemaVersion: 1,
-        projectId,
-        agentStackId: stack.id,
-        projectRevisionId: revision.id,
-        contentHash: revision.contentHash,
-        text: composeProfileText(plan),
-        createdAt: nowIsoTimestamp(),
-      });
-      await this.store.write(profile);
-      return profile;
+      return { plan, revision, stack };
     } finally {
       clearTimeout(timer);
       signal?.removeEventListener('abort', onAbort);
@@ -201,5 +236,65 @@ export class ProjectProfileBuilder {
         force: true,
       }).catch(() => undefined);
     }
+  }
+
+  async build(
+    projectId: ProjectId,
+    agentStackId: AgentStackId,
+    signal?: AbortSignal,
+  ): Promise<ProjectProfile> {
+    const { plan, revision, stack } = await this.planOnce(
+      projectId,
+      agentStackId,
+      {
+        what: 'profile',
+        prompt: 'PROJECT PROFILE. Write orientation notes only.',
+        context: { profileOnly: true },
+      },
+      signal,
+    );
+    const profile = ProjectProfileSchema.parse({
+      schemaVersion: 1,
+      projectId,
+      agentStackId: stack.id,
+      projectRevisionId: revision.id,
+      contentHash: revision.contentHash,
+      text: composeProfileText(plan),
+      createdAt: nowIsoTimestamp(),
+    });
+    await this.store.write(profile);
+    return profile;
+  }
+
+  /** "What would you need installed?": the agent names the Toolchains library entries it needs. */
+  async assessToolchains(
+    projectId: ProjectId,
+    agentStackId: AgentStackId,
+    signal?: AbortSignal,
+  ): Promise<ToolchainNeeds> {
+    const { plan, revision, stack } = await this.planOnce(
+      projectId,
+      agentStackId,
+      {
+        what: 'toolchain assessment',
+        prompt: 'TOOLCHAIN NEEDS. Name the library entries this project needs.',
+        context: { toolchainNeedsOnly: true },
+      },
+      signal,
+    );
+    const parsed = parseToolchainNeeds(plan);
+    const needs = ToolchainNeedsSchema.parse({
+      schemaVersion: 1,
+      projectId,
+      agentStackId: stack.id,
+      projectRevisionId: revision.id,
+      contentHash: revision.contentHash,
+      summary:
+        parsed.summary.length > 0 ? parsed.summary : 'The agent gave no summary of the stack.',
+      needs: parsed.needs,
+      createdAt: nowIsoTimestamp(),
+    });
+    await this.needsStore.write(needs);
+    return needs;
   }
 }

@@ -1,28 +1,35 @@
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
-import { ProjectProfileSchema, type ProjectProfile } from '@qa/schemas';
+import type { ZodType, ZodTypeDef } from 'zod';
+import {
+  ProjectProfileSchema,
+  ToolchainNeedsSchema,
+  type ProjectProfile,
+  type ToolchainNeeds,
+} from '@qa/schemas';
 import type { AgentStackId, ProjectId } from '@qa/shared';
 import { projectDataPaths, resolveInside } from './paths.js';
 
 /**
  * One JSON file per project and agent stack, next to (never inside) the working
- * copy. Removing a project removes its whole tree, profiles included.
+ * copy. Removing a project removes its whole tree, these files included.
  */
-export class ProjectProfileStore {
-  constructor(private readonly dataRoot: string) {}
+class AgentProjectJsonStore<T extends { projectId: ProjectId; agentStackId: AgentStackId }> {
+  constructor(
+    private readonly dataRoot: string,
+    private readonly folderName: string,
+    private readonly schema: ZodType<T, ZodTypeDef, unknown>,
+  ) {}
 
   private fileFor(projectId: ProjectId, agentStackId: AgentStackId): string {
-    const folder = resolve(projectDataPaths(this.dataRoot, projectId).root, 'profiles');
+    const folder = resolve(projectDataPaths(this.dataRoot, projectId).root, this.folderName);
     return resolveInside(folder, agentStackId + '.json');
   }
 
-  /** The stored profile, or undefined when missing or unreadable (never throws on bad content). */
-  async read(
-    projectId: ProjectId,
-    agentStackId: AgentStackId,
-  ): Promise<ProjectProfile | undefined> {
+  /** The stored value, or undefined when missing or unreadable (never throws on bad content). */
+  async read(projectId: ProjectId, agentStackId: AgentStackId): Promise<T | undefined> {
     try {
-      const parsed = ProjectProfileSchema.safeParse(
+      const parsed = this.schema.safeParse(
         JSON.parse(await readFile(this.fileFor(projectId, agentStackId), 'utf8')),
       );
       return parsed.success &&
@@ -35,8 +42,8 @@ export class ProjectProfileStore {
     }
   }
 
-  async write(profile: ProjectProfile): Promise<void> {
-    const valid = ProjectProfileSchema.parse(profile);
+  async write(value: T): Promise<void> {
+    const valid = this.schema.parse(value);
     const target = this.fileFor(valid.projectId, valid.agentStackId);
     await mkdir(dirname(target), { recursive: true });
     const temporary = target + '.tmp';
@@ -46,5 +53,19 @@ export class ProjectProfileStore {
 
   async remove(projectId: ProjectId, agentStackId: AgentStackId): Promise<void> {
     await rm(this.fileFor(projectId, agentStackId), { force: true });
+  }
+}
+
+/** Each agent's orientation notes about a project. */
+export class ProjectProfileStore extends AgentProjectJsonStore<ProjectProfile> {
+  constructor(dataRoot: string) {
+    super(dataRoot, 'profiles', ProjectProfileSchema);
+  }
+}
+
+/** What each agent says it would need from the Toolchains library for a project. */
+export class ToolchainNeedsStore extends AgentProjectJsonStore<ToolchainNeeds> {
+  constructor(dataRoot: string) {
+    super(dataRoot, 'toolchain-needs', ToolchainNeedsSchema);
   }
 }

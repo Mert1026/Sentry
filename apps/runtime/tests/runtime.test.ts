@@ -308,3 +308,22 @@ describe('project profile methods', () => {
     }
   });
 });
+
+describe('toolchain needs methods', () => {
+  it('reject unknown projects, and the new calls are part of the protocol', async () => {
+    const host = new SentryRuntimeHost(await tempDataRoot(), () => undefined);
+    try {
+      await host.recover();
+      const unknown = 'proj_01ARZ3NDEKTSV4RRFFQ69G5FAV';
+      await expect(host.toolchainNeedsStatus(unknown)).rejects.toMatchObject({
+        code: 'PROJECT_NOT_FOUND',
+      });
+      expect(() => host.assessToolchains(unknown)).toThrow(/Project not found/);
+      await expect(
+        host.dispatch('projects.toolchainNeeds', { projectId: unknown }),
+      ).rejects.toMatchObject({ code: 'PROJECT_NOT_FOUND' });
+    } finally {
+      host.close();
+    }
+  });
+});

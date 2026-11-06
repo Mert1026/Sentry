@@ -110,6 +110,8 @@ export const RUNTIME_METHODS = [
   'projects.suggestTargets',
   'projects.profile',
   'projects.buildProfile',
+  'projects.toolchainNeeds',
+  'projects.assessToolchains',
   'toolchains.status',
   'toolchains.install',
   'toolchains.remove',
@@ -132,6 +134,7 @@ export const RUNTIME_NOTIFICATIONS = [
   'run.snapshot',
   'activeRuns.updated',
   'profile.updated',
+  'toolchainNeeds.updated',
   'runtime.status',
 ] as const;
 export type RuntimeNotification = (typeof RUNTIME_NOTIFICATIONS)[number];

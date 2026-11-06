@@ -158,6 +158,48 @@ describe('project profile', () => {
     f.database.close();
   });
 
+  it('asks an agent which toolchains it needs and keeps only real library entries', async () => {
+    const seen: HarnessRunRequest[] = [];
+    const state = { finished: false };
+    const registry = new HarnessAdapterRegistry();
+    registry.register({
+      stack,
+      runtimeIdentity: { modelId: stack.model.modelId },
+      createAdapter: () =>
+        notesAdapter(
+          {
+            understanding: 'A Node CLI.',
+            flows: ['node 24 | package.json engines', 'cobol 85 | not in the library', 'c 14'],
+          },
+          seen,
+          state,
+        ),
+    });
+    const f = await fixture(registry);
+    expect((await f.runs.profiles.needsStatus(f.added.project.id))[0]?.state).toBe('none');
+    const needs = await f.runs.profiles.assessToolchains(f.added.project.id, stack.id);
+    expect(needs.summary).toBe('A Node CLI.');
+    expect(needs.needs).toEqual([
+      { packId: 'node', version: '24', reason: 'package.json engines' },
+      { packId: 'c', version: '14', reason: 'No reason given.' },
+    ]);
+    expect(seen[0]?.task.context?.['toolchainNeedsOnly']).toBe(true);
+    expect(seen[0]?.task.context?.['profileOnly']).toBeUndefined();
+    expect(state.finished).toBe(false);
+    const status = await f.runs.profiles.needsStatus(f.added.project.id);
+    expect(status).toEqual([
+      expect.objectContaining({ agentStackId: stack.id, state: 'fresh', needs: needs.needs }),
+    ]);
+    // It is a separate record: the project profile is still not built, and no run exists.
+    expect((await f.runs.profiles.status(f.added.project.id))[0]?.state).toBe('none');
+    const runsDir = projectDataPaths(f.dataRoot, f.added.project.id).runs;
+    expect(await readdir(runsDir).catch(() => [])).toEqual([]);
+    // Another revision makes the answer stale.
+    await f.runs.profiles.needsStore.write({ ...needs, contentHash: 'sha256:old' });
+    expect((await f.runs.profiles.needsStatus(f.added.project.id))[0]?.state).toBe('stale');
+    f.database.close();
+  });
+
   it('hands a fresh profile only to its own agent and records what happened', async () => {
     const seen: HarnessRunRequest[] = [];
     const f = await fixture();

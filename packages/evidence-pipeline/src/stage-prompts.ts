@@ -1,6 +1,7 @@
 import { describeSentryAgentReportContract, FINDING_CATEGORIES } from '@qa/schemas';
 import { agentNetworkPromptLines, type AgentNetworkPromptOptions } from '@qa/shared';
 import type { ObservedOperation } from './pipeline.js';
+import { toolchainCatalogText } from './toolchain-needs.js';
 import {
   maxPlannedChecks,
   reportCheckAliases,
@@ -61,7 +62,25 @@ export function buildProfilePrompt(request: Request): string {
   ].join('\n');
 }
 
+/**
+ * "What would you need installed?": the planning stage, reused to ask an agent which entries
+ * of the Toolchains library it needs to restore, build and test this project. Advice for the
+ * person installing packs; no bugs, no verdicts.
+ */
+export function buildToolchainNeedsPrompt(request: Request): string {
+  return [
+    QA_SESSION_CONTRACT,
+    'TOOLCHAIN NEEDS — ASSESSMENT ONLY. Read the project manifests and lockfiles, version pin files (global.json, .nvmrc, .python-version, go.mod, rust-toolchain, pom.xml, composer.json, .tool-versions and the like), build and test configuration, Dockerfiles and CI files. Decide which entries of the Sentry toolchain library you would need installed on this machine to restore dependencies, build the project, run its tests and probe it: the language runtime or SDK at the version the project asks for, a C or C++ compiler when native dependencies need one, build tools, and any database or service its tests need. Choose ONLY from this library (pack id, then the versions you may pick):\n' +
+      toolchainCatalogText() +
+      '\nPick the version the project pins; when it pins none, pick the one you would use. Name only what this project really needs, most important first. Do NOT look for bugs and do NOT judge the code. No tests, builds, installs or reproductions.',
+    'Return exactly one JSON object; first character is {, last is }. Schema: {"schemaVersion":1,"projectUnderstanding":string (two to five sentences: the stack and why you need what you listed),"criticalFlows":string[] (one line per needed library entry, exactly "<pack id> <version> | <one short reason>", for example "node 24 | .nvmrc pins Node 24 and the tests run with npm"),"weakPoints":[],"plannedChecks":["toolchains"]}.',
+    'Immutable mission context: ' + JSON.stringify(request.task.context ?? {}),
+  ].join('\n');
+}
+
 export function buildQaPlanningPrompt(request: Request): string {
+  if (request.task.context?.['toolchainNeedsOnly'] === true)
+    return buildToolchainNeedsPrompt(request);
   if (request.task.context?.['profileOnly'] === true) return buildProfilePrompt(request);
   return [
     QA_SESSION_CONTRACT,

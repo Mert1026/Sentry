@@ -18,6 +18,8 @@ export const IPC_CHANNELS = [
   'projects:suggest-targets',
   'projects:profile',
   'projects:build-profile',
+  'projects:toolchain-needs',
+  'projects:assess-toolchains',
   'runs:list',
   'runs:get',
   'runs:status',
@@ -110,6 +112,27 @@ export interface ProjectProfileStatus {
   readonly agents: readonly ProjectProfileAgent[];
 }
 
+export interface ToolchainNeedItem {
+  readonly packId: string;
+  readonly version: string;
+  readonly reason: string;
+}
+
+export interface ToolchainNeedsAgent {
+  readonly agentStackId: string;
+  readonly state: 'none' | 'fresh' | 'stale';
+  readonly createdAt?: string;
+  readonly summary?: string;
+  readonly needs?: readonly ToolchainNeedItem[];
+  readonly assessing: boolean;
+  readonly error?: string;
+}
+
+export interface ToolchainNeedsStatus {
+  readonly projectId: string;
+  readonly agents: readonly ToolchainNeedsAgent[];
+}
+
 export interface ToolchainVersionStatus {
   readonly version: string;
   readonly installed: boolean;
@@ -146,6 +169,13 @@ export interface SentryDesktopApi {
     profile(projectId: string): Promise<ProjectProfileStatus>;
     /** Starts the agents writing their notes (all, or the listed stacks); returns at once. */
     buildProfile(
+      projectId: string,
+      agentStackIds?: string[],
+    ): Promise<{ projectId: string; started: string[] }>;
+    /** What each agent says it would need from the Toolchains library for the project. */
+    toolchainNeeds(projectId: string): Promise<ToolchainNeedsStatus>;
+    /** Asks the agents (all, or the listed stacks) what they need; returns at once. */
+    assessToolchains(
       projectId: string,
       agentStackIds?: string[],
     ): Promise<{ projectId: string; started: string[] }>;

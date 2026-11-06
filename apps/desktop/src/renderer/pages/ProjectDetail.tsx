@@ -11,6 +11,8 @@ import { RemoveProjectButton } from '../components/RemoveProjectButton.js';
 import { isConfirmPaidRunsEnabled } from '../lib/app-preferences.js';
 import { ProjectProfilePanel } from '../components/ProjectProfilePanel.js';
 import { useProjectProfile } from '../lib/use-project-profile.js';
+import { ToolchainNeedsPanel } from '../components/ToolchainNeedsPanel.js';
+import { useToolchainNeeds } from '../lib/use-toolchain-needs.js';
 
 const AGENT_ORDER = ['stack_opencode_main', 'stack_deepseek_main', 'stack_glm_main'];
 
@@ -102,6 +104,7 @@ export function ProjectDetail(): React.JSX.Element {
   };
   const profile = useProjectProfile(projectId);
   const profileAgents = profile.status.data?.agents ?? [];
+  const toolchainNeeds = useToolchainNeeds(projectId);
   const freshProfileCount = effectiveStacks.filter((id) =>
     profileAgents.some((agent) => agent.agentStackId === id && agent.state === 'fresh'),
   ).length;
@@ -340,6 +343,24 @@ export function ProjectDetail(): React.JSX.Element {
           onBuild={(ids) => profile.build.mutate(ids)}
           buildError={
             profile.build.error instanceof Error ? profile.build.error.message : undefined
+          }
+        />
+      </PageSection>
+      <PageSection title="Toolchains the agents need">
+        <ToolchainNeedsPanel
+          stacks={stacks}
+          agents={toolchainNeeds.needs.data?.agents ?? []}
+          toolchains={toolchainNeeds.toolchains.data ?? []}
+          loading={toolchainNeeds.needs.isLoading}
+          installing={toolchainNeeds.install.isPending}
+          onAsk={(ids) => toolchainNeeds.assess.mutate(ids)}
+          onInstall={(items) => toolchainNeeds.install.mutate(items)}
+          error={
+            toolchainNeeds.assess.error instanceof Error
+              ? toolchainNeeds.assess.error.message
+              : toolchainNeeds.install.error instanceof Error
+                ? toolchainNeeds.install.error.message
+                : undefined
           }
         />
       </PageSection>

@@ -161,6 +161,19 @@ export class DesktopApplicationService {
     });
   }
 
+  toolchainNeedsStatus(projectId: string): Promise<unknown> {
+    const id = ProjectIdInput.parse(projectId);
+    return this.call('projects.toolchainNeeds', { projectId: id });
+  }
+
+  assessToolchains(projectId: string, agentStackIds?: string[]): Promise<unknown> {
+    const id = ProjectIdInput.parse(projectId);
+    return this.call('projects.assessToolchains', {
+      projectId: id,
+      ...(agentStackIds === undefined ? {} : { agentStackIds }),
+    });
+  }
+
   async updateProject(projectId: string, sourcePath?: string): Promise<unknown> {
     const id = ProjectIdInput.parse(projectId);
     if (sourcePath === undefined) return this.call('projects.update', { projectId: id });

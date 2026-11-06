@@ -445,6 +445,9 @@ export class SentryRuntimeHost {
   /** Profile builds in flight and the last failure per project and agent (memory only). */
   private readonly profileBuilds = new Map<string, AbortController>();
   private readonly profileErrors = new Map<string, string>();
+  /** Toolchain assessments in flight and the last failure per project and agent (memory only). */
+  private readonly needsBuilds = new Map<string, AbortController>();
+  private readonly needsErrors = new Map<string, string>();
   private readonly toolchains: ToolchainManager;
   private readonly activeImports = new Set<AbortController>();
   private readonly activeUpdates = new Set<AbortController>();
@@ -533,6 +536,7 @@ export class SentryRuntimeHost {
     if (this.closed) return;
     this.closed = true;
     for (const build of this.profileBuilds.values()) build.abort();
+    for (const build of this.needsBuilds.values()) build.abort();
     this.cancelAddProject();
     this.lease.release();
     this.database.close();
@@ -746,6 +750,59 @@ export class SentryRuntimeHost {
           this.profileBuilds.delete(key);
           if (!this.closed)
             this.notify('profile.updated', { projectId: id, agentStackId: stackId });
+        });
+    }
+    return { projectId: id, started };
+  }
+
+  /** What every agent says it would need from the Toolchains library, plus runs in flight and failures. */
+  async toolchainNeedsStatus(projectId: string): Promise<unknown> {
+    const id = ProjectIdInput.parse(projectId);
+    try {
+      const agents = await this.coordinator.profiles.needsStatus(id as never);
+      return {
+        projectId: id,
+        agents: agents.map((agent) => {
+          const key = id + ':' + agent.agentStackId;
+          const error = this.needsErrors.get(key);
+          return {
+            ...agent,
+            assessing: this.needsBuilds.has(key),
+            ...(error === undefined ? {} : { error }),
+          };
+        }),
+      };
+    } catch (error) {
+      const sanitized = toError(error);
+      throw rpcError(sanitized.code, sanitized.message);
+    }
+  }
+
+  /** Asks the agents what they need and returns at once; progress arrives as toolchainNeeds.updated. */
+  assessToolchains(projectId: string, agentStackIds?: string[]): unknown {
+    const id = ProjectIdInput.parse(projectId);
+    if (this.projects.getProject(id as never) === undefined)
+      throw rpcError('PROJECT_NOT_FOUND', 'Project not found: ' + id);
+    const wanted = agentStackIds ?? this.registry.list().map((item) => item.stack.id as string);
+    const started: string[] = [];
+    for (const stackId of wanted) {
+      if (this.registry.resolve(stackId as never) === undefined)
+        throw rpcError('AGENT_STACK_NOT_FOUND', 'Agent stack not found: ' + stackId);
+      const key = id + ':' + stackId;
+      if (this.needsBuilds.has(key)) continue;
+      const controller = new AbortController();
+      this.needsBuilds.set(key, controller);
+      this.needsErrors.delete(key);
+      started.push(stackId);
+      void this.coordinator.profiles
+        .assessToolchains(id as never, stackId as never, controller.signal)
+        .catch((error: unknown) => {
+          this.needsErrors.set(key, toError(error).message.slice(0, 500));
+        })
+        .finally(() => {
+          this.needsBuilds.delete(key);
+          if (!this.closed)
+            this.notify('toolchainNeeds.updated', { projectId: id, agentStackId: stackId });
         });
     }
     return { projectId: id, started };
@@ -1420,6 +1477,15 @@ export class SentryRuntimeHost {
       case 'projects.buildProfile': {
         const ids = params['agentStackIds'];
         return this.buildProfiles(
+          requireString(params, 'projectId'),
+          ids === undefined ? undefined : z.array(z.string().min(1).max(200)).max(10).parse(ids),
+        );
+      }
+      case 'projects.toolchainNeeds':
+        return this.toolchainNeedsStatus(requireString(params, 'projectId'));
+      case 'projects.assessToolchains': {
+        const ids = params['agentStackIds'];
+        return this.assessToolchains(
           requireString(params, 'projectId'),
           ids === undefined ? undefined : z.array(z.string().min(1).max(200)).max(10).parse(ids),
         );
