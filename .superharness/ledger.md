@@ -897,6 +897,7 @@ e7a1208..18af477, covering toolchain expansion/custom add-ons, assessments,
 revision findings and retest integration. No product code changed.
 
 Findings:
+
 - Blocker: ProjectDetail.tsx:174 passes effectiveRevisionId into retest, so choosing
   an older Run revision launches retest against that old code while the confirmation
   promises the current revision. Rendered temporary regression probe confirmed the
