@@ -1,4 +1,11 @@
-import { depthPolicy, profileContextEntry, PROFILE_CONTEXT_KEY } from '@qa/evidence-pipeline';
+import {
+  depthPolicy,
+  profileContextEntry,
+  PROFILE_CONTEXT_KEY,
+  RETEST_CONTEXT_KEY,
+  retestContextEntry,
+  type RetestItem,
+} from '@qa/evidence-pipeline';
 import { ProjectProfileBuilder, profileState } from './profile-builder.js';
 import {
   createWorkspacePreparer,
@@ -23,7 +30,9 @@ import {
   AgentRunSchema,
   HarnessRunRequestSchema,
   QARunSchema,
+  RETEST_MAX_FINDINGS,
   RunActivitySchema,
+  RunRetestSchema,
   TargetSpecSchema,
   type AgentRun,
   type ProjectRevision,
@@ -34,6 +43,7 @@ import {
   type HarnessWorkspace,
   type QARun,
   type RunProfileUsage,
+  type RunRetest,
   type TargetSpec,
 } from '@qa/schemas';
 import {
@@ -95,6 +105,15 @@ export interface RunOptions {
   readonly revisionId?: string;
   /** Hand every agent that has a fresh profile of this revision its own orientation notes. Omitted means off. */
   readonly useProfile?: boolean;
+  /**
+   * Re-test findings reported on earlier revisions against the revision this run uses. Every finding
+   * becomes one fixed check; 'reporter' gives each finding to the agent that reported it, 'all'
+   * gives every finding to every selected agent. Replaces the agents' own planning.
+   */
+  readonly retest?: {
+    readonly findings: ReadonlyArray<{ readonly runId: string; readonly findingId: string }>;
+    readonly who: 'reporter' | 'all';
+  };
   readonly onHarnessRequest?: (request: HarnessRunRequest) => void;
   /** Signals this request's identity immediately after the initial row is saved. */
   readonly onRunCreated?: (run: QARun) => void;
@@ -240,7 +259,14 @@ export class RunCoordinator {
     const project = this.projects.getProject(projectId);
     if (project === undefined)
       throw new RunEngineError('PROJECT_NOT_FOUND', 'Project not found: ' + projectId);
-    const selectedIds = options.agentStackIds ?? this.registry.list().map((item) => item.stack.id);
+    const retest =
+      options.retest === undefined
+        ? undefined
+        : this.prepareRetest(projectId, options.retest, options);
+    const selectedIds =
+      retest?.agentStackIds ??
+      options.agentStackIds ??
+      this.registry.list().map((item) => item.stack.id);
     const selected = selectedIds.map((id) => {
       const registration = this.registry.resolve(id);
       if (registration === undefined)
@@ -367,6 +393,7 @@ export class RunCoordinator {
             ...(options.toolDownloads === true ? { toolDownloads: true } : {}),
           },
           profileUsage,
+          ...(retest === undefined ? {} : { retest: retest.spec }),
         },
         createdAt,
         startedAt: createdAt,
@@ -441,10 +468,16 @@ export class RunCoordinator {
             (targetSpec.userInstructions === undefined
               ? ''
               : 'Target instructions: ' + targetSpec.userInstructions + ' ');
+      const retestPreamble =
+        retest === undefined
+          ? ''
+          : 'RETEST RUN. Do not run a general QA. Re-test only the findings listed in the mission context under "retest", one check each, against the current code. ';
       const instructionMessage =
-        targetSpec === undefined && options.instructions === undefined
+        targetSpec === undefined && options.instructions === undefined && retest === undefined
           ? undefined
-          : targetedPreamble + (options.instructions ?? 'No additional user instructions.');
+          : targetedPreamble +
+            retestPreamble +
+            (options.instructions ?? 'No additional user instructions.');
       // Micro-patch §8: the hook may flip targeted→full (explicit fallback).
       // Update the SAME persisted row before agents begin — configuration
       // preparation has not started execution, so no second QARun is created.
@@ -461,6 +494,7 @@ export class RunCoordinator {
             ? {}
             : { executionSafeguards: run.configuration.executionSafeguards }),
           profileUsage,
+          ...(run.configuration.retest === undefined ? {} : { retest: run.configuration.retest }),
           ...(instructionMessage === undefined
             ? {}
             : { instructions: { message: instructionMessage, createdAt } }),
@@ -544,6 +578,13 @@ export class RunCoordinator {
                   projectContext: context,
                   runInstructions: run.configuration.instructions ?? null,
                   qaPolicy: run.configuration.policy,
+                  ...(retest === undefined
+                    ? {}
+                    : {
+                        [RETEST_CONTEXT_KEY]: retestContextEntry(
+                          retest.itemsFor(registration.stack.id),
+                        ),
+                      }),
                 },
                 ...(options.onHarnessRequest === undefined
                   ? {}
@@ -671,6 +712,105 @@ export class RunCoordinator {
       else usage.missingAgentStackIds.push(stack.id);
     }
     return { usage, texts };
+  }
+
+  /**
+   * Resolves the findings a retest run takes on: each must be a stored finding of this project. Returns
+   * the spec saved on the run, the agents that take part and each agent's numbered items.
+   */
+  private prepareRetest(
+    projectId: ProjectId,
+    request: NonNullable<RunOptions['retest']>,
+    options: RunOptions,
+  ): {
+    spec: RunRetest;
+    agentStackIds: AgentStackId[];
+    itemsFor: (agentStackId: string) => RetestItem[];
+  } {
+    if (request.findings.length === 0 || request.findings.length > RETEST_MAX_FINDINGS)
+      throw new RunEngineError(
+        'INVALID_TARGET',
+        'A retest takes between 1 and ' + RETEST_MAX_FINDINGS + ' findings.',
+      );
+    const registered = this.registry.list().map((item) => item.stack.id as AgentStackId);
+    const found = request.findings.map((ref, index) => {
+      const sourceRun = this.repository.getRun(ref.runId as QARunId);
+      if (sourceRun === undefined || sourceRun.projectId !== projectId)
+        throw new RunEngineError(
+          'INVALID_TARGET',
+          'Run ' + ref.runId + ' is not part of this project',
+        );
+      const finding = this.repository
+        .listFindings(sourceRun.id)
+        .find((candidate) => candidate.id === ref.findingId);
+      if (finding === undefined)
+        throw new RunEngineError('INVALID_TARGET', 'Finding ' + ref.findingId + ' was not found');
+      const revisionId = this.repository.getSnapshot(sourceRun.snapshotId)?.projectRevisionId;
+      const hash =
+        (revisionId === undefined
+          ? undefined
+          : this.repository.getRevision(revisionId)?.contentHash) ?? '';
+      const digits = hash.replace(/^sha256:/, '');
+      return {
+        n: index + 1,
+        finding,
+        sourceRun,
+        revision: digits.length <= 6 ? digits : digits.slice(0, 3) + '...' + digits.slice(-3),
+      };
+    });
+    if (new Set(found.map((item) => item.finding.id)).size !== found.length)
+      throw new RunEngineError('INVALID_TARGET', 'The same finding was listed twice.');
+    const everyone =
+      options.agentStackIds === undefined
+        ? registered
+        : (options.agentStackIds as readonly AgentStackId[]);
+    const reporters = [...new Set(found.map((item) => item.finding.sourceAgentStackId))];
+    const agentStackIds = request.who === 'reporter' ? reporters : [...everyone];
+    for (const id of agentStackIds)
+      if (!registered.includes(id))
+        throw new RunEngineError('AGENT_STACK_NOT_FOUND', 'Agent stack not found: ' + id);
+    const assigned = (item: (typeof found)[number]): AgentStackId[] =>
+      request.who === 'reporter' ? [item.finding.sourceAgentStackId] : agentStackIds;
+    return {
+      spec: RunRetestSchema.parse({
+        who: request.who,
+        items: found.map((item) => ({
+          n: item.n,
+          findingId: item.finding.id,
+          sourceRunId: item.sourceRun.id,
+          sourceAgentStackId: item.finding.sourceAgentStackId,
+          title: item.finding.title,
+          assignedAgentStackIds: assigned(item),
+        })),
+      }),
+      agentStackIds,
+      itemsFor: (agentStackId) =>
+        found
+          .filter((item) => assigned(item).includes(agentStackId as AgentStackId))
+          .map(({ n, finding, revision }) => ({
+            n,
+            findingId: finding.id,
+            title: finding.title,
+            severity: finding.severity,
+            confidence: finding.confidence,
+            category: finding.category,
+            locations: finding.locations.map(
+              (place) =>
+                place.relativePath + (place.startLine === undefined ? '' : ':' + place.startLine),
+            ),
+            description: finding.description.slice(0, 2000),
+            ...(finding.expectedBehavior === undefined
+              ? {}
+              : { expectedBehavior: finding.expectedBehavior.slice(0, 1000) }),
+            ...(finding.actualBehavior === undefined
+              ? {}
+              : { actualBehavior: finding.actualBehavior.slice(0, 1000) }),
+            reproductionSteps: finding.reproductionSteps
+              .map((step) => step.slice(0, 500))
+              .slice(0, 10),
+            reportedOnRevision: revision,
+          })),
+    };
   }
 
   private async runAgent(input: {

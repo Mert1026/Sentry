@@ -56,6 +56,23 @@ export const DesktopChannelSchemas: Record<string, z.ZodTypeAny> = {
       webAccess: z.boolean().optional(),
       toolDownloads: z.boolean().optional(),
       useProfile: z.boolean().optional(),
+      retest: z
+        .object({
+          findings: z
+            .array(
+              z
+                .object({
+                  runId: z.string().min(1).max(100),
+                  findingId: z.string().min(1).max(100),
+                })
+                .strict(),
+            )
+            .min(1)
+            .max(12),
+          who: z.enum(['reporter', 'all']),
+        })
+        .strict()
+        .optional(),
     })
     .strict(),
   'runs:start-production': z
@@ -73,6 +90,23 @@ export const DesktopChannelSchemas: Record<string, z.ZodTypeAny> = {
       webAccess: z.boolean().optional(),
       toolDownloads: z.boolean().optional(),
       useProfile: z.boolean().optional(),
+      retest: z
+        .object({
+          findings: z
+            .array(
+              z
+                .object({
+                  runId: z.string().min(1).max(100),
+                  findingId: z.string().min(1).max(100),
+                })
+                .strict(),
+            )
+            .min(1)
+            .max(12),
+          who: z.enum(['reporter', 'all']),
+        })
+        .strict()
+        .optional(),
     })
     .strict(),
   'runs:cancel': z.object({ runId: z.string().min(1).max(100) }).strict(),
@@ -298,6 +332,7 @@ export async function dispatchDesktopCommand(
         webAccess: parsed['webAccess'],
         toolDownloads: parsed['toolDownloads'],
         useProfile: parsed['useProfile'],
+        retest: parsed['retest'],
         revisionId: parsed['revisionId'],
       });
       if (operation.runId !== undefined)

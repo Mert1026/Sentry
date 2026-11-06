@@ -45,6 +45,7 @@ import {
   groundCoverage,
   resolveReportChecks,
   reportableDepthPlan,
+  applyRetestPlan,
   depthPolicy,
   boundCorrectionMessage,
   buildPlanningCorrectionIntro,
@@ -1150,12 +1151,15 @@ export class OpenCodeHarnessAdapter implements HarnessAdapter {
           planRejection = describePlanRejection(undefined, true);
         } else {
           try {
-            planResult = reportableDepthPlan(
-              SentryInvestigationPlanV1Schema.parse(
-                parseWholeJson(planning.text, 'planning', pipeline),
+            planResult = applyRetestPlan(
+              reportableDepthPlan(
+                SentryInvestigationPlanV1Schema.parse(
+                  parseWholeJson(planning.text, 'planning', pipeline),
+                ),
+                depthPolicy(request.task.context) !== undefined,
+                maxPlannedChecks(request.task.context),
               ),
-              depthPolicy(request.task.context) !== undefined,
-              maxPlannedChecks(request.task.context),
+              request.task.context,
             );
             break;
           } catch (cause) {

@@ -40,6 +40,23 @@ const StartRunOptions = z
     webAccess: z.boolean().optional(),
     toolDownloads: z.boolean().optional(),
     useProfile: z.boolean().optional(),
+    retest: z
+      .object({
+        findings: z
+          .array(
+            z
+              .object({
+                runId: z.string().min(1).max(100),
+                findingId: z.string().min(1).max(100),
+              })
+              .strict(),
+          )
+          .min(1)
+          .max(12),
+        who: z.enum(['reporter', 'all']),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -232,6 +249,7 @@ export class DesktopApplicationService {
         ...(parsed.webAccess === true ? { webAccess: true } : {}),
         ...(parsed.toolDownloads === true ? { toolDownloads: true } : {}),
         ...(parsed.useProfile === true ? { useProfile: true } : {}),
+        ...(parsed.retest === undefined ? {} : { retest: parsed.retest }),
       })) as DesktopOperation;
     } catch (error) {
       // A client-side timeout does NOT mean the runtime didn't start the run:

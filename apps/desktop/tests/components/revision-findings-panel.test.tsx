@@ -1,11 +1,14 @@
 import React from 'react';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RevisionFindingsPanel } from '../../src/renderer/components/RevisionFindingsPanel.js';
 import type { FindingsByRevision } from '../../src/shared/ipc-contract.js';
 
-afterEach(() => cleanup());
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 const stacks = [
   { id: 'stack_a', displayName: 'Agent A' },
@@ -141,5 +144,98 @@ describe('RevisionFindingsPanel', () => {
     cleanup();
     show(undefined, true);
     expect(screen.getByText('Loading…')).toBeTruthy();
+  });
+});
+
+describe('re-testing findings from an older revision', () => {
+  const withRetest = (onRetest = vi.fn(), extra: Partial<FindingsByRevision> = {}) =>
+    render(
+      <MemoryRouter>
+        <RevisionFindingsPanel
+          stacks={stacks}
+          data={{ ...data, ...extra }}
+          loading={false}
+          onRetest={onRetest}
+        />
+      </MemoryRouter>,
+    );
+
+  it('offers no ticks on the current revision, and ticks on an older one', () => {
+    withRetest();
+    expect(screen.queryByRole('checkbox')).toBeNull();
+    expect(screen.queryByText(/Tick findings to re-test/)).toBeNull();
+    fireEvent.change(screen.getByLabelText('Revision'), { target: { value: 'rev_old' } });
+    expect(screen.getByRole('checkbox', { name: 'Re-test: Old problem' })).toBeTruthy();
+    expect(screen.getByText(/Tick findings to re-test them on the current revision/)).toBeTruthy();
+    expect(
+      screen.getByRole('button', { name: 'Re-test 0 selected' }).hasAttribute('disabled'),
+    ).toBe(true);
+  });
+
+  it('re-tests the ticked findings after the person confirms', () => {
+    const onRetest = vi.fn();
+    withRetest(onRetest);
+    fireEvent.change(screen.getByLabelText('Revision'), { target: { value: 'rev_old' } });
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Re-test: Old problem' }));
+    const confirm = vi.spyOn(window, 'confirm');
+    confirm.mockReturnValueOnce(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Re-test 1 selected' }));
+    expect(onRetest).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText('Re-test with'), { target: { value: 'all' } });
+    confirm.mockReturnValueOnce(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Re-test 1 selected' }));
+    expect(onRetest).toHaveBeenCalledWith([{ runId: 'run_0', findingId: 'f0' }], 'all');
+    expect(confirm).toHaveBeenLastCalledWith(
+      'Re-test 1 finding(s) on the current revision with all selected agents? This uses provider budget.',
+    );
+  });
+
+  it('starts a fresh selection when another revision is chosen', () => {
+    withRetest();
+    fireEvent.change(screen.getByLabelText('Revision'), { target: { value: 'rev_old' } });
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Re-test: Old problem' }));
+    expect(screen.getByRole('button', { name: 'Re-test 1 selected' })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Revision'), { target: { value: 'rev_new' } });
+    fireEvent.change(screen.getByLabelText('Revision'), { target: { value: 'rev_old' } });
+    expect(screen.getByRole('button', { name: 'Re-test 0 selected' })).toBeTruthy();
+  });
+
+  it('shows the verdicts of a retest run, and never calls a missing one fixed', () => {
+    const retestRun = {
+      runId: 'run_9',
+      mode: 'full',
+      runStatus: 'completed',
+      agentStatus: 'completed',
+      at: '2026-11-06T10:00:00.000Z',
+      findings: [],
+      retest: [
+        {
+          n: 1,
+          findingId: 'f0',
+          title: 'Old problem',
+          verdict: 'still_reproduces' as const,
+          details: 'same 200 response',
+        },
+        { n: 2, findingId: 'f9', title: 'Other problem', verdict: 'no_longer_reproduces' as const },
+        { n: 3, findingId: 'f8', title: 'Third problem', verdict: 'cannot_tell' as const },
+      ],
+    };
+    withRetest(vi.fn(), {
+      revisions: [
+        {
+          revisionId: 'rev_new',
+          contentHash: 'sha256:aaaaaaaa11111111',
+          importedAt: '2026-11-06T09:00:00.000Z',
+          agents: [{ agentStackId: 'stack_a', runs: [retestRun] }],
+        },
+      ],
+    });
+    expect(screen.getByText('RETEST')).toBeTruthy();
+    expect(screen.getByText('Still reproduces')).toBeTruthy();
+    expect(screen.getByText('No longer reproduces')).toBeTruthy();
+    expect(screen.getByText('Cannot tell')).toBeTruthy();
+    expect(screen.getByText('· same 200 response')).toBeTruthy();
+    expect(screen.queryByText(/fixed/i)).toBeNull();
+    expect(screen.queryByText('No findings from this agent in this run.')).toBeNull();
   });
 });

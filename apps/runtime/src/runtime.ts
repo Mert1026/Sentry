@@ -994,6 +994,14 @@ export class SentryRuntimeHost {
       ...(parsed.toolDownloads === true ? { toolDownloads: true } : {}),
       ...(parsed.revisionId === undefined ? {} : { revisionId: parsed.revisionId }),
       ...(parsed.useProfile === true ? { useProfile: true } : {}),
+      ...(parsed.retest === undefined
+        ? {}
+        : {
+            retest: {
+              findings: parsed.retest.findings.map((ref) => ({ ...ref })),
+              who: parsed.retest.who,
+            },
+          }),
     });
     const settled = runPromise.then(
       (details) => {
@@ -1558,6 +1566,23 @@ const StartRunParamsSchema = z
     webAccess: z.boolean().optional(),
     toolDownloads: z.boolean().optional(),
     useProfile: z.boolean().optional(),
+    retest: z
+      .object({
+        findings: z
+          .array(
+            z
+              .object({
+                runId: z.string().min(1).max(100),
+                findingId: z.string().min(1).max(100),
+              })
+              .strict(),
+          )
+          .min(1)
+          .max(12),
+        who: z.enum(['reporter', 'all']),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 

@@ -163,6 +163,28 @@ export function ProjectDetail(): React.JSX.Element {
     onSuccess: onStarted,
     onError: onStartError,
   });
+  // Re-test findings picked in "Findings by revision" on the revision chosen for runs (the current one by default).
+  const startRetest = useMutation({
+    mutationFn: (input: {
+      findings: Array<{ runId: string; findingId: string }>;
+      who: 'reporter' | 'all';
+    }) =>
+      sentryApi().runs.start(projectId as string, {
+        mode: 'full',
+        ...(effectiveRevisionId === undefined ? {} : { revisionId: effectiveRevisionId }),
+        ...(input.who === 'all' && effectiveStacks.length > 0
+          ? { agentStackIds: effectiveStacks }
+          : {}),
+        ...(webAccess ? { webAccess: true } : {}),
+        ...(toolDownloads ? { toolDownloads: true } : {}),
+        retest: input,
+      }),
+    onSuccess: (operation) => {
+      onStarted(operation);
+      void queryClient.invalidateQueries({ queryKey: ['findings-by-revision', projectId] });
+    },
+    onError: onStartError,
+  });
   const [updateStartedAt, setUpdateStartedAt] = React.useState<number | undefined>(undefined);
   const [updateElapsed, setUpdateElapsed] = React.useState(0);
   const [cancellingUpdate, setCancellingUpdate] = React.useState(false);
@@ -372,6 +394,9 @@ export function ProjectDetail(): React.JSX.Element {
           stacks={stacks}
           data={revisionFindings.data}
           loading={revisionFindings.isLoading}
+          onRetest={(findings, who) => startRetest.mutate({ findings, who })}
+          retesting={startRetest.isPending}
+          retestError={startRetest.error instanceof Error ? startRetest.error.message : undefined}
         />
       </PageSection>
       <PageSection title="Run QA">

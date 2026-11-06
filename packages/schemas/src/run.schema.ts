@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   AgentRunIdSchema,
   AgentStackIdSchema,
+  FindingIdSchema,
   IsoTimestampSchema,
   ProjectContextSnapshotIdSchema,
   ProjectIdSchema,
@@ -17,6 +18,35 @@ import { ExecutionSafeguardsSchema } from './agent.schema.js';
 import { RunInstructionsSchema } from './context.schema.js';
 import { RunProfileUsageSchema } from './profile.schema.js';
 
+/** Most findings one retest run may take on: each one is a full check for an agent. */
+export const RETEST_MAX_FINDINGS = 12;
+
+/**
+ * A run that re-tests findings reported on earlier revisions against the revision it runs on.
+ * Each item is numbered across the whole run; `assignedAgentStackIds` says who re-tests it.
+ */
+export const RunRetestSchema = z
+  .object({
+    who: z.enum(['reporter', 'all']),
+    items: z
+      .array(
+        z
+          .object({
+            n: z.number().int().min(1).max(RETEST_MAX_FINDINGS),
+            findingId: FindingIdSchema,
+            sourceRunId: QARunIdSchema,
+            sourceAgentStackId: AgentStackIdSchema,
+            title: z.string().min(1).max(200),
+            assignedAgentStackIds: z.array(AgentStackIdSchema).min(1).max(10),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(RETEST_MAX_FINDINGS),
+  })
+  .strict();
+export type RunRetest = z.infer<typeof RunRetestSchema>;
+
 export const QARunConfigurationSchema = z
   .object({
     agentStackIds: z.array(AgentStackIdSchema).min(1),
@@ -25,6 +55,7 @@ export const QARunConfigurationSchema = z
     executionProfileId: z.string().min(1).max(100).optional(),
     executionSafeguards: ExecutionSafeguardsSchema.optional(),
     profileUsage: RunProfileUsageSchema.optional(),
+    retest: RunRetestSchema.optional(),
   })
   .strict();
 export type QARunConfiguration = z.infer<typeof QARunConfigurationSchema>;

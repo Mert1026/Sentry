@@ -343,3 +343,27 @@ describe('findings by revision', () => {
     }
   });
 });
+
+describe('retest runs', () => {
+  it('refuses a malformed retest before anything starts', async () => {
+    const host = new SentryRuntimeHost(await tempDataRoot(), () => undefined);
+    try {
+      await host.recover();
+      const projectId = 'proj_01ARZ3NDEKTSV4RRFFQ69G5FAV';
+      const start = (retest: unknown) =>
+        host.dispatch('runs.start', { projectId, mode: 'full', retest });
+      await expect(start({ findings: [], who: 'reporter' })).rejects.toThrow();
+      await expect(
+        start({ findings: [{ runId: 'run_1', findingId: 'fnd_1' }], who: 'nobody' }),
+      ).rejects.toThrow();
+      await expect(
+        start({
+          findings: Array.from({ length: 13 }, () => ({ runId: 'run_1', findingId: 'fnd_1' })),
+          who: 'reporter',
+        }),
+      ).rejects.toThrow();
+    } finally {
+      host.close();
+    }
+  });
+});

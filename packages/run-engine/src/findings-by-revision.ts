@@ -1,4 +1,6 @@
+import { parseRetestResult, type RetestVerdict } from '@qa/evidence-pipeline';
 import type { SentryRepository } from '@qa/persistence';
+import type { QARun } from '@qa/schemas';
 import type { AgentStackId, ProjectId } from '@qa/shared';
 
 /** One finding as the revision list shows it: raw agent output, no merging or ranking. */
@@ -11,6 +13,15 @@ export interface RevisionFinding {
   readonly location: string;
 }
 
+/** What one agent concluded about one earlier finding in a retest run. */
+export interface RetestOutcome {
+  readonly n: number;
+  readonly findingId: string;
+  readonly title: string;
+  readonly verdict: RetestVerdict;
+  readonly details?: string;
+}
+
 /** One agent's part of one run: how it ended and what it reported. */
 export interface RevisionAgentRun {
   readonly runId: string;
@@ -19,6 +30,43 @@ export interface RevisionAgentRun {
   readonly agentStatus: string;
   readonly at: string;
   readonly findings: readonly RevisionFinding[];
+  /** Present only in a retest run: the agent's verdict on each earlier finding it was given. */
+  readonly retest?: readonly RetestOutcome[];
+}
+
+/** The agent's verdicts for a retest run, read from the check lines of its report. */
+function retestOutcomes(
+  repository: SentryRepository,
+  run: QARun,
+  agentRunId: string,
+  agentStackId: string,
+): RetestOutcome[] | undefined {
+  const spec = run.configuration.retest;
+  if (spec === undefined) return undefined;
+  const mine = spec.items.filter((item) =>
+    (item.assignedAgentStackIds as readonly string[]).includes(agentStackId),
+  );
+  const reported = new Map<number, { verdict: RetestVerdict; details?: string }>();
+  for (const stored of repository.iterateRunEvents(run.id)) {
+    const event = stored.event;
+    if (event.agentRunId !== agentRunId || event.type !== 'agent.message') continue;
+    const result = parseRetestResult(event.message);
+    if (result !== undefined)
+      reported.set(result.n, {
+        verdict: result.verdict,
+        ...(result.details === undefined ? {} : { details: result.details }),
+      });
+  }
+  return mine.map((item) => {
+    const result = reported.get(item.n);
+    return {
+      n: item.n,
+      findingId: item.findingId,
+      title: item.title,
+      verdict: result?.verdict ?? 'cannot_tell',
+      details: result?.details ?? 'The agent did not report a result for this finding.',
+    };
+  });
 }
 
 export interface RevisionAgent {
@@ -59,7 +107,9 @@ export function findingsByRevision(
     for (const agentRun of repository.listAgentRuns(run.id)) {
       const list = byAgent.get(agentRun.agentStackId) ?? [];
       byAgent.set(agentRun.agentStackId, list);
+      const retest = retestOutcomes(repository, run, agentRun.id, agentRun.agentStackId);
       list.push({
+        ...(retest === undefined ? {} : { retest }),
         runId: run.id,
         mode: run.mode,
         runStatus: run.status,

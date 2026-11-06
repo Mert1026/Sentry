@@ -143,6 +143,14 @@ export interface RevisionFindingItem {
   readonly location: string;
 }
 
+export interface RevisionRetestOutcome {
+  readonly n: number;
+  readonly findingId: string;
+  readonly title: string;
+  readonly verdict: 'still_reproduces' | 'no_longer_reproduces' | 'cannot_tell';
+  readonly details?: string;
+}
+
 export interface RevisionAgentRunItem {
   readonly runId: string;
   readonly mode: string;
@@ -150,6 +158,8 @@ export interface RevisionAgentRunItem {
   readonly agentStatus: string;
   readonly at: string;
   readonly findings: readonly RevisionFindingItem[];
+  /** Present only in a retest run: the agent's verdict on each earlier finding it was given. */
+  readonly retest?: readonly RevisionRetestOutcome[];
 }
 
 export interface RevisionAgentItem {
@@ -239,6 +249,11 @@ export interface SentryDesktopApi {
         webAccess?: boolean;
         toolDownloads?: boolean;
         useProfile?: boolean;
+        /** Re-test findings from earlier revisions on this one; replaces the agents' own planning. */
+        retest?: {
+          findings: Array<{ runId: string; findingId: string }>;
+          who: 'reporter' | 'all';
+        };
       },
     ): Promise<DesktopOperation>;
     /** Back-compat alias for start. */
@@ -253,6 +268,11 @@ export interface SentryDesktopApi {
         webAccess?: boolean;
         toolDownloads?: boolean;
         useProfile?: boolean;
+        /** Re-test findings from earlier revisions on this one; replaces the agents' own planning. */
+        retest?: {
+          findings: Array<{ runId: string; findingId: string }>;
+          who: 'reporter' | 'all';
+        };
       },
     ): Promise<DesktopOperation>;
     cancel(runId: string): Promise<unknown>;

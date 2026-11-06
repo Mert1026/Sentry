@@ -1,12 +1,22 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { StatusPill } from './ui/StatusPill.js';
-import type { FindingsByRevision, RevisionFindingsItem } from '../../shared/ipc-contract.js';
+import type {
+  FindingsByRevision,
+  RevisionFindingsItem,
+  RevisionRetestOutcome,
+} from '../../shared/ipc-contract.js';
 
 export interface RevisionPanelStack {
   readonly id: string;
   readonly displayName: string;
 }
+
+/** Most findings one retest run takes on (each is a full check for an agent). */
+export const RETEST_LIMIT = 12;
+
+export type RetestWho = 'reporter' | 'all';
+export type RetestSelection = { runId: string; findingId: string };
 
 function formatWhen(iso: string): string {
   const date = new Date(iso);
@@ -30,25 +40,63 @@ function revisionLabel(revision: RevisionFindingsItem, currentId: string): strin
   );
 }
 
+const VERDICT: Record<
+  RevisionRetestOutcome['verdict'],
+  { label: string; status: 'failed' | 'completed' | 'partial' }
+> = {
+  still_reproduces: { label: 'Still reproduces', status: 'failed' },
+  no_longer_reproduces: { label: 'No longer reproduces', status: 'completed' },
+  cannot_tell: { label: 'Cannot tell', status: 'partial' },
+};
+
+const keyOf = (runId: string, findingId: string): string => runId + '|' + findingId;
+
 /**
  * The raw findings every agent reported, per run, for one revision of the project. A new
  * revision starts a fresh list and older revisions stay here to browse. Nothing is merged,
- * ranked or matched across runs, and agents never see this list.
+ * ranked or matched across runs, and agents never see this list. Findings of an older revision
+ * can be picked and re-tested against the current one; the verdicts appear in the retest run.
  */
 export function RevisionFindingsPanel({
   stacks,
   data,
   loading,
+  onRetest,
+  retesting = false,
+  retestError,
 }: {
   stacks: readonly RevisionPanelStack[];
   data: FindingsByRevision | undefined;
   loading: boolean;
+  onRetest?: (findings: RetestSelection[], who: RetestWho) => void;
+  retesting?: boolean;
+  retestError?: string | undefined;
 }): React.JSX.Element {
   const revisions = data?.revisions ?? [];
   const [chosen, setChosen] = React.useState<string | undefined>(undefined);
   const selected = revisions.find((r) => r.revisionId === chosen) ?? revisions[0];
+  const [picked, setPicked] = React.useState<ReadonlyMap<string, RetestSelection>>(new Map());
+  const [who, setWho] = React.useState<RetestWho>('reporter');
+  const canPick = selected !== undefined && selected.revisionId !== data?.currentRevisionId;
   const name = (stackId: string): string =>
     stacks.find((stack) => stack.id === stackId)?.displayName ?? stackId;
+  const toggle = (selection: RetestSelection): void => {
+    const next = new Map(picked);
+    const key = keyOf(selection.runId, selection.findingId);
+    if (next.has(key)) next.delete(key);
+    else next.set(key, selection);
+    setPicked(next);
+  };
+  const retest = (): void => {
+    if (onRetest === undefined || picked.size === 0) return;
+    const text =
+      'Re-test ' +
+      picked.size +
+      ' finding(s) on the current revision with ' +
+      (who === 'reporter' ? 'the agent that reported each' : 'all selected agents') +
+      '? This uses provider budget.';
+    if (window.confirm(text)) onRetest([...picked.values()], who);
+  };
   return (
     <div className="card">
       <h3 className="card-title">Findings by revision</h3>
@@ -67,7 +115,10 @@ export function RevisionFindingsPanel({
             <span>Revision</span>
             <select
               value={selected.revisionId}
-              onChange={(event) => setChosen(event.target.value)}
+              onChange={(event) => {
+                setChosen(event.target.value);
+                setPicked(new Map());
+              }}
               aria-label="Revision"
             >
               {revisions.map((revision) => (
@@ -77,6 +128,47 @@ export function RevisionFindingsPanel({
               ))}
             </select>
           </label>
+          {canPick && onRetest !== undefined ? (
+            <div
+              style={{
+                display: 'flex',
+                gap: 12,
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                margin: '10px 0',
+              }}
+            >
+              <span className="metadata">
+                Tick findings to re-test them on the current revision (up to {RETEST_LIMIT}).
+              </span>
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span>Re-test with</span>
+                <select
+                  value={who}
+                  onChange={(event) => setWho(event.target.value as RetestWho)}
+                  aria-label="Re-test with"
+                >
+                  <option value="reporter">the agent that reported each</option>
+                  <option value="all">all selected agents</option>
+                </select>
+              </label>
+              <button
+                className="primary"
+                disabled={picked.size === 0 || picked.size > RETEST_LIMIT || retesting}
+                onClick={retest}
+              >
+                {retesting ? 'Starting…' : 'Re-test ' + picked.size + ' selected'}
+              </button>
+              {picked.size > RETEST_LIMIT ? (
+                <span className="metadata">Pick at most {RETEST_LIMIT}.</span>
+              ) : null}
+            </div>
+          ) : null}
+          {retestError !== undefined ? (
+            <p className="error-box" role="alert">
+              {retestError}
+            </p>
+          ) : null}
           {selected.agents.map((agent) => {
             const total = agent.runs.reduce((sum, run) => sum + run.findings.length, 0);
             return (
@@ -96,7 +188,9 @@ export function RevisionFindingsPanel({
                       style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}
                     >
                       <span>{formatWhen(run.at)}</span>
-                      <span className="badge">{run.mode.toUpperCase()}</span>
+                      <span className="badge">
+                        {run.retest === undefined ? run.mode.toUpperCase() : 'RETEST'}
+                      </span>
                       <StatusPill
                         status={
                           run.agentStatus === 'completed'
@@ -111,14 +205,49 @@ export function RevisionFindingsPanel({
                       />
                       <Link to={'/runs/' + run.runId}>Open run</Link>
                     </div>
+                    {run.retest !== undefined ? (
+                      <div style={{ margin: '6px 0 0' }}>
+                        <span className="metadata">
+                          Retest results (earlier findings checked on this revision):
+                        </span>
+                        <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
+                          {run.retest.map((outcome) => (
+                            <li key={outcome.findingId} style={{ margin: '4px 0' }}>
+                              <StatusPill
+                                status={VERDICT[outcome.verdict].status}
+                                label={VERDICT[outcome.verdict].label}
+                              />{' '}
+                              {outcome.title}
+                              {outcome.details !== undefined ? (
+                                <span className="metadata"> · {outcome.details}</span>
+                              ) : null}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
                     {run.findings.length === 0 ? (
-                      <p className="metadata" style={{ margin: '4px 0 0' }}>
-                        No findings from this agent in this run.
-                      </p>
+                      run.retest === undefined ? (
+                        <p className="metadata" style={{ margin: '4px 0 0' }}>
+                          No findings from this agent in this run.
+                        </p>
+                      ) : null
                     ) : (
-                      <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+                      <ul style={{ margin: '6px 0 0', paddingLeft: canPick ? 4 : 18 }}>
                         {run.findings.map((finding) => (
-                          <li key={finding.id} style={{ margin: '4px 0' }}>
+                          <li
+                            key={finding.id}
+                            style={{ margin: '4px 0', listStyle: canPick ? 'none' : undefined }}
+                          >
+                            {canPick && onRetest !== undefined ? (
+                              <input
+                                type="checkbox"
+                                checked={picked.has(keyOf(run.runId, finding.id))}
+                                onChange={() => toggle({ runId: run.runId, findingId: finding.id })}
+                                aria-label={'Re-test: ' + finding.title}
+                                style={{ marginRight: 8 }}
+                              />
+                            ) : null}
                             <span className="badge">{finding.severity}</span>{' '}
                             <span className="badge">{finding.confidence}</span> {finding.title}
                             {finding.location.length > 0 ? (

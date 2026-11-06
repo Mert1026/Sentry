@@ -3,6 +3,12 @@ import { agentNetworkPromptLines, type AgentNetworkPromptOptions } from '@qa/sha
 import type { ObservedOperation } from './pipeline.js';
 import { toolchainCatalogText } from './toolchain-needs.js';
 import {
+  RETEST_CHECK_RULES,
+  RETEST_PLANNING_TEXT,
+  isRetestCheck,
+  isRetestContext,
+} from './retest.js';
+import {
   maxPlannedChecks,
   reportCheckAliases,
   reportCheckAlias,
@@ -79,6 +85,14 @@ export function buildToolchainNeedsPrompt(request: Request): string {
 }
 
 export function buildQaPlanningPrompt(request: Request): string {
+  if (isRetestContext(request.task.context))
+    return [
+      QA_SESSION_CONTRACT,
+      RETEST_PLANNING_TEXT,
+      'Return exactly one JSON object; first character is {, last is }. Schema: {"schemaVersion":1,"projectUnderstanding":string (two or three sentences about the project),"criticalFlows":[],"weakPoints":[],"plannedChecks":string[] (one "Retest #<n>: <title>" per finding)}.',
+      'Immutable mission context: ' + JSON.stringify(request.task.context ?? {}),
+      'User instructions: ' + request.task.prompt,
+    ].join('\n');
   if (request.task.context?.['toolchainNeedsOnly'] === true)
     return buildToolchainNeedsPrompt(request);
   if (request.task.context?.['profileOnly'] === true) return buildProfilePrompt(request);
@@ -130,6 +144,7 @@ export function buildQaCheckInvestigationPrompt(
       '). Work ONLY on this check: "' +
       description +
       '". Other checks get their own turns; do not work on them. Trace real callers and input validation; form a concrete hypothesis and seek a counterexample. Reproduce significant candidates through actual code with narrow tests when feasible. Copied logic or file reads do not prove reachable behavior.',
+    ...(isRetestCheck(description) ? [RETEST_CHECK_RULES] : []),
     'Before concluding, attempt the hostile inputs that apply to this check: malformed names and paths (backslashes, traversal, symlinks, empty entries), pre-existing or legacy state, lifecycle transitions (create, delete, forget, restart, retest), and encoded or quoted payloads. If a category cannot apply, note that in your closing instead of skipping it silently. A check whose repro failed during setup is blocked, not verified: simplify the repro (direct built-dist or compiled-source probe) and retry once before giving up. Proof-bearing runs must be single non-compound commands: write probes to a temp file INSIDE the workspace first (for example `.qa-tmp/probe.mjs`; never `/tmp`: the write tool and your shell see different `/tmp` directories, and writes outside the workspace are rejected), then run `node <file>` (or the one test command) as its own command — no `;`, `&&`, `||`, other pipes or redirects on a run this check will cite, or the host cannot certify it. A trailing `2>&1` is fine, and a trailing `| tail -N` or `| head -N` is fine only where the host runs commands under pipefail (otherwise it hides the real exit code).',
     'A failing run is signal, not noise. When a proof run exits non-zero, triage it before changing anything: read the actual assertion or error and decide whether it is a PRODUCT defect (report it as a finding candidate and reproduce it minimally) or a proven FIXTURE error (missing build, wrong import, wrong API shape — name the exact cause). Never loosen, delete or rewrite an assertion just to turn a run green; an assertion that disagrees with the code under test is a hypothesis to investigate, and behavior you call "by design" must be justified from the documented contract. Your tests must try to break the property, not restate that the guard exists. Prefer running the real code path over a stub of it. Re-running the same failing command three times fails the check turn.',
     REPRODUCED_VIOLATION_RULE,

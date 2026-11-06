@@ -24,6 +24,11 @@
   Node.js, Bun, Deno, Ruby, PHP, Swift, Dart, Elixir, Kotlin, Scala (sbt), a C / C++
   toolchain (gcc, make, cmake, ninja), Zig, Gradle, utilities, PostgreSQL, MySQL, Redis
   and SQLite. Most install with micromamba from conda-forge, with no root.
+- Retest: in "Findings by revision", tick findings of an older revision and re-test them on the
+  current one. Each finding becomes one fixed check, given to the agent that reported it (or to all
+  chosen agents). A finding is only "No longer reproduces" when the agent re-ran it and saw
+  different behaviour; a probe that does not build, or cannot run, is "Cannot tell". The verdicts
+  sit in the retest run and never change the original finding.
 - "Findings by revision" on the project page: pick a revision and see what each agent reported in
   each run on it, as raw lists. A new revision starts a fresh list; older ones stay to browse.
   Nothing is merged or matched, and agents never see the lists.
