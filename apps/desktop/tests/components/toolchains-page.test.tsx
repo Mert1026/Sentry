@@ -41,7 +41,11 @@ const packs: ToolchainPackStatus[] = [
 
 function show() {
   (window as unknown as { sentry: unknown }).sentry = {
-    toolchains: { status: async () => packs, install: async () => ({ started: true }) },
+    toolchains: {
+      status: async () => packs,
+      install: async () => ({ started: true }),
+      customStatus: async () => [],
+    },
   };
   render(
     <QueryClientProvider

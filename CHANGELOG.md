@@ -29,6 +29,9 @@
   chosen agents). A finding is only "No longer reproduces" when the agent re-ran it and saw
   different behaviour; a probe that does not build, or cannot run, is "Cannot tell". The verdicts
   sit in the retest run and never change the original finding.
+- Custom add-ons (Settings → Toolchains): install a program with your own shell command. It runs
+  on the host, not in an agent sandbox, into its own folder under `toolchains/custom/`. Its program
+  folders go on PATH after every listed toolchain, so an add-on never replaces a listed tool.
 - "Findings by revision" on the project page: pick a revision and see what each agent reported in
   each run on it, as raw lists. A new revision starts a fresh list; older ones stay to browse.
   Nothing is merged or matched, and agents never see the lists.

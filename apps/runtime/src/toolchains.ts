@@ -12,6 +12,7 @@ import {
   type ToolchainSetup,
 } from '@qa/shared';
 
+import { CustomAddons } from './custom-addons.js';
 import { chooseVersion, projectToolchainHints, type ToolchainHints } from './toolchain-pins.js';
 import { CONDA_SCRIPT, PHP_SCRIPT, SWIFT_SCRIPT, condaRecipe } from './toolchain-installers.js';
 
@@ -187,12 +188,16 @@ function duMegabytes(dir: string): Promise<number | undefined> {
 export class ToolchainManager {
   private readonly installing = new Map<string, Promise<void>>();
   private readonly errors = new Map<string, string>();
+  /** Add-ons installed with the person's own command, kept apart from the listed packs. */
+  readonly custom: CustomAddons;
 
   constructor(
     private readonly dataRoot: string,
     private readonly runner: ScriptRunner = bashRunner,
     private readonly goReleases: () => Promise<GoRelease[]> = fetchGoReleases,
-  ) {}
+  ) {
+    this.custom = new CustomAddons(dataRoot, runner);
+  }
 
   private key(id: ToolchainPackId, version: string): string {
     return id + '@' + version;
@@ -372,6 +377,8 @@ export class ToolchainManager {
       path.push(...setup.path);
       Object.assign(env, setup.env);
     }
+    // Custom add-ons come last, so one can never shadow a listed tool.
+    path.push(...(await this.custom.pathEntries()));
     return { path, env };
   }
 }

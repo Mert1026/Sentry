@@ -367,3 +367,22 @@ describe('retest runs', () => {
     }
   });
 });
+
+describe('custom add-on calls', () => {
+  it('list nothing at first and refuse bad input through the protocol', async () => {
+    const host = new SentryRuntimeHost(await tempDataRoot(), () => undefined);
+    try {
+      await host.recover();
+      expect(await host.dispatch('toolchains.customStatus', {})).toEqual([]);
+      await expect(
+        host.dispatch('toolchains.customInstall', { name: 'node', command: 'true' }),
+      ).rejects.toThrow(/listed toolchain/);
+      await expect(
+        host.dispatch('toolchains.customInstall', { name: 'ok', command: 'true', extra: 1 }),
+      ).rejects.toThrow();
+      await expect(host.dispatch('toolchains.customRemove', { name: '../x' })).rejects.toThrow();
+    } finally {
+      host.close();
+    }
+  });
+});

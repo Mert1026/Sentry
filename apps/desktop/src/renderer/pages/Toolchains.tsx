@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { sentryApi } from '../lib/sentry-api.js';
 import { PageHeader, PageSection } from '../components/ui/PageHeader.js';
 import { StatusPill } from '../components/ui/StatusPill.js';
+import { CustomAddons } from '../components/CustomAddons.js';
 import type { ToolchainPackStatus } from '../../shared/ipc-contract.js';
 
 const POLL_MS = 3000;
@@ -217,6 +218,7 @@ export function Toolchains(): React.JSX.Element {
             </details>
           );
         })}
+        <CustomAddons listedIds={(status.data ?? []).map((pack) => pack.id)} />
         {status.isLoading ? <span className="muted">Loading…</span> : null}
       </PageSection>
     </div>

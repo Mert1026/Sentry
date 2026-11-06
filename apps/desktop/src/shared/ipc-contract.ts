@@ -43,6 +43,9 @@ export const IPC_CHANNELS = [
   'toolchains:status',
   'toolchains:install',
   'toolchains:remove',
+  'toolchains:custom-status',
+  'toolchains:custom-install',
+  'toolchains:custom-remove',
   'system:active-runs',
   'runtime:status',
   'runtime:distros',
@@ -178,6 +181,17 @@ export interface FindingsByRevision {
   readonly projectId: string;
   readonly currentRevisionId: string;
   readonly revisions: readonly RevisionFindingsItem[];
+}
+
+export interface CustomAddonStatus {
+  readonly name: string;
+  readonly command: string;
+  readonly pathEntries: readonly string[];
+  readonly installed: boolean;
+  readonly installing: boolean;
+  readonly installedAt?: string;
+  readonly sizeMb?: number;
+  readonly error?: string;
 }
 
 export interface ToolchainVersionStatus {
@@ -350,6 +364,14 @@ export interface SentryDesktopApi {
     status(): Promise<ToolchainPackStatus[]>;
     install(packId: string, version: string): Promise<{ started: boolean }>;
     remove(packId: string, version: string): Promise<{ removed: true }>;
+    /** Add-ons installed with the person's own command, apart from the listed packs. */
+    customStatus(): Promise<CustomAddonStatus[]>;
+    customInstall(input: {
+      name: string;
+      command: string;
+      pathEntries?: string[];
+    }): Promise<{ started: boolean }>;
+    customRemove(name: string): Promise<{ removed: true }>;
   };
   readonly system: {
     info(): Promise<{ dataRoot: string; versions: Record<string, string> }>;

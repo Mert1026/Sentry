@@ -1497,6 +1497,27 @@ export class SentryRuntimeHost {
         return this.toolchains
           .remove(requireString(params, 'packId'), requireString(params, 'version'))
           .then(() => ({ removed: true }));
+      case 'toolchains.customStatus':
+        return this.toolchains.custom.list();
+      case 'toolchains.customInstall': {
+        const input = z
+          .object({
+            name: z.string().min(1).max(60),
+            command: z.string().min(1).max(5000),
+            pathEntries: z.array(z.string().min(1).max(120)).max(10).optional(),
+          })
+          .strict()
+          .parse(params);
+        return this.toolchains.custom.install({
+          name: input.name,
+          command: input.command,
+          ...(input.pathEntries === undefined ? {} : { pathEntries: input.pathEntries }),
+        });
+      }
+      case 'toolchains.customRemove':
+        return this.toolchains.custom
+          .remove(requireString(params, 'name'))
+          .then(() => ({ removed: true }));
       case 'projects.profile':
         return this.profileStatus(requireString(params, 'projectId'));
       case 'projects.buildProfile': {

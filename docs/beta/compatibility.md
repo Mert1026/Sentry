@@ -30,6 +30,7 @@ product version stays `1.0.2`; no version numbers changed.
 - No browsers, Haskell, Docker or SQL Server packs: browsers and Haskell need system
   libraries that cannot be installed without root, and the other two need a daemon.
 - A pack that fails to install is deleted and the error is shown on the Toolchains page.
+- Custom add-ons run the person's own command with their permissions and network access on the host. They are not sandboxed, not checksummed and not version-pinned; only run commands you trust.
 - A single run-mode switch (Standard / Unrestricted) is not part of this beta; the
   per-run download option is the only widening control.
 - Pins for Gradle projects and `pyproject.toml` ranges are not read; those fall back

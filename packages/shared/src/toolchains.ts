@@ -370,3 +370,41 @@ export function withToolchains(
     PATH: [...setup.path, ...(current === undefined || current === '' ? [] : [current])].join(':'),
   };
 }
+
+/**
+ * Custom add-ons: programs the person installs with their own shell command, kept apart from the
+ * listed packs. They live in `<dataRoot>/toolchains/custom/<name>/` and their folders go on PATH
+ * after every listed pack, so an add-on can never shadow a listed tool.
+ */
+export const CUSTOM_ADDON_NAME = /^[a-z0-9][a-z0-9-]{0,39}$/;
+export const CUSTOM_ADDON_COMMAND_MAX = 4000;
+export const CUSTOM_ADDON_PATH_ENTRIES_MAX = 5;
+
+export function customAddonsRoot(dataRoot: string): string {
+  return join(toolchainsRoot(dataRoot), 'custom');
+}
+
+/** Directory of one custom add-on; the name must already satisfy `checkCustomAddonName`. */
+export function customAddonDir(dataRoot: string, name: string): string {
+  return join(customAddonsRoot(dataRoot), name);
+}
+
+/** A reason the name cannot be used, or undefined. Listed pack ids are reserved so the two never blur. */
+export function checkCustomAddonName(name: string): string | undefined {
+  if (!CUSTOM_ADDON_NAME.test(name))
+    return 'Use 1 to 40 lowercase letters, digits or hyphens, starting with a letter or digit.';
+  if ((TOOLCHAIN_PACK_IDS as readonly string[]).includes(name))
+    return '"' + name + '" is a listed toolchain. Pick another name.';
+  return undefined;
+}
+
+/** Folders (relative to the add-on) that go on PATH; defaults to `bin`. Rejects anything that leaves the add-on. */
+export function checkCustomAddonPathEntries(entries: readonly string[]): string | undefined {
+  if (entries.length > CUSTOM_ADDON_PATH_ENTRIES_MAX)
+    return 'At most ' + CUSTOM_ADDON_PATH_ENTRIES_MAX + ' program folders.';
+  for (const entry of entries) {
+    if (!/^[A-Za-z0-9._][A-Za-z0-9._/-]{0,119}$/.test(entry) || entry.split('/').includes('..'))
+      return 'Program folders are relative paths inside the add-on (for example "bin"): ' + entry;
+  }
+  return undefined;
+}

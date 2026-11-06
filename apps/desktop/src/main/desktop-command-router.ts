@@ -135,6 +135,15 @@ export const DesktopChannelSchemas: Record<string, z.ZodTypeAny> = {
     .strict(),
   'system:info': z.object({}).strict(),
   'toolchains:status': z.object({}).strict(),
+  'toolchains:custom-status': z.object({}).strict(),
+  'toolchains:custom-install': z
+    .object({
+      name: z.string().min(1).max(60),
+      command: z.string().min(1).max(5000),
+      pathEntries: z.array(z.string().min(1).max(120)).max(10).optional(),
+    })
+    .strict(),
+  'toolchains:custom-remove': z.object({ name: z.string().min(1).max(60) }).strict(),
   'toolchains:install': z
     .object({ packId: z.string().min(1).max(40), version: z.string().min(1).max(40) })
     .strict(),
@@ -382,6 +391,18 @@ export async function dispatchDesktopCommand(
           ? undefined
           : { agentStackIds: parsed['agentStackIds'] as string[] },
       );
+    case 'toolchains:custom-status':
+      return service.customAddonStatus();
+    case 'toolchains:custom-install':
+      return service.customAddonInstall({
+        name: parsed['name'] as string,
+        command: parsed['command'] as string,
+        ...(parsed['pathEntries'] === undefined
+          ? {}
+          : { pathEntries: parsed['pathEntries'] as string[] }),
+      });
+    case 'toolchains:custom-remove':
+      return service.customAddonRemove(parsed['name'] as string);
     case 'toolchains:status':
       return service.toolchainStatus();
     case 'toolchains:install':

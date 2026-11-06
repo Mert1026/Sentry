@@ -165,6 +165,22 @@ export class DesktopApplicationService {
     return this.call('toolchains.remove', { packId, version });
   }
 
+  customAddonStatus(): Promise<unknown> {
+    return this.call('toolchains.customStatus', {});
+  }
+
+  customAddonInstall(input: {
+    name: string;
+    command: string;
+    pathEntries?: string[];
+  }): Promise<unknown> {
+    return this.call('toolchains.customInstall', input);
+  }
+
+  customAddonRemove(name: string): Promise<unknown> {
+    return this.call('toolchains.customRemove', { name });
+  }
+
   profileStatus(projectId: string): Promise<unknown> {
     const id = ProjectIdInput.parse(projectId);
     return this.call('projects.profile', { projectId: id });

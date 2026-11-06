@@ -89,6 +89,10 @@ const api: SentryDesktopApi & { dialogs: { pickDirectory(): Promise<string | nul
     status: () => invoke('toolchains:status', {}),
     install: (packId: string, version: string) => invoke('toolchains:install', { packId, version }),
     remove: (packId: string, version: string) => invoke('toolchains:remove', { packId, version }),
+    customStatus: () => invoke('toolchains:custom-status', {}),
+    customInstall: (input: { name: string; command: string; pathEntries?: string[] }) =>
+      invoke('toolchains:custom-install', input),
+    customRemove: (name: string) => invoke('toolchains:custom-remove', { name }),
   },
   system: {
     info: () => invoke('system:info', {}),
