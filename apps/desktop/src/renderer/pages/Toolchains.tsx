@@ -8,6 +8,15 @@ import type { ToolchainPackStatus } from '../../shared/ipc-contract.js';
 
 const POLL_MS = 3000;
 
+/** The clickable heading row of a collapsible section. */
+const SUMMARY_STYLE: React.CSSProperties = {
+  cursor: 'pointer',
+  display: 'flex',
+  gap: 12,
+  alignItems: 'center',
+  flexWrap: 'wrap',
+};
+
 const CATEGORIES: ReadonlyArray<{
   readonly id: ToolchainPackStatus['category'];
   readonly title: string;
@@ -95,95 +104,128 @@ export function Toolchains(): React.JSX.Element {
             {message}
           </p>
         ) : null}
-        {CATEGORIES.map((category) => (
-          <React.Fragment key={category.id}>
-            <h3 className="card-title" style={{ marginTop: 18 }}>
-              {category.title}
-            </h3>
-            <p className="body-secondary" style={{ marginTop: 0 }}>
-              {category.hint}
-            </p>
-            <div className="cards">
-              {(status.data ?? [])
-                .filter((pack) => pack.category === category.id)
-                .map((pack) => (
-                  <div className="card" key={pack.id}>
-                    <h3 className="card-title">{pack.label}</h3>
-                    <p className="body-secondary" style={{ marginTop: 0 }}>
-                      {pack.description} About {pack.approxSizeMb} MB per version.
-                    </p>
-                    {pack.note !== undefined ? <p className="metadata">{pack.note}</p> : null}
-                    {pack.versions.map((v) => (
-                      <div
-                        key={v.version}
-                        style={{
-                          display: 'flex',
-                          gap: 12,
-                          alignItems: 'center',
-                          flexWrap: 'wrap',
-                          margin: '6px 0',
-                        }}
-                      >
-                        <span style={{ minWidth: 70 }}>
-                          {v.version}
-                          {v.version === pack.defaultVersion ? ' (default)' : ''}
+        {CATEGORIES.map((category) => {
+          const packs = (status.data ?? []).filter((pack) => pack.category === category.id);
+          const installedCount = packs.reduce(
+            (total, pack) => total + pack.versions.filter((v) => v.installed).length,
+            0,
+          );
+          return (
+            <details key={category.id} open style={{ margin: '14px 0' }}>
+              <summary style={SUMMARY_STYLE}>
+                <span className="card-title" style={{ margin: 0 }}>
+                  {category.title}
+                </span>
+                <span className="metadata">
+                  {packs.length} {packs.length === 1 ? 'pack' : 'packs'}, {installedCount}{' '}
+                  {installedCount === 1 ? 'version' : 'versions'} installed
+                </span>
+              </summary>
+              <p className="body-secondary" style={{ margin: '6px 0 0' }}>
+                {category.hint}
+              </p>
+              <div className="cards">
+                {packs.map((pack) => {
+                  const installed = pack.versions.filter((v) => v.installed).length;
+                  const installing = pack.versions.some((v) => v.installing);
+                  const failed = pack.versions.some((v) => v.error !== undefined && !v.installing);
+                  return (
+                    <details className="card" key={pack.id} open={installing || failed}>
+                      <summary style={SUMMARY_STYLE}>
+                        <span className="card-title" style={{ margin: 0 }}>
+                          {pack.label}
                         </span>
                         <StatusPill
                           status={
-                            v.installing ? 'running' : v.installed ? 'completed' : 'cancelled'
+                            installing ? 'running' : installed > 0 ? 'completed' : 'cancelled'
                           }
                           label={
-                            v.installing
+                            installing
                               ? 'Installing…'
-                              : v.installed
-                                ? 'Installed'
-                                : 'Not installed'
+                              : installed + ' of ' + pack.versions.length + ' installed'
                           }
                         />
-                        {v.installed && v.sizeMb !== undefined ? (
-                          <span className="metadata">{v.sizeMb} MB</span>
-                        ) : null}
-                        {v.installed ? (
-                          <button
-                            disabled={remove.isPending}
-                            onClick={() => remove.mutate({ packId: pack.id, version: v.version })}
-                            aria-label={'Remove ' + pack.label + ' ' + v.version}
-                          >
-                            Remove
-                          </button>
-                        ) : (
-                          <button
-                            disabled={v.installing}
-                            onClick={() => install.mutate({ packId: pack.id, version: v.version })}
-                            aria-label={'Install ' + pack.label + ' ' + v.version}
-                          >
-                            Install
-                          </button>
-                        )}
-                        {v.error !== undefined && !v.installing ? (
-                          <pre
-                            className="error-box mono"
-                            style={{ flexBasis: '100%', whiteSpace: 'pre-wrap' }}
-                          >
-                            {v.error}
-                          </pre>
-                        ) : null}
+                        {failed ? <span className="metadata">An install failed</span> : null}
+                      </summary>
+                      <p className="body-secondary" style={{ marginTop: 8 }}>
+                        {pack.description} About {pack.approxSizeMb} MB per version.
+                      </p>
+                      {pack.note !== undefined ? <p className="metadata">{pack.note}</p> : null}
+                      {pack.versions.map((v) => (
+                        <div
+                          key={v.version}
+                          style={{
+                            display: 'flex',
+                            gap: 12,
+                            alignItems: 'center',
+                            flexWrap: 'wrap',
+                            margin: '6px 0',
+                          }}
+                        >
+                          <span style={{ minWidth: 70 }}>
+                            {v.version}
+                            {v.version === pack.defaultVersion ? ' (default)' : ''}
+                          </span>
+                          <StatusPill
+                            status={
+                              v.installing ? 'running' : v.installed ? 'completed' : 'cancelled'
+                            }
+                            label={
+                              v.installing
+                                ? 'Installing…'
+                                : v.installed
+                                  ? 'Installed'
+                                  : 'Not installed'
+                            }
+                          />
+                          {v.installed && v.sizeMb !== undefined ? (
+                            <span className="metadata">{v.sizeMb} MB</span>
+                          ) : null}
+                          {v.installed ? (
+                            <button
+                              disabled={remove.isPending}
+                              onClick={() => remove.mutate({ packId: pack.id, version: v.version })}
+                              aria-label={'Remove ' + pack.label + ' ' + v.version}
+                            >
+                              Remove
+                            </button>
+                          ) : (
+                            <button
+                              disabled={v.installing}
+                              onClick={() =>
+                                install.mutate({ packId: pack.id, version: v.version })
+                              }
+                              aria-label={'Install ' + pack.label + ' ' + v.version}
+                            >
+                              Install
+                            </button>
+                          )}
+                          {v.error !== undefined && !v.installing ? (
+                            <pre
+                              className="error-box mono"
+                              style={{ flexBasis: '100%', whiteSpace: 'pre-wrap' }}
+                            >
+                              {v.error}
+                            </pre>
+                          ) : null}
+                        </div>
+                      ))}
+                      <div style={{ marginTop: 10 }}>
+                        <button
+                          className="primary"
+                          disabled={pack.versions.every((v) => v.installed || v.installing)}
+                          onClick={() => installAll(pack)}
+                        >
+                          Install all {pack.label} versions
+                        </button>
                       </div>
-                    ))}
-                    <div style={{ marginTop: 10 }}>
-                      <button
-                        className="primary"
-                        disabled={pack.versions.every((v) => v.installed || v.installing)}
-                        onClick={() => installAll(pack)}
-                      >
-                        Install all {pack.label} versions
-                      </button>
-                    </div>
-                  </div>
-                ))}
-            </div>
-          </React.Fragment>
-        ))}
+                    </details>
+                  );
+                })}
+              </div>
+            </details>
+          );
+        })}
         {status.isLoading ? <span className="muted">Loading…</span> : null}
       </PageSection>
     </div>
