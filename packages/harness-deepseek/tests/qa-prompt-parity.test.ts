@@ -206,6 +206,55 @@ describe('DeepSeek QA prompt parity', () => {
       }
     },
   );
+  it('puts the installed toolchains on the worker PATH with their variables', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'sentry-ds-toolchains-'));
+    roots.push(root);
+    const input = await request(root);
+    const seen: NodeJS.ProcessEnv[] = [];
+    const asked: string[] = [];
+    let turns = 0;
+    const adapter = new DeepSeekHarnessAdapter({
+      executable: 'dsh-test',
+      modelId: 'deepseek-v4-flash',
+      environment: { PATH: '/usr/bin' },
+      toolchains: async (workspace) => {
+        asked.push(workspace);
+        return {
+          binds: ['/data/toolchains'],
+          path: ['/data/toolchains/go/1.24/go/bin'],
+          env: { GOROOT: '/data/toolchains/go/1.24/go' },
+        };
+      },
+      clientFactory: async (spec) => {
+        seen.push(spec.environment);
+        return {
+          start: async () => undefined,
+          startSession: async () => ({
+            runText: async () => {
+              turns += 1;
+              return {
+                sessionId: 's1',
+                finalResponse:
+                  turns === 1
+                    ? validPlan()
+                    : turns === 2
+                      ? 'Investigation complete.'
+                      : validReport(false),
+                events: turns === 2 ? PROBE_EVENTS : [],
+                notifications: [],
+              };
+            },
+          }),
+          close: async () => undefined,
+        };
+      },
+    });
+    for await (const event of adapter.run(input)) void event;
+    await adapter.dispose();
+    expect(asked).toEqual([root]);
+    expect(seen[0]?.['PATH']).toBe('/data/toolchains/go/1.24/go/bin:/usr/bin');
+    expect(seen[0]?.['GOROOT']).toBe('/data/toolchains/go/1.24/go');
+  });
   it.each([true, false])(
     'tells the agent about SDK download hosts only when toolDownloads=%s',
     async (toolDownloads) => {

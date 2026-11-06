@@ -220,6 +220,49 @@ function threeStage(
 }
 
 describe('ClaudeCodeHarnessAdapter', () => {
+  it('puts the installed toolchains on the worker PATH with their variables', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'sentry-claude-toolchains-'));
+    roots.push(root);
+    const input = await request(root);
+    let seenEnvironment: NodeJS.ProcessEnv | undefined;
+    const asked: string[] = [];
+    let calls = 0;
+    const adapter = new ClaudeCodeHarnessAdapter({
+      executable: 'claude-test',
+      modelId: 'glm-5.3-flash',
+      environment: { PATH: '/usr/bin' },
+      windowsUsersRoot: hermeticUsersRoot(),
+      toolchains: async (workspace) => {
+        asked.push(workspace);
+        return {
+          binds: ['/data/toolchains'],
+          path: ['/data/toolchains/dotnet/8.0/dotnet'],
+          env: { DOTNET_ROOT: '/data/toolchains/dotnet/8.0/dotnet' },
+        };
+      },
+      clientFactory: async (spec) => {
+        seenEnvironment ??= spec.environment;
+        return {
+          sessionId: 'session-toolchains',
+          startSession: async () => ({
+            runText: async () => {
+              calls += 1;
+              if (calls === 1) return planTurn();
+              if (calls === 2) return investigationTurn();
+              return reportTurn(validReportV2());
+            },
+          }),
+          close: async () => undefined,
+        };
+      },
+    });
+    await collect(adapter, input);
+    await adapter.dispose();
+    expect(asked).toEqual([input.workspace.runtimePath]);
+    expect(seenEnvironment?.['PATH']).toBe('/data/toolchains/dotnet/8.0/dotnet:/usr/bin');
+    expect(seenEnvironment?.['DOTNET_ROOT']).toBe('/data/toolchains/dotnet/8.0/dotnet');
+  });
+
   it('recovers a context-exceeded report in a fresh compacted session', async () => {
     const root = await mkdtemp(join(tmpdir(), 'sentry-claude-context-'));
     roots.push(root);

@@ -474,8 +474,12 @@ export class SentryRuntimeHost {
           toolchains: (workspace) => this.toolchains.setup(workspace),
         }),
       )
-      .register(createDeepSeekRegistration())
-      .register(createGlmRegistration());
+      .register(
+        createDeepSeekRegistration({ toolchains: (workspace) => this.toolchains.setup(workspace) }),
+      )
+      .register(
+        createGlmRegistration({ toolchains: (workspace) => this.toolchains.setup(workspace) }),
+      );
     this.coordinator = new RunCoordinator(
       this.dataRoot,
       this.repository,

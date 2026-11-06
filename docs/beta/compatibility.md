@@ -15,11 +15,11 @@ product version stays `1.0.2`; no version numbers changed.
 
 ## Agent support
 
-| Harness     | Toolchain mounts and version pins | Tool and SDK downloads                                                                     | Windows-drive hiding |
-| ----------- | --------------------------------- | ------------------------------------------------------------------------------------------ | -------------------- |
-| OpenCode    | Yes                               | Yes                                                                                        | Yes                  |
-| Claude Code | No                                | Yes (sandbox `allowedDomains`)                                                             | Its own sandbox      |
-| DeepSeek    | No                                | Prompt guidance only (its sandbox has no network policy, so the host list is not enforced) | Its own sandbox      |
+| Harness     | Installed toolchains and version pins | Tool and SDK downloads                                                                     | Windows-drive hiding                    |
+| ----------- | ------------------------------------- | ------------------------------------------------------------------------------------------ | --------------------------------------- |
+| OpenCode    | Yes                                   | Yes                                                                                        | Yes                                     |
+| Claude Code | Yes (PATH and variables)              | Yes (sandbox `allowedDomains`)                                                             | `/mnt/c` only                           |
+| DeepSeek    | Yes (PATH and variables)              | Prompt guidance only (its sandbox has no network policy, so the host list is not enforced) | Not hidden (read-only root; not tested) |
 
 ## Known limits in this beta
 

@@ -25,6 +25,7 @@
 - OpenCode tool shells hide Windows drives, `/mnt` and the WSL interop socket, set
   `XDG_RUNTIME_DIR` to the private tmp, and stop .NET build servers from holding the
   shell's output pipe open until the tool timeout.
+- Claude Code and DeepSeek runs now get the installed toolchains on PATH (with the project's pinned versions) and the same tool and SDK download guidance as OpenCode. DeepSeek's sandbox has no network policy, so its host list is guidance, not enforced.
 - Compatibility: see [docs/beta/compatibility.md](docs/beta/compatibility.md).
 
 ## [1.0.2] - 2026-10-16

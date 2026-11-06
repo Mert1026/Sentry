@@ -12,8 +12,10 @@ import {
   webAccessEnabled,
   allowedAgentHosts,
   toolDownloadsEnabled,
+  withToolchains,
   type AgentRunId,
   type OperationId,
+  type ToolchainSetup,
   describePlanRejection,
   describeSchemaIssues,
 } from '@qa/shared';
@@ -111,6 +113,8 @@ export interface ClaudeCodeHarnessAdapterOptions {
   readonly modelId?: string;
   readonly provider?: string;
   readonly environment?: NodeJS.ProcessEnv;
+  /** Installed language toolchains to put on the agent's PATH; read when each run starts. */
+  readonly toolchains?: (workspace: string) => Promise<ToolchainSetup | undefined>;
   readonly clientFactory?: ClaudeClientFactory;
   readonly shutdownTimeoutMs?: number;
   readonly turnTimeoutMs?: number;
@@ -1493,15 +1497,21 @@ export class ClaudeCodeHarnessAdapter implements HarnessAdapter {
         ),
         'utf8',
       );
+      const toolchains = await this.options
+        .toolchains?.(request.workspace.runtimePath)
+        .catch(() => undefined);
       const spec: ClaudeSpawnSpec = {
         executable: this.runtime.executable,
         cwd: request.workspace.runtimePath,
         configDir,
         homeDir: ephemeralHome,
-        environment: {
-          ...this.environment,
-          ...dependencyCacheEnvironment(request.workspace.runtimePath),
-        },
+        environment: withToolchains(
+          {
+            ...this.environment,
+            ...dependencyCacheEnvironment(request.workspace.runtimePath),
+          },
+          toolchains,
+        ),
         webAccess: webAccessEnabled(request.executionSafeguards),
         modelId: this.runtime.modelId,
         settingsPath,

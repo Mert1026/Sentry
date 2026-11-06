@@ -128,3 +128,20 @@ export interface ToolchainSetup {
   readonly path: readonly string[];
   readonly env: Readonly<Record<string, string>>;
 }
+
+/**
+ * A copy of an agent's child environment with the installed toolchains on PATH (ahead of the
+ * system ones) and their variables set. For harnesses that run their own sandbox and need no mount.
+ */
+export function withToolchains(
+  environment: NodeJS.ProcessEnv,
+  setup: ToolchainSetup | undefined,
+): NodeJS.ProcessEnv {
+  if (setup === undefined || setup.path.length === 0) return environment;
+  const current = environment['PATH'];
+  return {
+    ...environment,
+    ...setup.env,
+    PATH: [...setup.path, ...(current === undefined || current === '' ? [] : [current])].join(':'),
+  };
+}
