@@ -104,9 +104,9 @@ describe('RevisionFindingsPanel', () => {
     show(data);
     const select = screen.getByLabelText('Revision') as HTMLSelectElement;
     expect(select.value).toBe('rev_new');
-    expect(select.options[0]?.textContent).toContain('Current');
-    expect(select.options[0]?.textContent).toContain('#aaaaaaaa');
-    expect(select.options[0]?.textContent).toContain('2 runs');
+    // First and last three characters of the hash, then the revision's date; the live one is marked.
+    expect(select.options[0]?.textContent).toMatch(/^rev aaa\.\.\.111 - .+ \(current\)$/);
+    expect(select.options[1]?.textContent).toMatch(/^rev bbb\.\.\.222 - [^(]+$/);
     expect(screen.getByText('Agent A')).toBeTruthy();
     expect(screen.getByText('2 runs, 2 findings')).toBeTruthy();
     expect(screen.getByText('Agent B')).toBeTruthy();

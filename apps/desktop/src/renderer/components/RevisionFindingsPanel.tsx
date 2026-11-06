@@ -13,21 +13,20 @@ function formatWhen(iso: string): string {
   return Number.isNaN(date.getTime()) ? iso : date.toLocaleString();
 }
 
-/** "sha256:ab12…" -> "ab12cd34": enough to tell revisions apart. */
+/** "sha256:abcdef0123456789" -> "abc...789": the first and last three characters of the hash. */
 function shortHash(hash: string): string {
-  return hash.replace(/^sha256:/, '').slice(0, 8);
+  const digits = hash.replace(/^sha256:/, '');
+  return digits.length <= 6 ? digits : digits.slice(0, 3) + '...' + digits.slice(-3);
 }
 
+/** "rev abc...789 - 5 Nov 2026, 10:00", with "(current)" on the revision in use. */
 function revisionLabel(revision: RevisionFindingsItem, currentId: string): string {
-  const runs = revision.agents.reduce((total, agent) => Math.max(total, agent.runs.length), 0);
   return (
-    (revision.revisionId === currentId ? 'Current · ' : '') +
-    formatWhen(revision.importedAt) +
-    ' · #' +
+    'rev ' +
     shortHash(revision.contentHash) +
-    ' · ' +
-    runs +
-    (runs === 1 ? ' run' : ' runs')
+    ' - ' +
+    formatWhen(revision.importedAt) +
+    (revision.revisionId === currentId ? ' (current)' : '')
   );
 }
 
