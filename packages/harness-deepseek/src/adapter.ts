@@ -9,6 +9,7 @@ import {
   createInvestigationPlanId,
   createOperationId,
   nowIsoTimestamp,
+  toolDownloadsEnabled,
   webAccessEnabled,
   type AgentRunId,
   type OperationId,
@@ -1149,6 +1150,9 @@ export class DeepSeekHarnessAdapter implements HarnessAdapter {
         contextBudget,
         network: {
           webAccess: webAccessEnabled(request.executionSafeguards),
+          // DeepSeek's sandbox governs file effects only and has no network policy, so this
+          // line is guidance in the prompt, not an enforced allowlist.
+          toolDownloads: toolDownloadsEnabled(request.executionSafeguards),
           webToolsAvailable: false,
         },
         event: (body) => event(request.agentRunId, body),

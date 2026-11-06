@@ -206,6 +206,49 @@ describe('DeepSeek QA prompt parity', () => {
       }
     },
   );
+  it.each([true, false])(
+    'tells the agent about SDK download hosts only when toolDownloads=%s',
+    async (toolDownloads) => {
+      const root = await mkdtemp(join(tmpdir(), 'sentry-ds-downloads-'));
+      roots.push(root);
+      const base = await request(root);
+      const input = HarnessRunRequestSchema.parse({
+        ...base,
+        executionSafeguards: { runTimeoutMs: 30_000, ...(toolDownloads ? { toolDownloads } : {}) },
+      });
+      const prompts: string[] = [];
+      const adapter = new DeepSeekHarnessAdapter({
+        executable: 'dsh-test',
+        modelId: 'deepseek-v4-flash',
+        environment: {},
+        clientFactory: async () => ({
+          start: async () => undefined,
+          startSession: async () => ({
+            runText: async (text: string) => {
+              prompts.push(text);
+              return {
+                sessionId: 's1',
+                finalResponse:
+                  prompts.length === 1
+                    ? validPlan()
+                    : prompts.length === 2
+                      ? 'Investigation complete.'
+                      : validReport(false),
+                events: prompts.length === 2 ? PROBE_EVENTS : [],
+                notifications: [],
+              };
+            },
+          }),
+          close: async () => undefined,
+        }),
+      });
+      for await (const event of adapter.run(input)) void event;
+      await adapter.dispose();
+      const investigation = prompts[1] ?? '';
+      expect(investigation.includes('official download hosts')).toBe(toolDownloads);
+      expect(investigation).toContain('Shell network access reaches');
+    },
+  );
   it.each([false, true, 'low-budget'])(
     'routes independent depth policy enabled=%s',
     async (depth) => {
