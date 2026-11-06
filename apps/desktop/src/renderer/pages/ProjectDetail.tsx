@@ -15,6 +15,7 @@ import { ToolchainNeedsPanel } from '../components/ToolchainNeedsPanel.js';
 import { useToolchainNeeds } from '../lib/use-toolchain-needs.js';
 import { RevisionFindingsPanel } from '../components/RevisionFindingsPanel.js';
 import { useFindingsByRevision } from '../lib/use-findings-by-revision.js';
+import { retestStartOptions } from '../lib/retest-options.js';
 
 const AGENT_ORDER = ['stack_opencode_main', 'stack_deepseek_main', 'stack_glm_main'];
 
@@ -163,22 +164,16 @@ export function ProjectDetail(): React.JSX.Element {
     onSuccess: onStarted,
     onError: onStartError,
   });
-  // Re-test findings picked in "Findings by revision" on the revision chosen for runs (the current one by default).
+  // Re-test findings picked in "Findings by revision" on the CURRENT revision, whatever "Run revision" says.
   const startRetest = useMutation({
     mutationFn: (input: {
       findings: Array<{ runId: string; findingId: string }>;
       who: 'reporter' | 'all';
     }) =>
-      sentryApi().runs.start(projectId as string, {
-        mode: 'full',
-        ...(effectiveRevisionId === undefined ? {} : { revisionId: effectiveRevisionId }),
-        ...(input.who === 'all' && effectiveStacks.length > 0
-          ? { agentStackIds: effectiveStacks }
-          : {}),
-        ...(webAccess ? { webAccess: true } : {}),
-        ...(toolDownloads ? { toolDownloads: true } : {}),
-        retest: input,
-      }),
+      sentryApi().runs.start(
+        projectId as string,
+        retestStartOptions(input, { stacks: effectiveStacks, webAccess, toolDownloads }),
+      ),
     onSuccess: (operation) => {
       onStarted(operation);
       void queryClient.invalidateQueries({ queryKey: ['findings-by-revision', projectId] });

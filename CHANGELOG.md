@@ -28,7 +28,8 @@
   current one. Each finding becomes one fixed check, given to the agent that reported it (or to all
   chosen agents). A finding is only "No longer reproduces" when the agent re-ran it and saw
   different behaviour; a probe that does not build, or cannot run, is "Cannot tell". The verdicts
-  sit in the retest run and never change the original finding.
+  sit in the retest run and never change the original finding. A retest always runs on the
+  current revision, and does no lead follow-ups, deepening or hazard sweep.
 - Custom add-ons (Settings → Toolchains): install a program with your own shell command. It runs
   on the host, not in an agent sandbox, into its own folder under `toolchains/custom/`. Its program
   folders go on PATH after every listed toolchain, so an add-on never replaces a listed tool.

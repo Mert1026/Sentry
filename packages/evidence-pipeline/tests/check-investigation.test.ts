@@ -418,7 +418,7 @@ describe('investigateChecks second pass', () => {
                     ? 'second pass: '
                     : 'first pass: ') +
               name +
-              (options.leadsOnFirstPass && !deepen && !second && !lead && name === 'Check A'
+              (options.leadsOnFirstPass && !deepen && !second && !lead && name.endsWith('Check A')
                 ? '\nLeads: symlink import fails; cleanup removes the root'
                 : ''),
           };
@@ -532,6 +532,46 @@ describe('investigateChecks second pass', () => {
     const context = reportContexts.at(-1) ?? '';
     for (const file of ['wipe', 'fresh', 'probed']) expect(context).toContain('packages/' + file);
     expect(context).toContain('hazard-sweep');
+  });
+
+  it('never follows leads, deepens or sweeps files in a retest, which only answers its own checks', async () => {
+    const hazards = [{ file: 'packages/wipe/src/index.ts', hazards: ['deletes files'], score: 4 }];
+    const retest = scenario({
+      checks: ['Retest #1: Check A', 'Retest #2: Check B', 'Retest #3: Check C'],
+      undecided: [],
+      clockPerTurnMin: 2,
+      leadsOnFirstPass: true,
+      hazards,
+    });
+    const { events } = await drain(investigateChecks(retest.hooks));
+    // One turn per finding and nothing after them, although time, leads and risky files remain.
+    expect(retest.prompts).toHaveLength(3);
+    const seen = codes(events);
+    for (const code of ['QA_DEEPEN_PASS', 'QA_HAZARD_SWEEP', 'QA_HAZARD_SWEEP_TURN'])
+      expect(seen).not.toContain(code);
+    // The very same situation with ordinary checks does all three.
+    const ordinary = scenario({
+      checks: ['Check A', 'Check B', 'Check C'],
+      undecided: [],
+      clockPerTurnMin: 2,
+      leadsOnFirstPass: true,
+      hazards,
+    });
+    const normal = codes((await drain(investigateChecks(ordinary.hooks))).events);
+    expect(normal).toContain('QA_DEEPEN_PASS');
+    expect(normal).toContain('QA_HAZARD_SWEEP');
+    expect(ordinary.prompts.length).toBeGreaterThan(3);
+  });
+
+  it('still gives an undecided retest check its second pass', async () => {
+    const retest = scenario({
+      checks: ['Retest #1: Check A', 'Retest #2: Check B'],
+      undecided: ['Retest #2: Check B'],
+      clockPerTurnMin: 2,
+    });
+    const { events } = await drain(investigateChecks(retest.hooks));
+    expect(codes(events)).toContain('QA_SECOND_PASS');
+    expect(retest.prompts.filter((p) => p.includes('SECOND PASS'))).toHaveLength(1);
   });
 
   it('skips the sweep when the adapter provides no hazard source', async () => {

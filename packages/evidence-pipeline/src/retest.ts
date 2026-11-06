@@ -43,6 +43,13 @@ export function retestContextEntry(items: readonly RetestItem[]): {
   };
 }
 
+/** The findings a retest run hands this agent, in check order; empty outside a retest. */
+export function retestItemsOf(
+  context: Readonly<Record<string, unknown>> | undefined,
+): RetestItem[] {
+  return itemsOf(context);
+}
+
 function itemsOf(context: Readonly<Record<string, unknown>> | undefined): RetestItem[] {
   const entry = context?.[RETEST_CONTEXT_KEY] as { items?: unknown } | undefined;
   return Array.isArray(entry?.items) ? (entry.items as RetestItem[]) : [];

@@ -3,6 +3,7 @@ import {
   RETEST_CHECK_RULES,
   RETEST_CONTEXT_KEY,
   applyRetestPlan,
+  buildInvestigationCompactionContext,
   buildQaCheckInvestigationPrompt,
   buildQaPlanningPrompt,
   isRetestCheck,
@@ -73,6 +74,46 @@ describe('retest checks', () => {
     // A pass needs a re-run with different behaviour, and a probe that does not build is never one.
     expect(RETEST_CHECK_RULES).toContain('never a pass');
     expect(RETEST_CHECK_RULES).toContain('INCONCLUSIVE');
+  });
+});
+
+describe('retest across a session rotation', () => {
+  it('hands a fresh session the full details of the findings still to re-test', () => {
+    const items = [
+      item({ description: 'FIRST description' }),
+      item({
+        n: 2,
+        findingId: 'fnd_2',
+        title: 'Second',
+        description: 'SECOND description with all the detail',
+        expectedBehavior: 'EXPECTED text',
+        reproductionSteps: ['STEP one', 'STEP two'],
+      }),
+    ];
+    const request = { task: { prompt: 'RETEST RUN.', context: context(items) } } as never;
+    const plan = { plannedChecks: items.map(retestCheckName) } as never;
+    // One check done: only the second finding is still open, and it comes back whole.
+    const text = buildInvestigationCompactionContext(request, plan, new Map(), '', 1);
+    expect(text).toContain('SECOND description with all the detail');
+    expect(text).toContain('EXPECTED text');
+    expect(text).toContain('STEP two');
+    expect(text).not.toContain('FIRST description');
+    // Before any check, both are listed.
+    const start = buildInvestigationCompactionContext(request, plan, new Map(), '', 0);
+    expect(start).toContain('FIRST description');
+    expect(start).toContain('SECOND description');
+  });
+
+  it('adds nothing for an ordinary run', () => {
+    const request = { task: { prompt: 'x', context: {} } } as never;
+    const text = buildInvestigationCompactionContext(
+      request,
+      { plannedChecks: ['A'] } as never,
+      new Map(),
+      '',
+      0,
+    );
+    expect(text).not.toContain('still to re-test');
   });
 });
 

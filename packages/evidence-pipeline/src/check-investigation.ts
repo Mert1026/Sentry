@@ -27,6 +27,7 @@ import {
   type TurnStop,
 } from './depth.js';
 import { deletesData, hazardModuleKey, type HazardFile } from './hazard-scan.js';
+import { isRetestCheck } from './retest.js';
 import {
   PhaseDeadlineReached,
   investigationDeadline,
@@ -758,8 +759,13 @@ export async function* investigateChecks<T extends InvestigationTurn>(
       checkEndKeys[currentCheck] = new Set(operations.keys());
     }
     yield* secondPass();
-    yield* deepenRound();
-    yield* sweepRound();
+    // A retest answers one question per finding. It never follows leads, deepens or sweeps files:
+    // that would spend budget on, and possibly report, problems nobody asked about.
+    const retestOnly = plan.plannedChecks.length > 0 && plan.plannedChecks.every(isRetestCheck);
+    if (!retestOnly) {
+      yield* deepenRound();
+      yield* sweepRound();
+    }
   } catch (cause) {
     if (
       (depth === undefined && !recoverable(cause)) ||
