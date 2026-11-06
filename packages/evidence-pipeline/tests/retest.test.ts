@@ -98,6 +98,11 @@ describe('retest across a session rotation', () => {
     expect(text).toContain('EXPECTED text');
     expect(text).toContain('STEP two');
     expect(text).not.toContain('FIRST description');
+    // A retry of an undecided check counts every check as completed: any finding can be revisited.
+    const retry = buildInvestigationCompactionContext(request, plan, new Map(), '', 2);
+    expect(retry).toContain('FIRST description');
+    expect(retry).toContain('SECOND description with all the detail');
+    expect(retry).toContain('STEP two');
     // Before any check, both are listed.
     const start = buildInvestigationCompactionContext(request, plan, new Map(), '', 0);
     expect(start).toContain('FIRST description');
@@ -113,7 +118,7 @@ describe('retest across a session rotation', () => {
       '',
       0,
     );
-    expect(text).not.toContain('still to re-test');
+    expect(text).not.toContain('to re-test, in full');
   });
 });
 
