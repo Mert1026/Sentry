@@ -13,6 +13,8 @@ import { ProjectProfilePanel } from '../components/ProjectProfilePanel.js';
 import { useProjectProfile } from '../lib/use-project-profile.js';
 import { ToolchainNeedsPanel } from '../components/ToolchainNeedsPanel.js';
 import { useToolchainNeeds } from '../lib/use-toolchain-needs.js';
+import { RevisionFindingsPanel } from '../components/RevisionFindingsPanel.js';
+import { useFindingsByRevision } from '../lib/use-findings-by-revision.js';
 
 const AGENT_ORDER = ['stack_opencode_main', 'stack_deepseek_main', 'stack_glm_main'];
 
@@ -105,6 +107,7 @@ export function ProjectDetail(): React.JSX.Element {
   const profile = useProjectProfile(projectId);
   const profileAgents = profile.status.data?.agents ?? [];
   const toolchainNeeds = useToolchainNeeds(projectId);
+  const revisionFindings = useFindingsByRevision(projectId);
   const freshProfileCount = effectiveStacks.filter((id) =>
     profileAgents.some((agent) => agent.agentStackId === id && agent.state === 'fresh'),
   ).length;
@@ -362,6 +365,13 @@ export function ProjectDetail(): React.JSX.Element {
                 ? toolchainNeeds.install.error.message
                 : undefined
           }
+        />
+      </PageSection>
+      <PageSection title="Findings by revision">
+        <RevisionFindingsPanel
+          stacks={stacks}
+          data={revisionFindings.data}
+          loading={revisionFindings.isLoading}
         />
       </PageSection>
       <PageSection title="Run QA">

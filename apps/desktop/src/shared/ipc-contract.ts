@@ -20,6 +20,7 @@ export const IPC_CHANNELS = [
   'projects:build-profile',
   'projects:toolchain-needs',
   'projects:assess-toolchains',
+  'projects:findings-by-revision',
   'runs:list',
   'runs:get',
   'runs:status',
@@ -133,6 +134,42 @@ export interface ToolchainNeedsStatus {
   readonly agents: readonly ToolchainNeedsAgent[];
 }
 
+export interface RevisionFindingItem {
+  readonly id: string;
+  readonly title: string;
+  readonly category: string;
+  readonly severity: string;
+  readonly confidence: string;
+  readonly location: string;
+}
+
+export interface RevisionAgentRunItem {
+  readonly runId: string;
+  readonly mode: string;
+  readonly runStatus: string;
+  readonly agentStatus: string;
+  readonly at: string;
+  readonly findings: readonly RevisionFindingItem[];
+}
+
+export interface RevisionAgentItem {
+  readonly agentStackId: string;
+  readonly runs: readonly RevisionAgentRunItem[];
+}
+
+export interface RevisionFindingsItem {
+  readonly revisionId: string;
+  readonly contentHash: string;
+  readonly importedAt: string;
+  readonly agents: readonly RevisionAgentItem[];
+}
+
+export interface FindingsByRevision {
+  readonly projectId: string;
+  readonly currentRevisionId: string;
+  readonly revisions: readonly RevisionFindingsItem[];
+}
+
 export interface ToolchainVersionStatus {
   readonly version: string;
   readonly installed: boolean;
@@ -174,6 +211,8 @@ export interface SentryDesktopApi {
     ): Promise<{ projectId: string; started: string[] }>;
     /** What each agent says it would need from the Toolchains library for the project. */
     toolchainNeeds(projectId: string): Promise<ToolchainNeedsStatus>;
+    /** Every revision with runs, newest first: each agent's runs and raw findings, kept apart. */
+    findingsByRevision(projectId: string): Promise<FindingsByRevision>;
     /** Asks the agents (all, or the listed stacks) what they need; returns at once. */
     assessToolchains(
       projectId: string,

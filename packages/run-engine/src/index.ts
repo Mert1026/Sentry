@@ -1697,3 +1697,4 @@ export * from './activity-projector.js';
 export * from './exporters.js';
 export * from './sandbox.js';
 export * from './simulation.js';
+export * from './findings-by-revision.js';

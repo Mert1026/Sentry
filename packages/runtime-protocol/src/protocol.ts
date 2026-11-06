@@ -112,6 +112,7 @@ export const RUNTIME_METHODS = [
   'projects.buildProfile',
   'projects.toolchainNeeds',
   'projects.assessToolchains',
+  'projects.findingsByRevision',
   'toolchains.status',
   'toolchains.install',
   'toolchains.remove',

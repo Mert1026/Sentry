@@ -327,3 +327,19 @@ describe('toolchain needs methods', () => {
     }
   });
 });
+
+describe('findings by revision', () => {
+  it('rejects unknown projects through the method and the protocol', async () => {
+    const host = new SentryRuntimeHost(await tempDataRoot(), () => undefined);
+    try {
+      await host.recover();
+      const unknown = 'proj_01ARZ3NDEKTSV4RRFFQ69G5FAV';
+      expect(() => host.findingsByRevision(unknown)).toThrow(/Project not found/);
+      await expect(
+        host.dispatch('projects.findingsByRevision', { projectId: unknown }),
+      ).rejects.toMatchObject({ code: 'PROJECT_NOT_FOUND' });
+    } finally {
+      host.close();
+    }
+  });
+});

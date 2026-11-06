@@ -45,6 +45,8 @@ const api: SentryDesktopApi & { dialogs: { pickDirectory(): Promise<string | nul
         agentStackIds === undefined ? { projectId } : { projectId, agentStackIds },
       ),
     toolchainNeeds: (projectId: string) => invoke('projects:toolchain-needs', { projectId }),
+    findingsByRevision: (projectId: string) =>
+      invoke('projects:findings-by-revision', { projectId }),
     assessToolchains: (projectId: string, agentStackIds?: string[]) =>
       invoke(
         'projects:assess-toolchains',

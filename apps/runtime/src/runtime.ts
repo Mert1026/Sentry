@@ -22,7 +22,12 @@ import {
   resolveSentryDataRoot,
 } from '@qa/persistence';
 import { ProjectManager } from '@qa/project-manager';
-import { RunCoordinator, SystemdSandboxBackend, sandboxStagingParent } from '@qa/run-engine';
+import {
+  RunCoordinator,
+  SystemdSandboxBackend,
+  findingsByRevision,
+  sandboxStagingParent,
+} from '@qa/run-engine';
 import {
   createOpenCodeRegistration,
   credentialEnvForProvider,
@@ -889,6 +894,18 @@ export class SentryRuntimeHost {
     };
   }
 
+  /** Every revision with runs, newest first, with each agent's runs and findings kept apart. */
+  findingsByRevision(projectId: string): unknown {
+    const id = ProjectIdInput.parse(projectId);
+    const record = this.projects.getProject(id as never);
+    if (record === undefined) throw rpcError('PROJECT_NOT_FOUND', 'Project not found: ' + id);
+    return {
+      projectId: id,
+      currentRevisionId: record.revision.id,
+      revisions: findingsByRevision(this.repository, id as never),
+    };
+  }
+
   // ---- runs ----
   listRuns(projectId: string): unknown[] {
     const id = ProjectIdInput.parse(projectId);
@@ -1490,6 +1507,8 @@ export class SentryRuntimeHost {
           ids === undefined ? undefined : z.array(z.string().min(1).max(200)).max(10).parse(ids),
         );
       }
+      case 'projects.findingsByRevision':
+        return this.findingsByRevision(requireString(params, 'projectId'));
       case 'runs.list':
         return this.listRuns(requireString(params, 'projectId'));
       case 'runs.get':

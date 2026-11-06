@@ -24,6 +24,9 @@
   Node.js, Bun, Deno, Ruby, PHP, Swift, Dart, Elixir, Kotlin, Scala (sbt), a C / C++
   toolchain (gcc, make, cmake, ninja), Zig, Gradle, utilities, PostgreSQL, MySQL, Redis
   and SQLite. Most install with micromamba from conda-forge, with no root.
+- "Findings by revision" on the project page: pick a revision and see what each agent reported in
+  each run on it, as raw lists. A new revision starts a fresh list; older ones stay to browse.
+  Nothing is merged or matched, and agents never see the lists.
 - "Toolchains the agents need" on the project page: every agent reads the project once and
   names the Toolchains library entries it would need (runtime versions, compilers, build tools,
   databases). The answers sit next to what is installed, with Install buttons. Advice only:
