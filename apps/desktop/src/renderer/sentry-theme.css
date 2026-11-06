@@ -1279,3 +1279,33 @@ kbd {
   animation-iteration-count: 1 !important;
   transition-duration: 0.001ms !important;
 }
+
+/* Collapsible sections (Toolchains page): a visible arrow that turns when open. */
+summary.disclosure {
+  cursor: pointer;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  list-style: none;
+}
+summary.disclosure::-webkit-details-marker {
+  display: none;
+}
+summary.disclosure::before {
+  content: '';
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid var(--text-muted, currentColor);
+  border-bottom: 2px solid var(--text-muted, currentColor);
+  transform: rotate(-45deg);
+  transition: transform var(--dur-fast, 120ms) ease;
+}
+details[open] > summary.disclosure::before {
+  transform: rotate(45deg);
+}
+/* Cards in one grid row keep their own height: opening one must not stretch its neighbours. */
+.cards.toolchain-cards {
+  align-items: start;
+}

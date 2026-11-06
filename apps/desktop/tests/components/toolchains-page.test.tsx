@@ -83,6 +83,16 @@ describe('Toolchains page', () => {
     expect(screen.getByText('curl: (6) could not resolve host')).toBeTruthy();
   });
 
+  it('gives every heading a visible arrow and keeps neighbouring cards from stretching', async () => {
+    show();
+    await waitFor(() => expect(screen.getByText('Python')).toBeTruthy());
+    // The arrow comes from the "disclosure" class (a custom marker; display:flex hides the native one).
+    for (const title of ['Languages and runtimes', 'Python', 'PostgreSQL'])
+      expect(sectionOf(title).querySelector(':scope > summary.disclosure')).not.toBeNull();
+    // Opening one card must not stretch the other cards in its grid row.
+    expect(sectionOf('Python').parentElement?.className).toContain('toolchain-cards');
+  });
+
   it('puts the versions inside the pack, ready to open', async () => {
     show();
     await waitFor(() => expect(screen.getByText('Python')).toBeTruthy());

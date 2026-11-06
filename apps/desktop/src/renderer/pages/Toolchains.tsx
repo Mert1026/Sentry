@@ -8,15 +8,6 @@ import type { ToolchainPackStatus } from '../../shared/ipc-contract.js';
 
 const POLL_MS = 3000;
 
-/** The clickable heading row of a collapsible section. */
-const SUMMARY_STYLE: React.CSSProperties = {
-  cursor: 'pointer',
-  display: 'flex',
-  gap: 12,
-  alignItems: 'center',
-  flexWrap: 'wrap',
-};
-
 const CATEGORIES: ReadonlyArray<{
   readonly id: ToolchainPackStatus['category'];
   readonly title: string;
@@ -112,7 +103,7 @@ export function Toolchains(): React.JSX.Element {
           );
           return (
             <details key={category.id} open style={{ margin: '14px 0' }}>
-              <summary style={SUMMARY_STYLE}>
+              <summary className="disclosure">
                 <span className="card-title" style={{ margin: 0 }}>
                   {category.title}
                 </span>
@@ -124,14 +115,14 @@ export function Toolchains(): React.JSX.Element {
               <p className="body-secondary" style={{ margin: '6px 0 0' }}>
                 {category.hint}
               </p>
-              <div className="cards">
+              <div className="cards toolchain-cards">
                 {packs.map((pack) => {
                   const installed = pack.versions.filter((v) => v.installed).length;
                   const installing = pack.versions.some((v) => v.installing);
                   const failed = pack.versions.some((v) => v.error !== undefined && !v.installing);
                   return (
                     <details className="card" key={pack.id} open={installing || failed}>
-                      <summary style={SUMMARY_STYLE}>
+                      <summary className="disclosure">
                         <span className="card-title" style={{ margin: 0 }}>
                           {pack.label}
                         </span>
