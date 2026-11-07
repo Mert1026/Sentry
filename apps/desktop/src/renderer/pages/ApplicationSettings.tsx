@@ -236,7 +236,7 @@ export function ApplicationSettingsContent(): React.JSX.Element {
             </div>
           </div>
           <SwitchButton
-            checked={prefs.reducedMotion}
+            checked={!prefs.reducedMotion}
             label="Workspace Motion & Animations"
             onToggle={() => prefs.setReducedMotion(!prefs.reducedMotion)}
           />

@@ -312,6 +312,14 @@ describe('Application settings & localization', () => {
     expect(document.documentElement.getAttribute('data-theme')).toBe('light');
 
     const motionSwitch = screen.getByRole('switch', { name: 'Workspace Motion & Animations' });
+    // Animations are on by default, so the switch starts ON; turning it OFF reduces motion.
+    expect(motionSwitch.getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(motionSwitch);
+    expect(motionSwitch.getAttribute('aria-checked')).toBe('false');
+    expect(document.documentElement.getAttribute('data-reduced-motion')).toBe('true');
+    fireEvent.click(motionSwitch);
+    expect(motionSwitch.getAttribute('aria-checked')).toBe('true');
+    expect(document.documentElement.getAttribute('data-reduced-motion')).toBeNull();
     fireEvent.click(motionSwitch);
     expect(document.documentElement.getAttribute('data-reduced-motion')).toBe('true');
 
