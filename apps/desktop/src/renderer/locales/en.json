@@ -204,6 +204,7 @@
   "Allow external terminals and scripts to run `sentry cli ...` commands through this desktop session.": "Allow external terminals and scripts to run `sentry cli ...` commands through this desktop session.",
   "Workspace Motion & Animations": "Workspace Motion & Animations",
   "Reduce pulsing indicators, animated graph edges, and smooth camera transitions.": "Reduce pulsing indicators, animated graph edges, and smooth camera transitions.",
+  "Reduce section entrance animations, pulsing indicators, animated graph edges, and smooth camera transitions.": "Reduce section entrance animations, pulsing indicators, animated graph edges, and smooth camera transitions.",
   "Confirm Before Paid QA Runs": "Confirm Before Paid QA Runs",
   "Require a confirmation dialog before starting Full or Targeted QA runs that consume provider credits.": "Require a confirmation dialog before starting Full or Targeted QA runs that consume provider credits.",
   "Developer mode": "Developer mode",
@@ -392,5 +393,12 @@
   "Analysis coverage unknown": "Analysis coverage unknown",
   "Partial analysis": "Partial analysis",
   "Planned checks reported": "Planned checks reported",
-  "Analysis in progress": "Analysis in progress"
+  "Analysis in progress": "Analysis in progress",
+  "Open project setup": "Open project setup",
+  "Selected agents": "Selected agents",
+  "Profile compatibility with this revision is checked when the run starts.": "Profile compatibility with this revision is checked when the run starts.",
+  "No profile": "No profile",
+  "Checked at run time": "Checked at run time",
+  "Profile will be used": "Profile will be used",
+  "Profile needs rebuilding": "Profile needs rebuilding"
 }
