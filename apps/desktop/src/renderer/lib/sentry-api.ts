@@ -2,12 +2,20 @@ import type { SentryDesktopApi } from '../../shared/ipc-contract.js';
 
 declare global {
   interface Window {
-    readonly sentry: SentryDesktopApi & { dialogs: { pickDirectory(): Promise<string | null> } };
+    readonly sentry: SentryDesktopApi & {
+      dialogs: {
+        pickDirectory(): Promise<string | null>;
+        pickTargets(projectId: string, kind: 'files' | 'folder'): Promise<string[]>;
+      };
+    };
   }
 }
 
 function requireApi(): SentryDesktopApi & {
-  dialogs?: { pickDirectory(): Promise<string | null> };
+  dialogs?: {
+    pickDirectory(): Promise<string | null>;
+    pickTargets(projectId: string, kind: 'files' | 'folder'): Promise<string[]>;
+  };
 } {
   const api = window.sentry;
   if (api === undefined)
@@ -16,7 +24,10 @@ function requireApi(): SentryDesktopApi & {
 }
 
 export function sentryApi(): SentryDesktopApi & {
-  dialogs?: { pickDirectory(): Promise<string | null> };
+  dialogs?: {
+    pickDirectory(): Promise<string | null>;
+    pickTargets(projectId: string, kind: 'files' | 'folder'): Promise<string[]>;
+  };
 } {
   return requireApi();
 }

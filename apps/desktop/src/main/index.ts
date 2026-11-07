@@ -14,6 +14,7 @@ import { readReleaseIdentity, sourceUserDataPath } from './distribution.js';
 import { mkdirSync } from 'node:fs';
 import { WslMaintenance } from './wsl-maintenance.js';
 import { WslSpaceReclaimer } from './platform/windows/wsl-space-reclaimer.js';
+import { sourcePathForDialog, projectRelativeSelections } from './target-picker-paths.js';
 
 // Keep source-beta credential/prefs and single-instance scope when the
 // packaged product is named Sentry. Do this before bootstrap/lock acquisition.
@@ -82,6 +83,43 @@ async function createWindow(): Promise<void> {
 }
 
 function registerDialogIpc(): void {
+  ipcMain.handle('sentry:dialog:pick-targets', async (_event, payload: unknown) => {
+    try {
+      if (mainWindow === undefined || bootstrapped === undefined)
+        throw new Error('Sentry is not ready.');
+      if (payload === null || typeof payload !== 'object')
+        throw new Error('Invalid picker request.');
+      const { projectId, kind } = payload as { projectId?: unknown; kind?: unknown };
+      if (typeof projectId !== 'string' || (kind !== 'files' && kind !== 'folder'))
+        throw new Error('Invalid picker request.');
+      const record = (await bootstrapped.service.getProject(projectId)) as {
+        project?: { sourcePath?: unknown };
+      };
+      if (typeof record.project?.sourcePath !== 'string')
+        throw new Error('Project source is unavailable.');
+      const info = await bootstrapped.host.runtimeEnvironmentInfo();
+      const root = sourcePathForDialog(record.project.sourcePath, process.platform, info.distro);
+      const result = await dialog.showOpenDialog(mainWindow, {
+        title: kind === 'files' ? 'Choose project files' : 'Choose a project folder',
+        defaultPath: root,
+        properties: kind === 'files' ? ['openFile', 'multiSelections'] : ['openDirectory'],
+      });
+      return {
+        ok: true,
+        result: result.canceled
+          ? []
+          : projectRelativeSelections(root, result.filePaths, process.platform),
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        error: {
+          code: 'DIALOG_FAILED',
+          message: error instanceof Error ? error.message : 'Could not open the picker.',
+        },
+      };
+    }
+  });
   ipcMain.handle('sentry:dialog:open-directory', async () => {
     const win = mainWindow;
     if (win === undefined)
