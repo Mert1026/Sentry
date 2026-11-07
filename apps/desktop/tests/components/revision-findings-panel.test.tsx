@@ -113,6 +113,8 @@ describe('RevisionFindingsPanel', () => {
     expect(screen.getByText('Agent A')).toBeTruthy();
     expect(screen.getByText('2 runs, 2 findings')).toBeTruthy();
     expect(screen.getByText('Agent B')).toBeTruthy();
+    fireEvent.click(screen.getByText('Agent A'));
+    fireEvent.click(screen.getByText('Agent B'));
     expect(screen.getByText('Admin check missing')).toBeTruthy();
     expect(screen.queryByText('Old problem')).toBeNull();
     expect(screen.getAllByText('No findings from this agent in this run.')).toHaveLength(2);
@@ -121,9 +123,19 @@ describe('RevisionFindingsPanel', () => {
     expect(links.map((link) => link.getAttribute('href'))).toContain('/runs/run_2');
   });
 
+  it('starts agent sections closed and opens them on request', () => {
+    const view = show(data);
+    const details = view.container.querySelectorAll('details.revision-agent');
+    expect([...details].every((item) => !item.open)).toBe(true);
+    fireEvent.click(screen.getByText('Agent A'));
+    expect(details[0]?.open).toBe(true);
+    expect(details[1]?.open).toBe(false);
+  });
+
   it('switches to an older revision, which has its own separate list', () => {
     show(data);
     fireEvent.change(screen.getByLabelText('Revision'), { target: { value: 'rev_old' } });
+    fireEvent.click(screen.getByText('Agent A'));
     expect(screen.getByText('Old problem')).toBeTruthy();
     expect(screen.queryByText('Admin check missing')).toBeNull();
     expect(screen.queryByText('Agent B')).toBeNull();
@@ -132,6 +144,7 @@ describe('RevisionFindingsPanel', () => {
 
   it('lists each finding with its severity, confidence and place', () => {
     show(data);
+    fireEvent.click(screen.getByText('Agent A'));
     const item = screen.getByText('Admin check missing').closest('li') as HTMLElement;
     expect(within(item).getByText('high')).toBeTruthy();
     expect(within(item).getByText('confirmed')).toBeTruthy();
@@ -163,10 +176,11 @@ describe('re-testing findings from an older revision', () => {
   it('offers no ticks on the current revision, and ticks on an older one', () => {
     withRetest();
     expect(screen.queryByRole('checkbox')).toBeNull();
-    expect(screen.queryByText(/Tick findings to re-test/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'About Re-testing findings' })).toBeNull();
     fireEvent.change(screen.getByLabelText('Revision'), { target: { value: 'rev_old' } });
+    fireEvent.click(screen.getByText('Agent A'));
     expect(screen.getByRole('checkbox', { name: 'Re-test: Old problem' })).toBeTruthy();
-    expect(screen.getByText(/Tick findings to re-test them on the current revision/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'About Re-testing findings' })).toBeTruthy();
     expect(
       screen.getByRole('button', { name: 'Re-test 0 selected' }).hasAttribute('disabled'),
     ).toBe(true);
@@ -176,6 +190,7 @@ describe('re-testing findings from an older revision', () => {
     const onRetest = vi.fn();
     withRetest(onRetest);
     fireEvent.change(screen.getByLabelText('Revision'), { target: { value: 'rev_old' } });
+    fireEvent.click(screen.getByText('Agent A'));
     fireEvent.click(screen.getByRole('checkbox', { name: 'Re-test: Old problem' }));
     const confirm = vi.spyOn(window, 'confirm');
     confirm.mockReturnValueOnce(false);
@@ -193,6 +208,7 @@ describe('re-testing findings from an older revision', () => {
   it('starts a fresh selection when another revision is chosen', () => {
     withRetest();
     fireEvent.change(screen.getByLabelText('Revision'), { target: { value: 'rev_old' } });
+    fireEvent.click(screen.getByText('Agent A'));
     fireEvent.click(screen.getByRole('checkbox', { name: 'Re-test: Old problem' }));
     expect(screen.getByRole('button', { name: 'Re-test 1 selected' })).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Revision'), { target: { value: 'rev_new' } });
@@ -230,11 +246,12 @@ describe('re-testing findings from an older revision', () => {
         },
       ],
     });
+    fireEvent.click(screen.getByText('Agent A'));
     expect(screen.getByText('RETEST')).toBeTruthy();
     expect(screen.getByText('Still reproduces')).toBeTruthy();
     expect(screen.getByText('No longer reproduces')).toBeTruthy();
     expect(screen.getByText('Cannot tell')).toBeTruthy();
-    expect(screen.getByText('· same 200 response')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'About Retest details: Old problem' })).toBeTruthy();
     expect(screen.queryByText(/fixed/i)).toBeNull();
     expect(screen.queryByText('No findings from this agent in this run.')).toBeNull();
   });

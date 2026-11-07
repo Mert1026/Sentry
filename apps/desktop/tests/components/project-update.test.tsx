@@ -13,7 +13,10 @@ afterEach(() => {
   delete (window as { sentry?: unknown }).sentry;
 });
 
-function fixture() {
+function fixture(options?: {
+  profiles?: Array<{ agentStackId: string; state: 'none' | 'fresh' | 'stale'; building: boolean }>;
+  multipleAgents?: boolean;
+}) {
   const update = vi.fn(async () => {
     await new Promise<never>(() => undefined);
   });
@@ -31,6 +34,7 @@ function fixture() {
         { id: 'rev_01K7777777777777777777779B', importedAt: '2026-10-25T12:00:00.000Z' },
       ]),
       doctor: vi.fn(async () => ({ ready: true })),
+      profile: vi.fn(async () => ({ projectId: 'proj_alpha', agents: options?.profiles ?? [] })),
       update,
       cancelUpdate,
     },
@@ -38,9 +42,22 @@ function fixture() {
       list: vi.fn(async () => []),
       start: vi.fn(async () => ({ operationId: 'dop_test', runId: 'run_started' })),
     },
+    dialogs: {
+      pickTargets: vi.fn(async (_project: string, kind: string) =>
+        kind === 'files' ? ['src/app.ts', 'tests/a.test.ts'] : ['src/components'],
+      ),
+    },
     doctors: {
       environment: vi.fn(async () => ({
-        agentStacks: [{ id: 'stack_opencode_main', displayName: 'OpenCode', readiness: 'ready' }],
+        agentStacks: [
+          { id: 'stack_opencode_main', displayName: 'OpenCode', readiness: 'ready' },
+          ...(options?.multipleAgents
+            ? [
+                { id: 'stack_deepseek_main', displayName: 'DeepSeek', readiness: 'ready' },
+                { id: 'stack_glm_main', displayName: 'GLM', readiness: 'ready' },
+              ]
+            : []),
+        ],
       })),
     },
     production: {
@@ -69,6 +86,125 @@ async function startUpdate() {
   fireEvent.click(await screen.findByRole('button', { name: 'Update Project' }));
   return screen.findByRole('dialog', { name: 'Updating project in Sentry' });
 }
+
+describe('project section navigation', () => {
+  it('localizes the start confirmation while preserving revision IDs and paths', async () => {
+    window.localStorage.setItem('sentry:language', 'bg');
+    try {
+      fixture();
+      fireEvent.click(await screen.findByRole('button', { name: 'Start Full QA' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Потвърди стартиране на пълен QA' });
+      expect(within(dialog).getByText('Да се стартира ли пълен QA?')).toBeTruthy();
+      expect(within(dialog).getByText(/ревизия/i)).toBeTruthy();
+      expect(dialog.textContent).toContain('rev_01K77777…');
+      expect(dialog.textContent).not.toContain('Web access:');
+    } finally {
+      window.localStorage.removeItem('sentry:language');
+    }
+  });
+  it('opens setup from profile help and preserves run choices', async () => {
+    fixture();
+    const web = await screen.findByRole('switch', { name: 'Allow web access' });
+    fireEvent.click(web);
+    fireEvent.click(screen.getByText('Open project setup'));
+    expect(screen.getByRole('tabpanel', { name: 'Setup' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: 'Run QA' }));
+    expect(
+      (screen.getByRole('switch', { name: 'Allow web access' }) as HTMLInputElement).checked,
+    ).toBe(true);
+  });
+  it('reports profile usage for selected agents and treats older revisions as unknown', async () => {
+    fixture({
+      multipleAgents: true,
+      profiles: [
+        { agentStackId: 'stack_opencode_main', state: 'fresh', building: false },
+        { agentStackId: 'stack_deepseek_main', state: 'stale', building: false },
+        { agentStackId: 'stack_glm_main', state: 'none', building: false },
+      ],
+    });
+    const toggle = (await screen.findByRole('switch', {
+      name: 'Use project profile',
+    })) as HTMLInputElement;
+    await waitFor(() => expect(toggle.checked).toBe(true));
+    const details = document.querySelector('.run-option-details') as HTMLElement;
+    expect(within(details).getByText('Profile will be used')).toBeTruthy();
+    expect(within(details).getByText('Profile needs rebuilding')).toBeTruthy();
+    expect(within(details).getByText('No profile')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Run revision'), {
+      target: { value: 'rev_01K7777777777777777777778A' },
+    });
+    expect(within(details).getAllByText('Checked at run time')).toHaveLength(2);
+    expect(within(details).queryByText('Profile will be used')).toBeNull();
+    fireEvent.click(toggle);
+    expect(document.querySelector('.run-option-details')).toBeNull();
+  });
+  it('adds project-relative files and folders from the picker to a targeted run', async () => {
+    const f = fixture();
+    await screen.findByLabelText('Run revision');
+    fireEvent.click(screen.getByRole('button', { name: 'Targeted QA' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Browse files' }));
+    await screen.findByRole('button', { name: 'Remove src/app.ts' });
+    fireEvent.click(screen.getByRole('button', { name: 'Browse folder' }));
+    await screen.findByRole('button', { name: 'Remove src/components' });
+    fireEvent.click(screen.getByRole('button', { name: 'Start Targeted QA' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Confirm start targeted QA' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Start QA' }));
+    await waitFor(() =>
+      expect(f.api.runs.start).toHaveBeenCalledWith(
+        'proj_alpha',
+        expect.objectContaining({
+          includePaths: ['src/app.ts', 'tests/a.test.ts', 'src/components'],
+        }),
+      ),
+    );
+  });
+  it('sends icon-toggle choices to QA and keeps unavailable profiles disabled', async () => {
+    const f = fixture();
+    const start = await screen.findByRole('button', { name: 'Start Full QA' });
+    await waitFor(() => expect((start as HTMLButtonElement).disabled).toBe(false));
+    const profile = screen.getByRole('switch', { name: 'Use project profile' }) as HTMLInputElement;
+    expect(profile.disabled).toBe(true);
+    for (const name of ['Allow web access', 'Allow tool and SDK downloads']) {
+      const control = screen.getByRole('switch', { name }) as HTMLInputElement;
+      fireEvent.click(control.closest('label') as HTMLLabelElement);
+      expect(control.checked).toBe(true);
+    }
+    fireEvent.click(start);
+    const dialog = await screen.findByRole('dialog', { name: 'Confirm start full QA' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Start QA' }));
+    await waitFor(() =>
+      expect(f.api.runs.start).toHaveBeenCalledWith(
+        'proj_alpha',
+        expect.objectContaining({ webAccess: true, toolDownloads: true }),
+      ),
+    );
+  });
+
+  it('opens on Run QA and preserves options when switching sections', async () => {
+    fixture();
+    await screen.findByLabelText('Run revision');
+    expect(screen.getByRole('tabpanel', { name: 'Run QA' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Project profile' })).toBeNull();
+    fireEvent.click(screen.getByLabelText('Allow web access'));
+    fireEvent.click(screen.getByRole('tab', { name: 'Setup' }));
+    expect(screen.getByRole('tabpanel', { name: 'Setup' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Start Full QA' })).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: 'Run QA' }));
+    expect((screen.getByLabelText('Allow web access') as HTMLInputElement).checked).toBe(true);
+  });
+
+  it('supports arrow, Home and End keys with matching panel and focus', async () => {
+    fixture();
+    const runTab = await screen.findByRole('tab', { name: 'Run QA' });
+    fireEvent.keyDown(runTab, { key: 'ArrowRight' });
+    expect(screen.getByRole('tabpanel', { name: 'Findings' })).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Findings' }));
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'End' });
+    expect(screen.getByRole('tabpanel', { name: 'Activity' })).toBeTruthy();
+    fireEvent.keyDown(document.activeElement as HTMLElement, { key: 'Home' });
+    expect(screen.getByRole('tabpanel', { name: 'Run QA' })).toBeTruthy();
+  });
+});
 
 describe('project revision update', () => {
   it('opens a blocking modal and disables run start while updating', async () => {
@@ -119,6 +255,8 @@ describe('run revision selection', () => {
     expect(options).toHaveLength(2);
     expect(options[0]!.value).toBe('rev_01K7777777777777777777779B');
     expect(options[1]!.value).toBe('rev_01K7777777777777777777778A');
+    expect(options[0]!.text).toContain('rev_01K7777777777777777777779B');
+    expect(options[1]!.text).toContain('rev_01K7777777777777777777778A');
     expect(picker.value).toBe('rev_01K7777777777777777777779B');
     expect(options[0]!.text).toContain('current');
     expect(options[0]!.text).toContain('2026');
