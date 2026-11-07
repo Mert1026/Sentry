@@ -11,7 +11,15 @@ import {
   SWIFT_SCRIPT,
   condaRecipe,
 } from '../src/toolchain-installers.js';
-import { ToolchainManager, type ScriptRunner } from '../src/toolchains.js';
+import {
+  DOTNET_SCRIPT,
+  GO_SCRIPT,
+  JAVA_SCRIPT,
+  PYTHON_SCRIPT,
+  RUST_SCRIPT,
+  ToolchainManager,
+  type ScriptRunner,
+} from '../src/toolchains.js';
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -91,6 +99,8 @@ describe.skipIf(!has('bash') || !has('python3'))('installer scripts parse', () =
     syntax(CONDA_SCRIPT);
     syntax(PHP_SCRIPT);
     syntax(SWIFT_SCRIPT);
+    for (const script of [PYTHON_SCRIPT, DOTNET_SCRIPT, RUST_SCRIPT, GO_SCRIPT, JAVA_SCRIPT])
+      syntax(script);
     for (const pack of TOOLCHAIN_PACKS) {
       const check = condaRecipe(pack.id, pack.defaultVersion)?.check;
       if (check !== undefined) syntax(check);
@@ -153,7 +163,9 @@ describe('installing the new packs', () => {
   it('lists a category for every pack in the status', async () => {
     const manager = new ToolchainManager(await temp(), okRunner([]));
     const status = await manager.status();
-    expect(status.map((p) => p.category).filter((c) => c === 'database')).toHaveLength(4);
+    const databases = TOOLCHAIN_PACKS.filter((pack) => pack.category === 'database').length;
+    expect(databases).toBeGreaterThanOrEqual(8);
+    expect(status.map((p) => p.category).filter((c) => c === 'database')).toHaveLength(databases);
     expect(status.find((p) => p.id === 'c')?.category).toBe('build');
   });
 });

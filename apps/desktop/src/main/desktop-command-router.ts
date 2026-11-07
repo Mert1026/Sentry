@@ -31,6 +31,7 @@ export const DesktopChannelSchemas: Record<string, z.ZodTypeAny> = {
     })
     .strict(),
   'projects:toolchain-needs': z.object({ projectId: z.string().min(1).max(200) }).strict(),
+  'projects:toolchain-selection': z.object({ projectId: z.string().min(1).max(200) }).strict(),
   'projects:findings-by-revision': z.object({ projectId: z.string().min(1).max(200) }).strict(),
   'projects:assess-toolchains': z
     .object({
@@ -305,6 +306,8 @@ export async function dispatchDesktopCommand(
       );
     case 'projects:toolchain-needs':
       return service.toolchainNeedsStatus(parsed['projectId'] as string);
+    case 'projects:toolchain-selection':
+      return service.toolchainSelection(parsed['projectId'] as string);
     case 'projects:findings-by-revision':
       return service.findingsByRevision(parsed['projectId'] as string);
     case 'projects:assess-toolchains':

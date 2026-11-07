@@ -894,6 +894,20 @@ export class SentryRuntimeHost {
     };
   }
 
+  /** What the project's own files ask for, per toolchain, against what is installed. */
+  async toolchainSelection(projectId: string): Promise<unknown> {
+    const id = ProjectIdInput.parse(projectId);
+    const record = this.projects.getProject(id as never);
+    if (record === undefined) throw rpcError('PROJECT_NOT_FOUND', 'Project not found: ' + id);
+    const { projectDataPaths } = await import('@qa/persistence');
+    return {
+      projectId: id,
+      items: await this.toolchains.selection(
+        projectDataPaths(this.dataRoot, id as never).workingCopy,
+      ),
+    };
+  }
+
   /** Every revision with runs, newest first, with each agent's runs and findings kept apart. */
   findingsByRevision(projectId: string): unknown {
     const id = ProjectIdInput.parse(projectId);
@@ -1536,6 +1550,8 @@ export class SentryRuntimeHost {
           ids === undefined ? undefined : z.array(z.string().min(1).max(200)).max(10).parse(ids),
         );
       }
+      case 'projects.toolchainSelection':
+        return this.toolchainSelection(requireString(params, 'projectId'));
       case 'projects.findingsByRevision':
         return this.findingsByRevision(requireString(params, 'projectId'));
       case 'runs.list':

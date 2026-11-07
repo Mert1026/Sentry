@@ -1,6 +1,6 @@
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it } from 'vitest';
 import { Toolchains } from '../../src/renderer/pages/Toolchains.js';
@@ -39,10 +39,10 @@ const packs: ToolchainPackStatus[] = [
   pack('postgres', 'PostgreSQL', 'database', [{ version: '17' }]),
 ];
 
-function show() {
+function show(list: ToolchainPackStatus[] = packs) {
   (window as unknown as { sentry: unknown }).sentry = {
     toolchains: {
-      status: async () => packs,
+      status: async () => list,
       install: async () => ({ started: true }),
       customStatus: async () => [],
     },
@@ -62,10 +62,41 @@ const sectionOf = (title: string): HTMLDetailsElement =>
   screen.getByText(title).closest('details') as HTMLDetailsElement;
 
 describe('Toolchains page', () => {
+  it('finds packs by search and hides the groups that have none left', async () => {
+    show();
+    await waitFor(() => expect(screen.getByText('Python')).toBeTruthy());
+    expect(screen.getByText('5 of 5 packs')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Search toolchains'), { target: { value: 'postgres' } });
+    expect(screen.getByText('1 of 5 packs')).toBeTruthy();
+    expect(screen.getByText('PostgreSQL')).toBeTruthy();
+    expect(screen.queryByText('Python')).toBeNull();
+    expect(screen.queryByText('Languages and runtimes')).toBeNull();
+    expect(screen.getByText('Databases and services')).toBeTruthy();
+  });
+
+  it('shows only installed packs when asked, with what the install printed', async () => {
+    const withCheck = pack('python', 'Python', 'language', [{ version: '3.13', installed: true }]);
+    const first = withCheck.versions[0]!;
+    show([
+      { ...withCheck, versions: [{ ...first, verification: 'Python 3.13.1\nuv 0.13.7' }] },
+      pack('ruff', 'Ruff', 'qa', [{ version: '0.17' }]),
+    ]);
+    await waitFor(() => expect(screen.getByText('Python')).toBeTruthy());
+    expect(screen.getByText('Ruff')).toBeTruthy();
+    expect(screen.getByText('QA and security tools')).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('Installed only'));
+    expect(screen.queryByText('Ruff')).toBeNull();
+    expect(screen.getByText('Python')).toBeTruthy();
+    // the first line of what the install proved to run, with all of it on hover
+    expect(screen.getByText('Python 3.13.1').getAttribute('title')).toBe(
+      'Python 3.13.1\nuv 0.13.7',
+    );
+  });
+
   it('groups packs into collapsible sections that start open', async () => {
     show();
     await waitFor(() => expect(screen.getByText('Languages and runtimes')).toBeTruthy());
-    for (const title of ['Languages and runtimes', 'Build tools', 'Databases']) {
+    for (const title of ['Languages and runtimes', 'Build tools', 'Databases and services']) {
       expect(sectionOf(title).tagName).toBe('DETAILS');
       expect(sectionOf(title).open).toBe(true);
     }

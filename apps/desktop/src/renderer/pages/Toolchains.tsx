@@ -7,6 +7,7 @@ import { PageHeader, PageSection } from '../components/ui/PageHeader.js';
 import { StatusPill } from '../components/ui/StatusPill.js';
 import { CustomAddons } from '../components/CustomAddons.js';
 import { InfoPopover } from '../components/InfoPopover.js';
+import { packMatches, verificationLine } from '../lib/toolchain-filter.js';
 import type { ToolchainPackStatus } from '../../shared/ipc-contract.js';
 
 const POLL_MS = 3000;
@@ -18,13 +19,28 @@ const CATEGORIES: ReadonlyArray<{
 }> = [
   { id: 'language', title: 'Languages and runtimes', hint: 'Compilers, interpreters and SDKs.' },
   {
+    id: 'package',
+    title: 'Package managers',
+    hint: 'pnpm, Yarn, Poetry and others. A project that names one in its files gets that one.',
+  },
+  {
     id: 'build',
     title: 'Build tools',
-    hint: 'C and C++ compilers, make, cmake, Gradle and everyday utilities.',
+    hint: 'C and C++ compilers, make, cmake, Gradle, Bazelisk and everyday utilities.',
+  },
+  {
+    id: 'qa',
+    title: 'QA and security tools',
+    hint: 'Linters and scanners. A project that brings its own version uses that one first.',
+  },
+  {
+    id: 'infra',
+    title: 'Infrastructure',
+    hint: 'Validate and plan only: installing a tool never changes real infrastructure.',
   },
   {
     id: 'database',
-    title: 'Databases',
+    title: 'Databases and services',
     hint: 'Servers for integration tests. Agents start them inside their sandbox.',
   },
 ];
@@ -40,6 +56,9 @@ function totalInstallMb(pack: ToolchainPackStatus): number {
 export function Toolchains(): React.JSX.Element {
   const queryClient = useQueryClient();
   const [message, setMessage] = React.useState<string | undefined>(undefined);
+  const [query, setQuery] = React.useState('');
+  const [installedOnly, setInstalledOnly] = React.useState(false);
+  const filtering = query.trim().length > 0 || installedOnly;
   const status = useQuery({
     queryKey: ['toolchains'],
     queryFn: () => sentryApi().toolchains.status(),
@@ -103,8 +122,33 @@ export function Toolchains(): React.JSX.Element {
             {message}
           </p>
         ) : null}
+        <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search toolchains (name, version, what it does)"
+            aria-label="Search toolchains"
+            style={{ minWidth: 280 }}
+          />
+          <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <input
+              type="checkbox"
+              checked={installedOnly}
+              onChange={(event) => setInstalledOnly(event.target.checked)}
+            />
+            <span>Installed only</span>
+          </label>
+          <span className="metadata">
+            {(status.data ?? []).filter((pack) => packMatches(pack, query, installedOnly)).length}{' '}
+            of {(status.data ?? []).length} packs
+          </span>
+        </div>
         {CATEGORIES.map((category) => {
-          const packs = (status.data ?? []).filter((pack) => pack.category === category.id);
+          const packs = (status.data ?? []).filter(
+            (pack) => pack.category === category.id && packMatches(pack, query, installedOnly),
+          );
+          if (filtering && packs.length === 0) return null;
           const installedCount = packs.reduce(
             (total, pack) => total + pack.versions.filter((v) => v.installed).length,
             0,
@@ -185,6 +229,11 @@ export function Toolchains(): React.JSX.Element {
                                   : 'Not installed'
                             }
                           />
+                          {v.installed && verificationLine(v.verification) !== undefined ? (
+                            <span className="metadata mono" title={v.verification}>
+                              {verificationLine(v.verification)}
+                            </span>
+                          ) : null}
                           {v.installed && v.sizeMb !== undefined ? (
                             <span className="metadata">{v.sizeMb} MB</span>
                           ) : null}

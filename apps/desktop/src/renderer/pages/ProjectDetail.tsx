@@ -25,6 +25,7 @@ import { useI18n } from '../lib/i18n.js';
 import { ProjectProfilePanel } from '../components/ProjectProfilePanel.js';
 import { useProjectProfile } from '../lib/use-project-profile.js';
 import { ToolchainNeedsPanel } from '../components/ToolchainNeedsPanel.js';
+import { ToolchainRequestsPanel } from '../components/ToolchainRequestsPanel.js';
 import { useToolchainNeeds } from '../lib/use-toolchain-needs.js';
 import { RevisionFindingsPanel } from '../components/RevisionFindingsPanel.js';
 import { useFindingsByRevision } from '../lib/use-findings-by-revision.js';
@@ -735,6 +736,13 @@ export function ProjectDetail(): React.JSX.Element {
           />
         </PageSection>
         <PageSection title="Toolchains the agents need">
+          <ToolchainRequestsPanel
+            items={toolchainNeeds.selection.data?.items ?? []}
+            toolchains={toolchainNeeds.toolchains.data ?? []}
+            loading={toolchainNeeds.selection.isLoading}
+            installing={toolchainNeeds.install.isPending}
+            onInstall={(items) => toolchainNeeds.install.mutate(items)}
+          />
           <ToolchainNeedsPanel
             stacks={stacks}
             agents={toolchainNeeds.needs.data?.agents ?? []}

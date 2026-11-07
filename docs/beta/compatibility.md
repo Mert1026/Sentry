@@ -23,12 +23,21 @@ product version stays `1.0.2`; no version numbers changed.
 
 ## Known limits in this beta
 
-- Only the Python and .NET installers have been run end to end. The others (Rust, Go,
-  Java and everything added later: C / C++, Node.js, Bun, Deno, Ruby, PHP, Swift, Dart,
-  Elixir, Kotlin, Scala, Zig, Gradle, utilities and the databases) are covered by unit
-  tests with a fake runner and shell syntax checks only. Swift is experimental.
-- No browsers, Haskell, Docker or SQL Server packs: browsers and Haskell need system
-  libraries that cannot be installed without root, and the other two need a daemon.
+- Only the Python and .NET installers have been run end to end. Every other pack (Rust,
+  Go, Java and everything added later, 59 packs in all) is covered by unit tests with a fake
+  runner and by shell syntax checks only; the first real install of each is its first real
+  test. Swift is experimental. Every install ends with a check that runs the installed
+  program, and a pack only counts as installed when that check passes.
+- Packs added to the library that are not yet in conda-forge form (semgrep, gitleaks,
+  hadolint, shfmt, kubectl, helm, kubeconform, Valkey, MariaDB) are not offered.
+- No browsers, Haskell, Docker or SQL Server packs. Browsers need a Playwright download
+  matched to the project's version plus two libraries (`nss`, `nspr`) that are on
+  conda-forge; that is planned, not built. Docker and SQL Server are left out on purpose.
+- Database packs install the programs only. Starting a server (data folder, port, readiness,
+  clean-up) is left to the agent inside its sandbox; there is no service manager yet.
+- The project page shows what the project's own version files ask for next to what is
+  installed, and a run falls back to another installed version when the requested one is
+  missing. The page flags the mismatch; it does not stop the run.
 - A pack that fails to install is deleted and the error is shown on the Toolchains page.
 - Custom add-ons run the person's own command with their permissions and network access on the host. They are not sandboxed, not checksummed and not version-pinned; only run commands you trust.
 - A single run-mode switch (Standard / Unrestricted) is not part of this beta; the

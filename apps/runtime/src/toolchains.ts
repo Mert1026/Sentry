@@ -13,7 +13,13 @@ import {
 } from '@qa/shared';
 
 import { CustomAddons } from './custom-addons.js';
-import { chooseVersion, projectToolchainHints, type ToolchainHints } from './toolchain-pins.js';
+import {
+  chooseVersion,
+  matchOffered,
+  projectToolchainHints,
+  versionsAgree,
+  type ToolchainHints,
+} from './toolchain-pins.js';
 import { CONDA_SCRIPT, PHP_SCRIPT, SWIFT_SCRIPT, condaRecipe } from './toolchain-installers.js';
 
 const INSTALL_TIMEOUT_MS = 30 * 60_000;
@@ -96,7 +102,7 @@ export function pickGoArchive(
   return undefined;
 }
 
-const PYTHON_SCRIPT = `
+export const PYTHON_SCRIPT = `
 mkdir -p bin python tmp
 ARCH=$(uname -m)
 ASSET="uv-\${ARCH}-unknown-linux-gnu.tar.gz"
@@ -111,29 +117,35 @@ bin/uv python install "$SENTRY_TC_VERSION"
 PY=$(bin/uv python find "$SENTRY_TC_VERSION")
 ln -sf "$PY" bin/python3
 ln -sf python3 bin/python
+bin/python3 --version
+bin/uv --version
 `;
 
-const DOTNET_SCRIPT = `
+export const DOTNET_SCRIPT = `
 curl -fsSL --retry 3 -o dotnet-install.sh https://dot.net/v1/dotnet-install.sh
 bash dotnet-install.sh --channel "$SENTRY_TC_VERSION" --install-dir "$SENTRY_TC_DIR/dotnet" --no-path
 rm -f dotnet-install.sh
+"$SENTRY_TC_DIR/dotnet/dotnet" --version
 `;
 
-const RUST_SCRIPT = `
+export const RUST_SCRIPT = `
 curl --proto '=https' --tlsv1.2 -fsSL --retry 3 -o rustup-init.sh https://sh.rustup.rs
 export RUSTUP_HOME="$SENTRY_TC_DIR/rustup" CARGO_HOME="$SENTRY_TC_DIR/cargo"
 sh rustup-init.sh -y --no-modify-path --profile minimal --default-toolchain "$SENTRY_TC_VERSION"
 rm -f rustup-init.sh
+"$CARGO_HOME/bin/rustc" --version
+"$CARGO_HOME/bin/cargo" --version
 `;
 
-const GO_SCRIPT = `
+export const GO_SCRIPT = `
 curl -fsSL --retry 3 -o go.tar.gz "https://go.dev/dl/$SENTRY_GO_FILE"
 echo "$SENTRY_GO_SHA  go.tar.gz" | sha256sum -c -
 tar -xzf go.tar.gz
 rm -f go.tar.gz
+"$SENTRY_TC_DIR/go/bin/go" version
 `;
 
-const JAVA_SCRIPT = `
+export const JAVA_SCRIPT = `
 case "$(uname -m)" in aarch64|arm64) A=aarch64 ;; *) A=x64 ;; esac
 curl -fsSL --retry 3 -L -o jdk.tar.gz "https://api.adoptium.net/v3/binary/latest/$SENTRY_TC_VERSION/ga/linux/$A/jdk/hotspot/normal/eclipse"
 mkdir -p jdk && tar -xzf jdk.tar.gz --strip-components=1 -C jdk && rm -f jdk.tar.gz
@@ -144,12 +156,16 @@ curl -fsSL --retry 3 -o maven.tar.gz.sha512 "$BASE.sha512"
 echo "$(cut -d' ' -f1 maven.tar.gz.sha512)  maven.tar.gz" | sha512sum -c -
 mkdir -p maven && tar -xzf maven.tar.gz --strip-components=1 -C maven
 rm -f maven.tar.gz maven.tar.gz.sha512
+"$SENTRY_TC_DIR/jdk/bin/java" -version 2>&1
+"$SENTRY_TC_DIR/maven/bin/mvn" -version 2>&1 | sed -n 1p
 `;
 
 export interface InstalledToolchain {
   readonly packId: ToolchainPackId;
   readonly version: string;
   readonly installedAt: string;
+  /** What the install's own check printed (versions of the programs it proved to run). */
+  readonly verification?: string;
 }
 
 export interface ToolchainVersionStatus {
@@ -158,6 +174,26 @@ export interface ToolchainVersionStatus {
   readonly installing: boolean;
   readonly sizeMb?: number;
   readonly error?: string;
+  readonly verification?: string;
+}
+
+/** One toolchain a project's own files ask for, next to what a run would use. */
+export interface ToolchainRequest {
+  readonly packId: ToolchainPackId;
+  readonly label: string;
+  /** The version the project asks for, as its files state it ("22", "3.11"). */
+  readonly requested: string;
+  /** The library version that satisfies it, when the library offers one. */
+  readonly offered?: string;
+  readonly installed: readonly string[];
+  /** The version a run would put on PATH; undefined when none of this pack is installed. */
+  readonly selected?: string;
+  /**
+   * match: the requested version is installed. fallback: another version would be used instead.
+   * not_installed: nothing of the pack is installed but the library offers the version.
+   * not_offered: the library has no such version.
+   */
+  readonly state: 'match' | 'fallback' | 'not_installed' | 'not_offered';
 }
 
 export interface ToolchainPackStatus {
@@ -204,25 +240,32 @@ export class ToolchainManager {
   }
 
   async installed(): Promise<InstalledToolchain[]> {
-    const found: InstalledToolchain[] = [];
-    for (const pack of TOOLCHAIN_PACKS) {
-      for (const version of pack.versions) {
+    const checks = TOOLCHAIN_PACKS.flatMap((pack) =>
+      pack.versions.map(async (version): Promise<InstalledToolchain | undefined> => {
         try {
           const marker = JSON.parse(
             await readFile(join(toolchainDir(this.dataRoot, pack.id, version), MARKER), 'utf8'),
-          ) as { installedAt?: string };
-          found.push({ packId: pack.id, version, installedAt: marker.installedAt ?? '' });
+          ) as { installedAt?: string; verification?: string };
+          return {
+            packId: pack.id,
+            version,
+            installedAt: marker.installedAt ?? '',
+            ...(marker.verification === undefined ? {} : { verification: marker.verification }),
+          };
         } catch {
-          /* not installed */
+          return undefined; // not installed
         }
-      }
-    }
-    return found;
+      }),
+    );
+    return (await Promise.all(checks)).filter(
+      (item): item is InstalledToolchain => item !== undefined,
+    );
   }
 
   async status(): Promise<ToolchainPackStatus[]> {
-    const installed = new Set(
-      (await this.installed()).map((item) => this.key(item.packId, item.version)),
+    const installedList = await this.installed();
+    const installed = new Map(
+      installedList.map((item) => [this.key(item.packId, item.version), item]),
     );
     return Promise.all(
       TOOLCHAIN_PACKS.map(async (pack) => ({
@@ -236,7 +279,8 @@ export class ToolchainManager {
         versions: await Promise.all(
           pack.versions.map(async (version) => {
             const key = this.key(pack.id, version);
-            const isInstalled = installed.has(key);
+            const record = installed.get(key);
+            const isInstalled = record !== undefined;
             const sizeMb = isInstalled
               ? await duMegabytes(toolchainDir(this.dataRoot, pack.id, version))
               : undefined;
@@ -247,6 +291,7 @@ export class ToolchainManager {
               installing: this.installing.has(key),
               ...(sizeMb === undefined ? {} : { sizeMb }),
               ...(error === undefined ? {} : { error }),
+              ...(record?.verification === undefined ? {} : { verification: record.verification }),
             };
           }),
         ),
@@ -332,7 +377,15 @@ export class ToolchainManager {
     }
     await writeFile(
       join(dir, MARKER),
-      JSON.stringify({ packId: id, version, installedAt: new Date().toISOString() }),
+      JSON.stringify({
+        packId: id,
+        version,
+        installedAt: new Date().toISOString(),
+        // The first lines of what the install's check printed: the exact versions that ran.
+        ...(result.output.trim().length === 0
+          ? {}
+          : { verification: result.output.trim().slice(0, 600) }),
+      }),
       'utf8',
     );
   }
@@ -345,6 +398,40 @@ export class ToolchainManager {
       throw new Error('That install is still running.');
     await rm(toolchainDir(this.dataRoot, pack.id, version), { recursive: true, force: true });
     this.errors.delete(this.key(pack.id, version));
+  }
+
+  /** What the project's files ask for, per pack, against what is installed. */
+  async selection(workspace: string): Promise<ToolchainRequest[]> {
+    const hints = await projectToolchainHints(workspace).catch((): ToolchainHints => ({}));
+    const installed = await this.installed();
+    const out: ToolchainRequest[] = [];
+    for (const pack of TOOLCHAIN_PACKS) {
+      const requested = hints[pack.id];
+      if (requested === undefined) continue;
+      const versions = installed
+        .filter((item) => item.packId === pack.id)
+        .map((item) => item.version);
+      const offered = matchOffered(pack.versions, requested);
+      const matching = versions.find((version) => versionsAgree(version, requested));
+      const selected = matching ?? chooseVersion(versions, undefined, pack.defaultVersion);
+      out.push({
+        packId: pack.id,
+        label: pack.label,
+        requested,
+        ...(offered === undefined ? {} : { offered }),
+        installed: versions,
+        ...(selected === undefined ? {} : { selected }),
+        state:
+          matching !== undefined
+            ? 'match'
+            : versions.length > 0
+              ? 'fallback'
+              : offered !== undefined
+                ? 'not_installed'
+                : 'not_offered',
+      });
+    }
+    return out;
   }
 
   /** What an agent shell needs to use the installed toolchains, or undefined when none are installed. */

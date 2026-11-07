@@ -199,6 +199,11 @@ export class DesktopApplicationService {
     return this.call('projects.toolchainNeeds', { projectId: id });
   }
 
+  toolchainSelection(projectId: string): Promise<unknown> {
+    const id = ProjectIdInput.parse(projectId);
+    return this.call('projects.toolchainSelection', { projectId: id });
+  }
+
   findingsByRevision(projectId: string): Promise<unknown> {
     const id = ProjectIdInput.parse(projectId);
     return this.call('projects.findingsByRevision', { projectId: id });

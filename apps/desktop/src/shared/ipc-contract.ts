@@ -21,6 +21,7 @@ export const IPC_CHANNELS = [
   'projects:toolchain-needs',
   'projects:assess-toolchains',
   'projects:findings-by-revision',
+  'projects:toolchain-selection',
   'runs:list',
   'runs:get',
   'runs:status',
@@ -183,6 +184,21 @@ export interface FindingsByRevision {
   readonly revisions: readonly RevisionFindingsItem[];
 }
 
+export interface ToolchainRequestItem {
+  readonly packId: string;
+  readonly label: string;
+  readonly requested: string;
+  readonly offered?: string;
+  readonly installed: readonly string[];
+  readonly selected?: string;
+  readonly state: 'match' | 'fallback' | 'not_installed' | 'not_offered';
+}
+
+export interface ToolchainSelection {
+  readonly projectId: string;
+  readonly items: readonly ToolchainRequestItem[];
+}
+
 export interface CustomAddonStatus {
   readonly name: string;
   readonly command: string;
@@ -200,11 +216,12 @@ export interface ToolchainVersionStatus {
   readonly installing: boolean;
   readonly sizeMb?: number;
   readonly error?: string;
+  readonly verification?: string;
 }
 
 export interface ToolchainPackStatus {
   readonly id: string;
-  readonly category: 'language' | 'build' | 'database';
+  readonly category: 'language' | 'package' | 'build' | 'qa' | 'infra' | 'database';
   readonly label: string;
   readonly description: string;
   readonly approxSizeMb: number;
@@ -233,6 +250,8 @@ export interface SentryDesktopApi {
       projectId: string,
       agentStackIds?: string[],
     ): Promise<{ projectId: string; started: string[] }>;
+    /** What the project's own files ask for, per toolchain, against what is installed. */
+    toolchainSelection(projectId: string): Promise<ToolchainSelection>;
     /** What each agent says it would need from the Toolchains library for the project. */
     toolchainNeeds(projectId: string): Promise<ToolchainNeedsStatus>;
     /** Every revision with runs, newest first: each agent's runs and raw findings, kept apart. */

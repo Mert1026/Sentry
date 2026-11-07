@@ -33,6 +33,12 @@ export function useToolchainNeeds(projectId: string | undefined) {
         ? POLL_MS
         : false,
   });
+  // What the project's own files ask for; recomputed whenever a pack is installed or removed.
+  const selection = useQuery({
+    queryKey: ['toolchain-selection', projectId],
+    queryFn: () => sentryApi().projects.toolchainSelection(projectId as string),
+    enabled: projectId !== undefined,
+  });
   const assess = useMutation({
     mutationFn: (agentStackIds?: string[]) =>
       sentryApi().projects.assessToolchains(projectId as string, agentStackIds),
@@ -42,7 +48,10 @@ export function useToolchainNeeds(projectId: string | undefined) {
     mutationFn: async (items: ReadonlyArray<{ packId: string; version: string }>) => {
       for (const item of items) await sentryApi().toolchains.install(item.packId, item.version);
     },
-    onSettled: () => queryClient.invalidateQueries({ queryKey: ['toolchains'] }),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ['toolchain-selection', projectId] });
+      return queryClient.invalidateQueries({ queryKey: ['toolchains'] });
+    },
   });
-  return { needs, toolchains, assess, install };
+  return { needs, toolchains, selection, assess, install };
 }

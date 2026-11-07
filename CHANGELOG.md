@@ -30,6 +30,18 @@
   different behaviour; a probe that does not build, or cannot run, is "Cannot tell". The verdicts
   sit in the retest run and never change the original finding. A retest always runs on the
   current revision, and does no lead follow-ups, deepening or hazard sweep.
+- Toolchains library grows from 23 to 59 packs in six groups (languages, package managers,
+  build tools, QA and security tools, infrastructure, databases and services): pnpm, Yarn,
+  Poetry, PDM, pipx; Bazelisk, just, Task, Meson, protoc, Buf, Autotools; Ruff, ShellCheck,
+  actionlint, Trivy, OSV-Scanner, yamllint, Biome, SQLFluff, Checkov; OpenTofu, Terraform,
+  kustomize, Ansible; MongoDB, DuckDB, RabbitMQ, NATS; R, Julia, Lua, Perl, PowerShell, OCaml,
+  Clojure. The page has search and an "installed only" filter.
+- Toolchain installs now end by running what they installed; the first lines it printed are
+  kept as the installed version and shown on the page. The Node pack no longer claims Corepack,
+  pnpm or Yarn, which its check never proved; pnpm and Yarn are separate packs.
+- The project page shows what the project's own files ask for (including the `packageManager`
+  line of package.json and Poetry's lockfile), what is installed and what a run would use, and
+  flags a mismatch instead of silently falling back.
 - Custom add-ons (Settings → Toolchains): install a program with your own shell command. It runs
   on the host, not in an agent sandbox, into its own folder under `toolchains/custom/`. Its program
   folders go on PATH after every listed toolchain, so an add-on never replaces a listed tool.

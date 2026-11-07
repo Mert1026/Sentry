@@ -50,6 +50,8 @@ const api: SentryDesktopApi & {
         agentStackIds === undefined ? { projectId } : { projectId, agentStackIds },
       ),
     toolchainNeeds: (projectId: string) => invoke('projects:toolchain-needs', { projectId }),
+    toolchainSelection: (projectId: string) =>
+      invoke('projects:toolchain-selection', { projectId }),
     findingsByRevision: (projectId: string) =>
       invoke('projects:findings-by-revision', { projectId }),
     assessToolchains: (projectId: string, agentStackIds?: string[]) =>
