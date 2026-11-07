@@ -22,7 +22,12 @@ async function pickDirectory(): Promise<string | null> {
   throw Object.assign(new Error('Directory picker failed'), { code: 'DIALOG_FAILED' });
 }
 
-const api: SentryDesktopApi & { dialogs: { pickDirectory(): Promise<string | null> } } = {
+const api: SentryDesktopApi & {
+  dialogs: {
+    pickDirectory(): Promise<string | null>;
+    pickTargets(projectId: string, kind: 'files' | 'folder'): Promise<string[]>;
+  };
+} = {
   projects: {
     list: () => invoke('projects:list', {}),
     add: (sourcePath: string) => invoke('projects:add', { sourcePath }),
@@ -139,7 +144,10 @@ const api: SentryDesktopApi & { dialogs: { pickDirectory(): Promise<string | nul
       };
     },
   },
-  dialogs: { pickDirectory },
+  dialogs: {
+    pickDirectory,
+    pickTargets: (projectId, kind) => invoke('sentry:dialog:pick-targets', { projectId, kind }),
+  },
 };
 
 contextBridge.exposeInMainWorld('sentry', api);

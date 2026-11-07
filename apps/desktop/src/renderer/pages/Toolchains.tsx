@@ -1,10 +1,12 @@
 import React from 'react';
+import { translateText } from '../lib/i18n.js';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { sentryApi } from '../lib/sentry-api.js';
 import { PageHeader, PageSection } from '../components/ui/PageHeader.js';
 import { StatusPill } from '../components/ui/StatusPill.js';
 import { CustomAddons } from '../components/CustomAddons.js';
+import { InfoPopover } from '../components/InfoPopover.js';
 import type { ToolchainPackStatus } from '../../shared/ipc-contract.js';
 
 const POLL_MS = 3000;
@@ -68,13 +70,15 @@ export function Toolchains(): React.JSX.Element {
     if (
       missing.length > 0 &&
       window.confirm(
-        'Install ' +
-          missing.length +
-          ' version(s) of ' +
-          pack.label +
-          '? About ' +
-          mb +
-          ' MB in total.',
+        translateText(
+          'Install ' +
+            missing.length +
+            ' version(s) of ' +
+            pack.label +
+            '? About ' +
+            mb +
+            ' MB in total.',
+        ),
       )
     )
       for (const v of missing) install.mutate({ packId: pack.id, version: v.version });
@@ -86,11 +90,14 @@ export function Toolchains(): React.JSX.Element {
         subtitle="Language toolchains installed on this machine for the agents to use."
       />
       <PageSection title="Install">
-        <p className="body-secondary" style={{ marginTop: 0 }}>
-          Each version installs into its own folder inside Sentry&apos;s data folder, using this
-          machine&apos;s network. Nothing installs until you press a button.{' '}
+        <div className="info-aligned-row">
           <Link to="/settings">Back to Settings</Link>
-        </p>
+          <InfoPopover title="Installing toolchains">
+            Each version installs into its own folder inside Sentry&apos;s data folder using this
+            machine&apos;s network. Select an individual version or install all available versions;
+            installations start only when you choose an install action.
+          </InfoPopover>
+        </div>
         {message !== undefined ? (
           <p className="error-box" role="alert">
             {message}
@@ -103,26 +110,32 @@ export function Toolchains(): React.JSX.Element {
             0,
           );
           return (
-            <details key={category.id} open style={{ margin: '14px 0' }}>
+            <details
+              className="info-disclosure"
+              key={category.id}
+              open
+              style={{ margin: '14px 0' }}
+            >
               <summary className="disclosure">
                 <span className="card-title" style={{ margin: 0 }}>
                   {category.title}
                 </span>
                 <span className="metadata">
-                  {packs.length} {packs.length === 1 ? 'pack' : 'packs'}, {installedCount}{' '}
-                  {installedCount === 1 ? 'version' : 'versions'} installed
+                  {`${packs.length} ${packs.length === 1 ? 'pack' : 'packs'}, ${installedCount} ${installedCount === 1 ? 'version' : 'versions'} installed`}
                 </span>
               </summary>
-              <p className="body-secondary" style={{ margin: '6px 0 0' }}>
-                {category.hint}
-              </p>
+              <InfoPopover title={category.title}>{category.hint}</InfoPopover>
               <div className="cards toolchain-cards">
                 {packs.map((pack) => {
                   const installed = pack.versions.filter((v) => v.installed).length;
                   const installing = pack.versions.some((v) => v.installing);
                   const failed = pack.versions.some((v) => v.error !== undefined && !v.installing);
                   return (
-                    <details className="card" key={pack.id} open={installing || failed}>
+                    <details
+                      className="card info-disclosure"
+                      key={pack.id}
+                      open={installing || failed}
+                    >
                       <summary className="disclosure">
                         <span className="card-title" style={{ margin: 0 }}>
                           {pack.label}
@@ -139,10 +152,12 @@ export function Toolchains(): React.JSX.Element {
                         />
                         {failed ? <span className="metadata">An install failed</span> : null}
                       </summary>
-                      <p className="body-secondary" style={{ marginTop: 8 }}>
-                        {pack.description} About {pack.approxSizeMb} MB per version.
-                      </p>
-                      {pack.note !== undefined ? <p className="metadata">{pack.note}</p> : null}
+                      <InfoPopover title={pack.label}>
+                        <p>{pack.description}</p>
+                        <p>Allow about {pack.approxSizeMb} MB per version.</p>
+                        {pack.note !== undefined ? <p>{pack.note}</p> : null}
+                      </InfoPopover>
+                      <span className="metadata">About {pack.approxSizeMb} MB per version</span>
                       {pack.versions.map((v) => (
                         <div
                           key={v.version}

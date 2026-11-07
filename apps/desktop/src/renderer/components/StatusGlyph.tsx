@@ -105,7 +105,7 @@ export function statusVisual(status: string): StatusVisual {
 
 export function StatusIcon({
   status,
-  size = 13,
+  size = 15,
   className = '',
 }: {
   status: string;

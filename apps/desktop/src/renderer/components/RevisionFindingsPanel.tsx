@@ -1,4 +1,6 @@
 import React from 'react';
+import { translateText } from '../lib/i18n.js';
+import { InfoPopover } from './InfoPopover.js';
 import { Link } from 'react-router-dom';
 import { StatusPill } from './ui/StatusPill.js';
 import type {
@@ -95,16 +97,19 @@ export function RevisionFindingsPanel({
       ' finding(s) on the current revision with ' +
       (who === 'reporter' ? 'the agent that reported each' : 'all selected agents') +
       '? This uses provider budget.';
-    if (window.confirm(text)) onRetest([...picked.values()], who);
+    if (window.confirm(translateText(text))) onRetest([...picked.values()], who);
   };
   return (
-    <div className="card">
-      <h3 className="card-title">Findings by revision</h3>
-      <p className="body-secondary" style={{ marginTop: 0 }}>
-        What each agent reported in each run, for one revision of the project at a time. A new
-        revision starts a fresh list; older revisions stay here. The lists are raw agent output:
-        nothing is merged or matched, and agents never see them.
-      </p>
+    <div className="card revision-findings">
+      <div className="project-info-title">
+        <h3 className="card-title">Findings by revision</h3>
+        <InfoPopover title="Findings by revision">
+          Choose a project revision to see the findings each agent reported in each of its runs. A
+          new revision starts its own list while earlier revisions remain available to browse. These
+          are raw agent reports: findings are not merged or matched between runs, and agents do not
+          see the list. Expand an agent to review its runs and open a run for more detail.
+        </InfoPopover>
+      </div>
       {loading ? <span className="muted">Loading…</span> : null}
       {!loading && revisions.length === 0 ? (
         <p className="metadata">No finished runs yet. Findings appear here after a run.</p>
@@ -138,9 +143,13 @@ export function RevisionFindingsPanel({
                 margin: '10px 0',
               }}
             >
-              <span className="metadata">
-                Tick findings to re-test them on the current revision (up to {RETEST_LIMIT}).
-              </span>
+              <InfoPopover title="Re-testing findings">
+                Select up to {RETEST_LIMIT} findings from an older revision and re-test them on the
+                current project revision. Choose the original reporting agent or all selected
+                agents. The new run reports whether each finding still reproduces, no longer
+                reproduces, or could not be determined; it does not change the original finding.
+                Re-testing uses provider budget.
+              </InfoPopover>
               <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <span>Re-test with</span>
                 <select
@@ -172,7 +181,7 @@ export function RevisionFindingsPanel({
           {selected.agents.map((agent) => {
             const total = agent.runs.reduce((sum, run) => sum + run.findings.length, 0);
             return (
-              <details key={agent.agentStackId} open style={{ margin: '14px 0' }}>
+              <details key={selected.revisionId + agent.agentStackId} className="revision-agent">
                 <summary className="disclosure">
                   <span className="card-title" style={{ margin: 0 }}>
                     {name(agent.agentStackId)}
@@ -183,7 +192,7 @@ export function RevisionFindingsPanel({
                   </span>
                 </summary>
                 {agent.runs.map((run) => (
-                  <div key={run.runId} style={{ margin: '10px 0 10px 18px' }}>
+                  <div key={run.runId} className="revision-agent-run">
                     <div
                       style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}
                     >
@@ -219,7 +228,9 @@ export function RevisionFindingsPanel({
                               />{' '}
                               {outcome.title}
                               {outcome.details !== undefined ? (
-                                <span className="metadata"> · {outcome.details}</span>
+                                <InfoPopover title={'Retest details: ' + outcome.title}>
+                                  {outcome.details}
+                                </InfoPopover>
                               ) : null}
                             </li>
                           ))}

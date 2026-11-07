@@ -1,7 +1,9 @@
 import React from 'react';
+import { translateText } from '../lib/i18n.js';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { sentryApi } from '../lib/sentry-api.js';
 import { StatusPill } from './ui/StatusPill.js';
+import { InfoPopover } from './InfoPopover.js';
 import type { CustomAddonStatus } from '../../shared/ipc-contract.js';
 
 const POLL_MS = 3000;
@@ -75,29 +77,31 @@ export function CustomAddons({ listedIds }: { listedIds: readonly string[] }): R
   const start = (): void => {
     if (
       window.confirm(
-        'Run this command on this machine now? It installs "' +
-          trimmed +
-          '" and runs with your permissions, with network access.',
+        translateText(
+          'Run this command on this machine now? It installs "' +
+            trimmed +
+            '" and runs with your permissions, with network access.',
+        ),
       )
     )
       install.mutate();
   };
   const attention = list.some((addon) => addon.installing || addon.error !== undefined);
   return (
-    <details open={attention} style={{ margin: '14px 0' }}>
+    <details className="info-disclosure" open={attention} style={{ margin: '14px 0' }}>
       <summary className="disclosure">
         <span className="card-title" style={{ margin: 0 }}>
           Custom add-ons
         </span>
         <span className="metadata">
-          {list.filter((addon) => addon.installed).length} installed · your own install command
+          {`${list.filter((addon) => addon.installed).length} installed · your own install command`}
         </span>
       </summary>
-      <p className="body-secondary" style={{ margin: '6px 0 0' }}>
+      <InfoPopover title="Custom add-ons">
         For anything the lists above do not cover. Each add-on gets its own folder, shown to agents
         read-only, and its program folders are added after the listed toolchains, so it never
         replaces one.
-      </p>
+      </InfoPopover>
       <div className="card" style={{ marginTop: 10 }}>
         <p className="error-box" style={{ marginTop: 0 }}>
           The command runs on this machine (inside WSL) with your permissions and network access,
@@ -119,37 +123,40 @@ export function CustomAddons({ listedIds }: { listedIds: readonly string[] }): R
           />
           {nameProblem !== undefined ? <span className="metadata">{nameProblem}</span> : null}
         </label>
-        <label style={{ display: 'block', margin: '8px 0' }}>
-          <span>Install command</span>
-          <textarea
-            value={command}
-            onChange={(event) => setCommand(event.target.value)}
-            placeholder={
-              'mkdir -p "$SENTRY_ADDON_DIR/bin"\ncurl -fsSL https://example.com/tool -o "$SENTRY_ADDON_DIR/bin/tool"\nchmod +x "$SENTRY_ADDON_DIR/bin/tool"'
-            }
-            aria-label="Install command"
-            rows={5}
-            className="mono"
-            style={{ display: 'block', width: '100%' }}
-          />
-          <span className="metadata">
-            Runs in the add-on&apos;s folder, also available as $SENTRY_ADDON_DIR. Stops at the
-            first error.
-          </span>
-        </label>
-        <label style={{ display: 'block', margin: '8px 0' }}>
-          <span>Program folders on PATH</span>
-          <input
-            value={folders}
-            onChange={(event) => setFolders(event.target.value)}
-            aria-label="Program folders"
-            style={{ display: 'block', width: '100%', maxWidth: 360 }}
-          />
-          <span className="metadata">
-            Comma-separated folders inside the add-on that hold the programs. They must exist after
-            the command runs.
-          </span>
-        </label>
+        <div className="info-aligned-row">
+          <label htmlFor="custom-addon-command">Install command</label>
+          <InfoPopover title="Install command">
+            The command runs in the add-on&apos;s folder, which is also available as
+            $SENTRY_ADDON_DIR. It stops at the first error; use this folder for the files the add-on
+            needs to expose to agents.
+          </InfoPopover>
+        </div>
+        <textarea
+          id="custom-addon-command"
+          value={command}
+          onChange={(event) => setCommand(event.target.value)}
+          placeholder={
+            'mkdir -p "$SENTRY_ADDON_DIR/bin"\ncurl -fsSL https://example.com/tool -o "$SENTRY_ADDON_DIR/bin/tool"\nchmod +x "$SENTRY_ADDON_DIR/bin/tool"'
+          }
+          aria-label="Install command"
+          rows={5}
+          className="mono"
+          style={{ display: 'block', width: '100%' }}
+        />
+        <div className="info-aligned-row">
+          <label htmlFor="custom-addon-folders">Program folders on PATH</label>
+          <InfoPopover title="Program folders on PATH">
+            Enter comma-separated folders inside the add-on that contain its programs. These folders
+            must exist when the install command finishes and are added after the listed toolchains.
+          </InfoPopover>
+        </div>
+        <input
+          id="custom-addon-folders"
+          value={folders}
+          onChange={(event) => setFolders(event.target.value)}
+          aria-label="Program folders"
+          style={{ display: 'block', width: '100%', maxWidth: 360 }}
+        />
         <button className="primary" disabled={!canInstall} onClick={start}>
           {install.isPending ? 'Starting…' : 'Install add-on'}
         </button>

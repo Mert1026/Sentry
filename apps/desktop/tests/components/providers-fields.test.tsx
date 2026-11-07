@@ -12,7 +12,7 @@ afterEach(() => cleanup());
  * The advanced harness-binary section must exist with saveable fields:
  * without it the backend binary-override channel is unreachable from
  * Settings, and users cannot fix an unresolvable provider executable.
- * It lives collapsed under "Advanced runtime binaries"; the card itself
+ * It lives in the "Advanced runtime binaries" info box; the card itself
  * still renders every Linux-path executable field.
  */
 describe('Providers harness binary section', () => {
@@ -61,7 +61,8 @@ describe('Providers harness binary section', () => {
     expect(html).toContain('GLM');
     expect(html).toContain('OpenCode API key (Zen &amp; Go)');
     expect(html).toContain('OpenRouter API key (Pay-as-you-go)');
-    expect(html).toContain('<summary class="metadata">Explanation</summary>');
+    expect(html).toContain('aria-label="About OpenCode API key (Zen &amp; Go)"');
+    expect(html).toContain('aria-label="About OpenRouter API key (Pay-as-you-go)"');
     expect(html).toContain('API key');
     expect(html).toContain('Model');
     expect(html).toContain('Advanced runtime binaries');

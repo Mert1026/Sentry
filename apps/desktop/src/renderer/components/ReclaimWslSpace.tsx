@@ -2,6 +2,7 @@ import React from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { sentryApi } from '../lib/sentry-api.js';
 import { PageSection } from './ui/PageHeader.js';
+import { InfoPopover } from './InfoPopover.js';
 
 function gib(bytes: number): string {
   return (bytes / 2 ** 30).toFixed(2) + ' GiB';
@@ -52,24 +53,28 @@ export function ReclaimWslSpace({
   return (
     <PageSection title="Windows disk space">
       <div className="card">
-        <p>
-          Removing projects frees storage inside WSL. Reclaim unused blocks to return that space to
-          Windows.
-        </p>
-        <p className="metadata">
-          The virtual disk can grow again when needed. Compaction does not delete projects or set a
-          fixed free-space reserve.
-        </p>
-        <button
-          className="primary"
-          disabled={blocked || operation.isPending}
-          onClick={() => {
-            operation.reset();
-            setConfirm(true);
-          }}
-        >
-          Reclaim Windows disk space
-        </button>
+        <div className="info-aligned-row">
+          <button
+            className="primary"
+            disabled={blocked || operation.isPending}
+            onClick={() => {
+              operation.reset();
+              setConfirm(true);
+            }}
+          >
+            Reclaim Windows disk space
+          </button>
+          <InfoPopover title="Windows disk space">
+            <p>
+              Removing projects frees storage inside WSL. Reclaim unused blocks to return that space
+              to Windows.
+            </p>
+            <p className="metadata">
+              The virtual disk can grow again when needed. Compaction does not delete projects or
+              set a fixed free-space reserve.
+            </p>
+          </InfoPopover>
+        </div>
         {blocked ? (
           <p className="metadata">
             Connect the runtime and finish active QA before reclaiming space.

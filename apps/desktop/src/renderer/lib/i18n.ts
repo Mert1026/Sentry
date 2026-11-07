@@ -96,6 +96,15 @@ function translateCore(trimmed: string): string {
   const exact = BG_MAP[trimmed];
   if (exact !== undefined) return exact;
 
+  const about = /^About (.+)$/.exec(trimmed);
+  if (about !== null) return `За ${translateCore(about[1] ?? '')}`;
+  const information = /^(.+) information$/.exec(trimmed);
+  if (information !== null) return `Информация: ${translateCore(information[1] ?? '')}`;
+  const retestDetails = /^Retest details: (.+)$/.exec(trimmed);
+  if (retestDetails !== null) return `Детайли за повторната проверка: ${retestDetails[1]}`;
+  const assessment = /^(.+) assessment$/.exec(trimmed);
+  if (assessment !== null) return `Оценка на ${assessment[1]}`;
+
   const lowerStatus = STATUS_BG[trimmed.toLowerCase()];
   if (lowerStatus !== undefined) {
     return trimmed === trimmed.toUpperCase() && trimmed.length > 1
@@ -124,6 +133,69 @@ function translateCore(trimmed: string): string {
   if (trimmed.startsWith('Ecosystem:')) {
     return 'Екосистема:' + trimmed.slice('Ecosystem:'.length);
   }
+
+  const webOptions = /^Web access: (on|off) · tool and SDK downloads: (on|off)$/.exec(trimmed);
+  if (webOptions !== null) {
+    return `Достъп до интернет: ${webOptions[1] === 'on' ? 'включен' : 'изключен'} · изтегляне на инструменти и SDK: ${webOptions[2] === 'on' ? 'включено' : 'изключено'}`;
+  }
+  const confirmOptions =
+    /^Web access: (on|off) · tool and SDK downloads: (on|off) · package installs: on$/.exec(
+      trimmed,
+    );
+  if (confirmOptions !== null) {
+    return `Достъп до интернет: ${confirmOptions[1] === 'on' ? 'включен' : 'изключен'} · изтегляне на инструменти и SDK: ${confirmOptions[2] === 'on' ? 'включено' : 'изключено'} · инсталиране на пакети: включено`;
+  }
+  const paidAgentCount = /^(\d+) agents? · uses real provider budget\.$/.exec(trimmed);
+  if (paidAgentCount !== null)
+    return `${paidAgentCount[1]} ${paidAgentCount[1] === '1' ? 'агент' : 'агента'} · изразходва реален бюджет на доставчика.`;
+  const profileUsed =
+    /^Project profile: used by (\d+) agent\(s\)(?:, (\d+) without \(out of date or not built\))?$/.exec(
+      trimmed,
+    );
+  if (profileUsed !== null) {
+    return `Профил на проекта: използван от ${profileUsed[1]} ${profileUsed[1] === '1' ? 'агент' : 'агента'}${profileUsed[2] === undefined ? '' : `, ${profileUsed[2]} без профил (остарял или несъздаден)`}`;
+  }
+  const profileAvailable =
+    /^(\d+) of (\d+) agents have up-to-date notes\. When enabled, each eligible agent receives only its own profile as unverified context; it must still inspect and test the project\.$/.exec(
+      trimmed,
+    );
+  if (profileAvailable !== null) {
+    return `${profileAvailable[1]} от ${profileAvailable[2]} агента имат актуални бележки. Когато опцията е включена, всеки агент с актуален профил получава само своя профил като непроверен контекст и продължава да проверява и тества проекта.`;
+  }
+  const runScope = /^(\d+) agents? · (Full project|Selected paths) · uses provider budget$/.exec(
+    trimmed,
+  );
+  if (runScope !== null) {
+    return `${runScope[1]} ${runScope[1] === '1' ? 'агент' : 'агента'} · ${runScope[2] === 'Full project' ? 'Целият проект' : 'Избрани пътища'} · изразходва бюджет на доставчика`;
+  }
+  const packs = /^(\d+) packs?, (\d+) versions? installed$/.exec(trimmed);
+  if (packs !== null) return `${packs[1]} пакета, ${packs[2]} инсталирани версии`;
+  const addons = /^(\d+) installed · your own install command$/.exec(trimmed);
+  if (addons !== null) return `${addons[1]} инсталирани · собствена команда за инсталиране`;
+  const installedCount = /^(\d+) of (\d+) installed$/.exec(trimmed);
+  if (installedCount !== null) return `${installedCount[1]} от ${installedCount[2]} инсталирани`;
+  const installAll = /^Install all (.+) versions$/.exec(trimmed);
+  if (installAll !== null) return `Инсталирай всички версии на ${installAll[1]}`;
+  const installVersions = /^Install (\d+) version\(s\) of (.+)\? About (\d+) MB in total\.$/.exec(
+    trimmed,
+  );
+  if (installVersions !== null)
+    return `Инсталиране на ${installVersions[1]} версии на ${installVersions[2]}? Общо около ${installVersions[3]} MB.`;
+  const installItems = /^Install (\d+) item\(s\)\? About (\d+) MB in total\.$/.exec(trimmed);
+  if (installItems !== null)
+    return `Инсталиране на ${installItems[1]} инструмента? Общо около ${installItems[2]} MB.`;
+  const customInstall =
+    /^Run this command on this machine now\? It installs "(.+)" and runs with your permissions, with network access\.$/.exec(
+      trimmed,
+    );
+  if (customInstall !== null)
+    return `Да се изпълни ли командата на тази машина сега? Тя инсталира „${customInstall[1]}“ и се изпълнява с вашите права и достъп до мрежата.`;
+  const retest =
+    /^Re-test (\d+) finding\(s\) on the current revision with (the agent that reported each|all selected agents)\? This uses provider budget\.$/.exec(
+      trimmed,
+    );
+  if (retest !== null)
+    return `Повторна проверка на ${retest[1]} констатации в текущата ревизия с ${retest[2] === 'all selected agents' ? 'всички избрани агенти' : 'агента, докладвал всяка констатация'}? Това изразходва бюджет на доставчика.`;
 
   const runsMatch = /^(\d+)\s+runs?$/.exec(trimmed);
   if (runsMatch !== null) {
@@ -447,7 +519,6 @@ export function useI18n(): {
 
 const originalTextNodes = new WeakMap<Text, string>();
 const lastWrittenTextNodes = new WeakMap<Text, string>();
-const originalPlaceholder = new WeakMap<Element, string>();
 
 function shouldSkipElement(el: Element | null): boolean {
   if (el === null) return true;
@@ -485,15 +556,7 @@ function translateSubtree(root: HTMLElement, language: AppLanguage): void {
   const inputs = root.querySelectorAll('input[placeholder], textarea[placeholder]');
   for (const el of inputs) {
     if (shouldSkipElement(el)) continue;
-    const currentAttr = el.getAttribute('placeholder') ?? '';
-    if (!originalPlaceholder.has(el)) {
-      originalPlaceholder.set(el, currentAttr);
-    }
-    const source = originalPlaceholder.get(el) ?? currentAttr;
-    const target = language === 'en' ? source : translateText(source, 'bg');
-    if (currentAttr !== target) {
-      el.setAttribute('placeholder', target);
-    }
+    translateElementAttribute(el, 'placeholder', language);
   }
   // Tooltips and accessible names follow the interface language too.
   const labelled = root.querySelectorAll('[title], [aria-label]');
@@ -555,7 +618,13 @@ export function useDomTranslationObserver(
         }
       });
     });
-    observer.observe(root, { childList: true, subtree: true, characterData: true });
+    observer.observe(root, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+      attributes: true,
+      attributeFilter: ['placeholder', 'title', 'aria-label'],
+    });
     return () => observer.disconnect();
   }, [rootRef, language]);
 }

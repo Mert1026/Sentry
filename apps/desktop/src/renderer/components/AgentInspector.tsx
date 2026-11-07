@@ -158,7 +158,7 @@ export function AgentInspector({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minHeight: 0 }}>
       <div>
-        <h3 className="card-title" style={{ fontSize: 15 }}>
+        <h3 className="card-title" style={{ fontSize: 17 }}>
           {view.displayName} QA
         </h3>
         <div style={{ marginTop: 6 }}>
@@ -544,13 +544,13 @@ function DiagnosticsTab({
       </dl>
       <details>
         <summary className="muted">Agent view JSON</summary>
-        <pre className="mono" style={{ whiteSpace: 'pre-wrap', fontSize: 11 }}>
+        <pre className="mono" style={{ whiteSpace: 'pre-wrap', fontSize: 13 }}>
           {JSON.stringify(view, null, 2).slice(0, 6000)}
         </pre>
       </details>
       <details>
         <summary className="muted">{'Raw events (' + events.length + ')'}</summary>
-        <pre className="mono" style={{ whiteSpace: 'pre-wrap', fontSize: 11 }}>
+        <pre className="mono" style={{ whiteSpace: 'pre-wrap', fontSize: 13 }}>
           {JSON.stringify(events, null, 2).slice(0, 8000)}
         </pre>
       </details>
@@ -610,7 +610,7 @@ export function FindingCard({
       {finding.locations !== undefined && finding.locations.length > 0 ? (
         <div
           className="mono faint truncate"
-          style={{ fontSize: 11 }}
+          style={{ fontSize: 13 }}
           title={formatLocation(
             finding.locations[0] as NonNullable<InspectorFinding['locations']>[number],
           )}
@@ -644,7 +644,7 @@ export function FindingDetail({
   const missing = <span className="muted">Not provided by this agent.</span>;
   const section = (label: string, body: React.ReactNode): React.JSX.Element => (
     <div style={{ marginTop: 8 }}>
-      <p className="faint" style={{ margin: '0 0 2px', fontSize: 11 }}>
+      <p className="faint" style={{ margin: '0 0 2px', fontSize: 13 }}>
         {label}
       </p>
       <div>{body}</div>
@@ -726,7 +726,7 @@ export function FindingDetail({
       {section(
         'Locations',
         finding.locations !== undefined && finding.locations.length > 0 ? (
-          <ul className="mono" style={{ margin: 0, paddingLeft: 18, fontSize: 11 }}>
+          <ul className="mono" style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
             {finding.locations.map((location, index) => (
               <li key={index} style={{ overflowWrap: 'anywhere' }}>
                 {formatLocation(location)}
@@ -828,7 +828,7 @@ function EventDetail({
       {showRaw ? (
         <details>
           <summary className="muted">Raw event</summary>
-          <pre className="mono" style={{ whiteSpace: 'pre-wrap', fontSize: 11 }}>
+          <pre className="mono" style={{ whiteSpace: 'pre-wrap', fontSize: 13 }}>
             {JSON.stringify(event, null, 2).slice(0, 4000)}
           </pre>
         </details>

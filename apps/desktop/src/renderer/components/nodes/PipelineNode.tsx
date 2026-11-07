@@ -3,8 +3,10 @@ import { Handle, Position, type NodeProps } from '@xyflow/react';
 import { StatusIcon, nodeStateClass } from '../StatusGlyph.js';
 import { dotClassForStatus } from '../ui/StatusPill.js';
 import { truncateMiddle } from '../../lib/agent-telemetry.js';
+import { useI18n } from '../../lib/i18n.js';
 
 export function PipelineNode({ data }: NodeProps): React.JSX.Element {
+  const { t } = useI18n();
   const label = (data['label'] as string) ?? 'Node';
   const status = (data['status'] as string) ?? 'pending';
   const kind = (data['kind'] as string) ?? '';
@@ -19,8 +21,12 @@ export function PipelineNode({ data }: NodeProps): React.JSX.Element {
       aria-label={label + ' ' + status}
     >
       <Handle type="target" position={Position.Top} />
-      <div className="sys-kind">{kind === '' ? 'STEP' : kind.toUpperCase().replace(/-/g, ' ')}</div>
-      <div className="node-title" style={{ fontSize: 12 }}>
+      <div className="sys-kind">
+        {t(
+          kind === '' ? 'Step' : kind.charAt(0).toUpperCase() + kind.slice(1).replace(/-/g, ' '),
+        ).toUpperCase()}
+      </div>
+      <div className="node-title" style={{ fontSize: 14 }}>
         <span className={dotClassForStatus(status)} aria-hidden="true" />
         <span className="truncate" title={label}>
           {label}

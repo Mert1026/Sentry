@@ -1,4 +1,6 @@
 import React from 'react';
+import { translateText } from '../lib/i18n.js';
+import { InfoPopover } from './InfoPopover.js';
 import { Link } from 'react-router-dom';
 import { StatusPill } from './ui/StatusPill.js';
 import type {
@@ -82,11 +84,13 @@ export function ToolchainNeedsPanel({
     if (items.length === 0) return;
     if (
       window.confirm(
-        'Install ' +
-          items.length +
-          ' item(s)? About ' +
-          sizeMb(toolchains, items) +
-          ' MB in total.',
+        translateText(
+          'Install ' +
+            items.length +
+            ' item(s)? About ' +
+            sizeMb(toolchains, items) +
+            ' MB in total.',
+        ),
       )
     )
       onInstall(items);
@@ -98,13 +102,18 @@ export function ToolchainNeedsPanel({
   const allMissing = missingOf(toolchains, [...everything.values()]);
   return (
     <div className="card">
-      <h3 className="card-title">What the agents need installed</h3>
-      <p className="body-secondary" style={{ marginTop: 0 }}>
-        Each agent reads the project once and says which entries of the Toolchains library it would
-        need to build and test it: runtimes at the versions the project asks for, compilers, build
-        tools and databases. Nothing is installed until you press Install, and a run does not change
-        because of these answers. <Link to="/settings/toolchains">Open Toolchains</Link>
-      </p>
+      <div className="project-info-title">
+        <h3 className="card-title">What the agents need installed</h3>
+        <InfoPopover title="Toolchain requirements">
+          Each agent can inspect this revision and recommend entries from the Toolchains library,
+          including runtimes at the versions the project requests, compilers, build tools, and
+          databases for integration tests. These answers are advice and may become outdated after a
+          project update. Nothing is installed until you choose an Install button, and the
+          assessment itself does not change a QA run. Asking agents uses provider budget for one
+          short planning turn per selected agent.{' '}
+          <Link to="/settings/toolchains">Open Toolchains</Link> to manage the library.
+        </InfoPopover>
+      </div>
       {stacks.length === 0 ? (
         <span className="muted">Loading agents…</span>
       ) : (
@@ -142,12 +151,13 @@ export function ToolchainNeedsPanel({
                     {agent.error}
                   </span>
                 ) : null}
+                <span className="info-row-spacer" />
+                {agent?.summary !== undefined ? (
+                  <InfoPopover title={stack.displayName + ' assessment'}>
+                    {agent.summary}
+                  </InfoPopover>
+                ) : null}
               </div>
-              {agent?.summary !== undefined ? (
-                <p className="body-secondary" style={{ margin: '6px 0' }}>
-                  {agent.summary}
-                </p>
-              ) : null}
               {agent?.needs !== undefined && needs.length === 0 && !assessing ? (
                 <p className="metadata" style={{ margin: '4px 0' }}>
                   The agent named nothing from the library.
@@ -194,9 +204,12 @@ export function ToolchainNeedsPanel({
                         Install
                       </button>
                     ) : null}
-                    <span className="metadata" style={{ flexBasis: '100%', marginLeft: 0 }}>
+                    <span className="info-row-spacer" />
+                    <InfoPopover
+                      title={stack.displayName + ' on ' + label(need.packId) + ' ' + need.version}
+                    >
                       {need.reason}
-                    </span>
+                    </InfoPopover>
                   </div>
                 );
               })}
@@ -225,8 +238,8 @@ export function ToolchainNeedsPanel({
           </button>
         ) : null}
       </div>
-      <p className="metadata" style={{ margin: '6px 0 0' }}>
-        Uses provider budget: one short planning turn per agent.
+      <p className="metadata" style={{ margin: '8px 0 0' }}>
+        Uses provider budget
       </p>
       {error !== undefined ? (
         <p className="error-box" role="alert" style={{ marginTop: 8 }}>
