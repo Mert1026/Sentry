@@ -715,5 +715,19 @@
   "pnpm, Yarn, Poetry and others. A project that names one in its files gets that one.": "pnpm, Yarn, Poetry и други. Проект, който назовава един в своите файлове, получава именно него.",
   "C and C++ compilers, make, cmake, Gradle, Bazelisk and everyday utilities.": "Компилатори за C и C++, make, cmake, Gradle, Bazelisk и ежедневни помощни програми.",
   "Linters and scanners. A project that brings its own version uses that one first.": "Линтери и скенери. Проект със собствена версия използва първо нея.",
-  "Validate and plan only: installing a tool never changes real infrastructure.": "Само проверка и планиране: инсталирането на инструмент никога не променя реална инфраструктура."
+  "Validate and plan only: installing a tool never changes real infrastructure.": "Само проверка и планиране: инсталирането на инструмент никога не променя реална инфраструктура.",
+  "Sign in with ChatGPT": "Вход с ChatGPT",
+  "Sign out": "Изход",
+  "Cancel sign-in": "Отказ от входа",
+  "Preparing sign-in…": "Подготовка на входа…",
+  "Copy link": "Копирай линка",
+  "Signed in": "Влезли сте",
+  "Not signed in": "Не сте влезли",
+  "Waiting for sign-in…": "Изчакване на вход…",
+  "ChatGPT account": "ChatGPT акаунт",
+  "OpenAI sign-in": "Вход в OpenAI",
+  "Use API key": "Използвай API ключ",
+  "Use ChatGPT account": "Използвай ChatGPT акаунт",
+  "OpenAI API key": "OpenAI API ключ",
+  "Open this link in your browser and sign in. This page updates when it finishes.": "Отворете този линк в браузъра си и влезте. Страницата се обновява, когато приключи."
 }

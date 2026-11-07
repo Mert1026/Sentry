@@ -86,6 +86,7 @@ import type {
 import {
   assertSupportedOpenCodeProvider,
   credentialEnvForProvider,
+  openAiAccountMode,
   doctorOpenCode,
   markOpenCodeRuntimeVerified,
   openCodeCatalogMode,
@@ -156,6 +157,12 @@ export interface OpenCodeHarnessAdapterOptions {
    * contract tests to capture real-binary routes without provider credit.
    */
   readonly proxyUpstreamBaseUrl?: string;
+  /**
+   * OpenAI account mode: starts (or reuses) the runtime-owned loopback bridge
+   * backed by the person's ChatGPT sign-in and returns its base URL. Only
+   * called when SENTRY_OPENAI_AUTH=account and the provider is `openai`.
+   */
+  readonly openAiAccountBridge?: () => Promise<string>;
   readonly providerNpm?: string;
   readonly providerModels?: Readonly<Record<string, Record<string, unknown>>>;
   readonly environment?: NodeJS.ProcessEnv;
@@ -1007,7 +1014,7 @@ export class OpenCodeHarnessAdapter implements HarnessAdapter {
         throw new OpenCodeHarnessError(
           'OPENCODE_CREDENTIAL_MISSING',
           'OpenCode credential is missing. Set ' +
-            credentialEnvForProvider(this.runtime.provider) +
+            credentialEnvForProvider(this.runtime.provider, this.hostEnvironment) +
             ' for provider ' +
             this.runtime.provider +
             '.',
@@ -1037,9 +1044,24 @@ export class OpenCodeHarnessAdapter implements HarnessAdapter {
       // Localhost auth proxy: the real key lives only in its closure.
       // OpenCode receives the proxy endpoint plus a dummy key. Upstream
       // follows the configured provider (OpenRouter vs OpenCode Zen).
+      let accountBridgeUrl: string | undefined;
+      if (
+        openAiAccountMode(this.runtime.provider, this.hostEnvironment) &&
+        this.options.openAiAccountBridge !== undefined
+      ) {
+        try {
+          accountBridgeUrl = await this.options.openAiAccountBridge();
+        } catch (cause) {
+          throw new OpenCodeHarnessError(
+            'OPENCODE_CREDENTIAL_MISSING',
+            'OpenAI account bridge unavailable: ' +
+              (cause instanceof Error ? cause.message : 'unknown error'),
+          );
+        }
+      }
       const upstreamBaseUrl = openCodeUpstreamBaseUrl(
         this.runtime.provider,
-        this.options.proxyUpstreamBaseUrl ?? this.options.providerBaseUrl,
+        this.options.proxyUpstreamBaseUrl ?? this.options.providerBaseUrl ?? accountBridgeUrl,
       );
       const proxy = await startOpenCodeAuthProxy({
         apiKey,

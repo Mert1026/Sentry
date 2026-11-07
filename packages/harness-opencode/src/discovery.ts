@@ -389,11 +389,32 @@ export function assertSupportedOpenCodeProvider(provider: string, customEndpoint
   }
 }
 
+/**
+ * OpenAI can be used with an API key or through the person's ChatGPT account
+ * (loopback bridge owned by the runtime). Account mode is selected with
+ * SENTRY_OPENAI_AUTH=account and is "ready" once the runtime has seen a
+ * stored sign-in (SENTRY_OPENAI_ACCOUNT_READY=1).
+ */
+export function openAiAccountMode(
+  provider: string,
+  environment: NodeJS.ProcessEnv = process.env,
+): boolean {
+  return provider === 'openai' && (environment['SENTRY_OPENAI_AUTH'] ?? '').trim() === 'account';
+}
+
+/** Placeholder passed to the localhost proxy in account mode (no real secret exists in the harness). */
+export const OPENAI_ACCOUNT_PROXY_KEY = 'chatgpt-account-session' as const;
+
 /** Trimmed credential for the provider (possibly empty; never logged). */
 export function openCodeCredential(
   provider: string,
   environment: NodeJS.ProcessEnv = process.env,
 ): string {
+  if (openAiAccountMode(provider, environment)) {
+    return (environment['SENTRY_OPENAI_ACCOUNT_READY'] ?? '') === '1'
+      ? OPENAI_ACCOUNT_PROXY_KEY
+      : '';
+  }
   const spec = openCodeProviderSpec(provider);
   if (spec === undefined) return (environment.OPENROUTER_API_KEY ?? '').trim();
   return (environment[spec.credentialEnv] ?? '').trim();
@@ -406,7 +427,11 @@ export function openCodeCredentialPresent(
   return openCodeCredential(provider, environment).length > 0;
 }
 
-export function credentialEnvForProvider(provider: string): string {
+export function credentialEnvForProvider(
+  provider: string,
+  environment: NodeJS.ProcessEnv = process.env,
+): string {
+  if (openAiAccountMode(provider, environment)) return 'OpenAI account sign-in (Providers)';
   return openCodeProviderSpec(provider)?.credentialEnv ?? 'OPENROUTER_API_KEY';
 }
 
@@ -768,7 +793,7 @@ export async function doctorOpenCode(
     fallbackProvider = 'openrouter';
   }
   const providerId = runtime?.provider ?? fallbackProvider;
-  const credentialEnv = credentialEnvForProvider(providerId);
+  const credentialEnv = credentialEnvForProvider(providerId, environment);
   const credentialOk = openCodeCredentialPresent(providerId, environment);
   checks.push({
     name: 'credential',

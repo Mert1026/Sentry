@@ -145,6 +145,10 @@ export const DesktopChannelSchemas: Record<string, z.ZodTypeAny> = {
     })
     .strict(),
   'toolchains:custom-remove': z.object({ name: z.string().min(1).max(60) }).strict(),
+  'openai:account-status': z.object({}).strict(),
+  'openai:account-login': z.object({}).strict(),
+  'openai:account-cancel-login': z.object({}).strict(),
+  'openai:account-logout': z.object({}).strict(),
   'toolchains:install': z
     .object({ packId: z.string().min(1).max(40), version: z.string().min(1).max(40) })
     .strict(),
@@ -406,6 +410,14 @@ export async function dispatchDesktopCommand(
       });
     case 'toolchains:custom-remove':
       return service.customAddonRemove(parsed['name'] as string);
+    case 'openai:account-status':
+      return service.openAiAccountStatus();
+    case 'openai:account-login':
+      return service.openAiAccountLogin();
+    case 'openai:account-cancel-login':
+      return service.openAiAccountCancelLogin();
+    case 'openai:account-logout':
+      return service.openAiAccountLogout();
     case 'toolchains:status':
       return service.toolchainStatus();
     case 'toolchains:install':

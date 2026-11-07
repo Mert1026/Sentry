@@ -47,6 +47,10 @@ export const IPC_CHANNELS = [
   'toolchains:custom-status',
   'toolchains:custom-install',
   'toolchains:custom-remove',
+  'openai:account-status',
+  'openai:account-login',
+  'openai:account-cancel-login',
+  'openai:account-logout',
   'system:active-runs',
   'runtime:status',
   'runtime:distros',
@@ -197,6 +201,17 @@ export interface ToolchainRequestItem {
 export interface ToolchainSelection {
   readonly projectId: string;
   readonly items: readonly ToolchainRequestItem[];
+}
+
+export interface OpenAiAccountStatus {
+  readonly installed: boolean;
+  readonly signedIn: boolean;
+  readonly bridgeRunning: boolean;
+  readonly login: 'idle' | 'waiting' | 'done' | 'failed';
+  /** Sign-in link while a login is waiting. */
+  readonly loginUrl?: string;
+  readonly error?: string;
+  readonly version: string;
 }
 
 export interface CustomAddonStatus {
@@ -391,6 +406,13 @@ export interface SentryDesktopApi {
       pathEntries?: string[];
     }): Promise<{ started: boolean }>;
     customRemove(name: string): Promise<{ removed: true }>;
+  };
+  readonly openai: {
+    accountStatus(): Promise<OpenAiAccountStatus>;
+    /** Starts the ChatGPT sign-in; resolves with the link to open in a browser. */
+    accountLogin(): Promise<{ url: string }>;
+    accountCancelLogin(): Promise<{ cancelled: true }>;
+    accountLogout(): Promise<{ signedOut: true }>;
   };
   readonly system: {
     info(): Promise<{ dataRoot: string; versions: Record<string, string> }>;

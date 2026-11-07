@@ -71,6 +71,7 @@ import {
 
 import { runtimeReleaseIdentity } from './distribution.js';
 import { ToolchainManager } from './toolchains.js';
+import { OpenAiAccount } from './openai-account.js';
 const releaseIdentity = runtimeReleaseIdentity();
 export const RUNTIME_VERSION = releaseIdentity?.version ?? '1.0.2';
 
@@ -454,6 +455,7 @@ export class SentryRuntimeHost {
   private readonly needsBuilds = new Map<string, AbortController>();
   private readonly needsErrors = new Map<string, string>();
   private readonly toolchains: ToolchainManager;
+  private readonly openAiAccount: OpenAiAccount;
   private readonly activeImports = new Set<AbortController>();
   private readonly activeUpdates = new Set<AbortController>();
   private readonly notify: (event: string, payload?: unknown) => void;
@@ -468,6 +470,8 @@ export class SentryRuntimeHost {
     this.notify = notify;
     this.dataRoot = dataRootOverride ?? defaultLinuxDataRoot();
     this.toolchains = new ToolchainManager(this.dataRoot);
+    this.openAiAccount = new OpenAiAccount({ dataRoot: this.dataRoot });
+    void this.refreshOpenAiAccountReady();
     this.database = new SentryDatabase({ dataRoot: this.dataRoot });
     this.repository = new SentryRepository(this.database);
     this.lease = new RuntimeInstanceLease(this.repository);
@@ -480,6 +484,7 @@ export class SentryRuntimeHost {
         createOpenCodeRegistration({
           managedExecutable: managedOpenCodeExecutable(this.dataRoot),
           toolchains: (workspace) => this.toolchains.setup(workspace),
+          openAiAccountBridge: () => this.openAiAccount.ensureBridge(),
         }),
       )
       .register(
@@ -543,6 +548,7 @@ export class SentryRuntimeHost {
     for (const build of this.profileBuilds.values()) build.abort();
     for (const build of this.needsBuilds.values()) build.abort();
     this.cancelAddProject();
+    this.openAiAccount.dispose();
     this.lease.release();
     this.database.close();
   }
@@ -570,8 +576,17 @@ export class SentryRuntimeHost {
     });
   }
 
+  /** Mirror "a ChatGPT sign-in is stored" into the env flag the OpenCode credential check reads. */
+  private async refreshOpenAiAccountReady(): Promise<void> {
+    process.env['SENTRY_OPENAI_ACCOUNT_READY'] = (await this.openAiAccount.signedIn()) ? '1' : '';
+  }
+
   configure(params: unknown): unknown {
     const parsed = RuntimeConfigureParamsSchema.parse(params ?? {});
+    if (parsed.openAiAuth !== undefined) {
+      process.env['SENTRY_OPENAI_AUTH'] = parsed.openAiAuth;
+      void this.refreshOpenAiAccountReady();
+    }
     if (parsed.models.opencode !== undefined) {
       process.env['SENTRY_OPENCODE_MODEL'] = parsed.models.opencode;
       this.configuredModels = { ...this.configuredModels, opencode: parsed.models.opencode };
@@ -1514,6 +1529,18 @@ export class SentryRuntimeHost {
         return this.toolchains
           .remove(requireString(params, 'packId'), requireString(params, 'version'))
           .then(() => ({ removed: true }));
+      case 'openai.accountStatus':
+        return this.refreshOpenAiAccountReady().then(() => this.openAiAccount.status());
+      case 'openai.accountLogin':
+        return this.openAiAccount.startLogin();
+      case 'openai.accountCancelLogin':
+        this.openAiAccount.cancelLogin();
+        return { cancelled: true };
+      case 'openai.accountLogout':
+        return this.openAiAccount.logout().then(async () => {
+          await this.refreshOpenAiAccountReady();
+          return { signedOut: true };
+        });
       case 'toolchains.customStatus':
         return this.toolchains.custom.list();
       case 'toolchains.customInstall': {

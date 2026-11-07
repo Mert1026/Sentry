@@ -18,6 +18,7 @@ import {
   stripKnownOpenCodePrefix,
 } from '../lib/provider-models.js';
 import { PageHeader } from '../components/ui/PageHeader.js';
+import { OpenAiAccountPanel } from '../components/OpenAiAccountPanel.js';
 
 interface ProviderStatus {
   name: string;
@@ -46,6 +47,8 @@ const DESCRIPTIONS: Record<string, string> = {
   SENTRY_OPENCODE_BINARY: 'OpenCode harness executable override (non-secret).',
   OPENCODE_API_KEY:
     'OpenCode Console provider key (secret, from opencode.ai/console). Used for both OpenCode Go monthly subscriptions (Provider: opencode-go) and OpenCode Zen pay-as-you-go credits (Provider: opencode).',
+  SENTRY_OPENAI_AUTH:
+    'How provider openai signs in (non-secret): key (OpenAI API key) or account (your ChatGPT account through the local bridge).',
   SENTRY_OPENCODE_PROVIDER:
     'OpenCode upstream provider (non-secret): opencode-go (OpenCode Go monthly subscription gateway), opencode (OpenCode Zen pay-as-you-go Console gateway), openai (OpenAI API with your own key), or openrouter (OpenRouter pay-as-you-go gateway; default when unset).',
   OPENAI_API_KEY:
@@ -361,7 +364,7 @@ export function Providers(): React.JSX.Element {
             </div>
             {card.title === 'OpenCode' ? <OpenCodeProviderGuidance byName={byName} /> : null}
             {card.title === 'OpenCode' ? (
-              <OpenCodeCard {...fieldProps} />
+              <OpenCodeCard {...fieldProps} onError={fail} />
             ) : (
               card.fields.map((field) =>
                 field.modelList === undefined ? (
@@ -919,6 +922,7 @@ function CredentialSourceSelector(props: {
  * never presents a draft as activated.
  */
 function OpenCodeCard(props: {
+  readonly onError: (error: unknown) => void;
   readonly values: Record<string, string>;
   readonly setValues: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   readonly onSave: (name: string, value: string) => void;
@@ -953,6 +957,10 @@ function OpenCodeCard(props: {
       setRememberedGoZen(persistedProvider);
     }
   }, [persistedProvider]);
+  const openAiAuthStatus = props.byName.get('SENTRY_OPENAI_AUTH');
+  const openAiAccount =
+    openAiAuthStatus?.configured === true &&
+    openAiAuthStatus.hint.trim().toLowerCase() === 'account';
   const common = {
     values: props.values,
     setValues: props.setValues,
@@ -1085,12 +1093,45 @@ function OpenCodeCard(props: {
         detailsLabel="Explanation"
         {...common}
       />
-      <CredentialField
-        label="OpenAI API key"
-        name="OPENAI_API_KEY"
-        detailsLabel="Explanation"
-        {...common}
-      />
+      {effectiveProvider === 'openai' ? (
+        <div style={{ marginBottom: 12 }}>
+          <span id="openai-auth-label" className="card-title">
+            OpenAI sign-in
+          </span>
+          <div
+            role="group"
+            aria-labelledby="openai-auth-label"
+            style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}
+          >
+            <button
+              className={openAiAccount ? 'compact ghost' : 'primary compact'}
+              aria-pressed={!openAiAccount}
+              disabled={props.savePending}
+              onClick={() => props.onSave('SENTRY_OPENAI_AUTH', 'key')}
+            >
+              Use API key
+            </button>
+            <button
+              className={openAiAccount ? 'primary compact' : 'compact ghost'}
+              aria-pressed={openAiAccount}
+              disabled={props.savePending}
+              onClick={() => props.onSave('SENTRY_OPENAI_AUTH', 'account')}
+            >
+              Use ChatGPT account
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {effectiveProvider === 'openai' && openAiAccount ? (
+        <OpenAiAccountPanel onError={props.onError} />
+      ) : (
+        <CredentialField
+          label="OpenAI API key"
+          name="OPENAI_API_KEY"
+          detailsLabel="Explanation"
+          {...common}
+        />
+      )}
       <CredentialField
         label="OpenRouter API key (Pay-as-you-go)"
         name="OPENROUTER_API_KEY"

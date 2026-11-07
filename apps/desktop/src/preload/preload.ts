@@ -101,6 +101,12 @@ const api: SentryDesktopApi & {
       invoke('toolchains:custom-install', input),
     customRemove: (name: string) => invoke('toolchains:custom-remove', { name }),
   },
+  openai: {
+    accountStatus: () => invoke('openai:account-status', {}),
+    accountLogin: () => invoke('openai:account-login', {}),
+    accountCancelLogin: () => invoke('openai:account-cancel-login', {}),
+    accountLogout: () => invoke('openai:account-logout', {}),
+  },
   system: {
     info: () => invoke('system:info', {}),
     activeRuns: () => invoke('system:active-runs', {}),

@@ -106,6 +106,13 @@ describe('runtime protocol framing', () => {
     });
     expect(openai.providers.openAiApiKey).toBe('sk-test-openai');
     expect(openai.openCodeProvider).toBe('openai');
+    expect(
+      RuntimeConfigureParamsSchema.parse({ models: {}, providers: {}, openAiAuth: 'account' })
+        .openAiAuth,
+    ).toBe('account');
+    expect(() =>
+      RuntimeConfigureParamsSchema.parse({ models: {}, providers: {}, openAiAuth: 'other' }),
+    ).toThrow();
     expect(RUNTIME_PROTOCOL_VERSION).toBe(1);
   });
 

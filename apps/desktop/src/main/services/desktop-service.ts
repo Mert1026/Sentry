@@ -153,6 +153,22 @@ export class DesktopApplicationService {
     return this.call('projects.suggestTargets', { projectId: id });
   }
 
+  openAiAccountStatus(): Promise<unknown> {
+    return this.call('openai.accountStatus', {});
+  }
+
+  openAiAccountLogin(): Promise<unknown> {
+    return this.call('openai.accountLogin', {});
+  }
+
+  openAiAccountCancelLogin(): Promise<unknown> {
+    return this.call('openai.accountCancelLogin', {});
+  }
+
+  openAiAccountLogout(): Promise<unknown> {
+    return this.call('openai.accountLogout', {});
+  }
+
   toolchainStatus(): Promise<unknown> {
     return this.call('toolchains.status', {});
   }
@@ -449,7 +465,15 @@ export class DesktopApplicationService {
       openCodeProvider === 'openai'
         ? { openCodeProvider }
         : {};
-    return this.call('runtime.configure', { models, providers, binaries, ...provider });
+    const openAiAuth =
+      get('SENTRY_OPENAI_AUTH')?.trim().toLowerCase() === 'account' ? 'account' : 'key';
+    return this.call('runtime.configure', {
+      models,
+      providers,
+      binaries,
+      ...provider,
+      openAiAuth,
+    });
   }
 
   productionReadiness(input?: { agentStackIds?: string[] }): Promise<unknown> {

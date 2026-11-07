@@ -120,6 +120,10 @@ export const RUNTIME_METHODS = [
   'toolchains.customStatus',
   'toolchains.customInstall',
   'toolchains.customRemove',
+  'openai.accountStatus',
+  'openai.accountLogin',
+  'openai.accountCancelLogin',
+  'openai.accountLogout',
   'runs.list',
   'runs.get',
   'runs.status',
@@ -211,6 +215,9 @@ export const RuntimeConfigureParamsSchema = z
     // OpenCode upstream provider selection (openrouter|opencode). Ephemeral
     // like everything else here; additive, so the version stays 1.
     openCodeProvider: z.enum(['openrouter', 'opencode', 'opencode-go', 'openai']).optional(),
+    // How provider `openai` authenticates: an API key (default) or the
+    // person's ChatGPT account through the runtime's loopback bridge.
+    openAiAuth: z.enum(['key', 'account']).optional(),
     // Harness executable overrides (non-secret absolute paths inside the
     // runtime environment, e.g. a user-local opencode install). Ephemeral
     // like everything else here; additive, so the version stays 1.

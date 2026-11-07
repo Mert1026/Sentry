@@ -55,7 +55,7 @@ export function createOpenCodeRegistration(
         throw new OpenCodeHarnessError(
           'OPENCODE_CREDENTIAL_MISSING',
           'OpenCode credential is missing. Set ' +
-            credentialEnvForProvider(resolved.provider) +
+            credentialEnvForProvider(resolved.provider, options.environment ?? process.env) +
             ' for provider ' +
             resolved.provider +
             '.',
