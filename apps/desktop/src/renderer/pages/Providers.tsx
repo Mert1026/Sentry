@@ -1,4 +1,6 @@
 import React from 'react';
+import { InfoPopover } from '../components/InfoPopover.js';
+import { LoadingOverlay } from '../components/BlockingOverlay.js';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check } from 'lucide-react';
@@ -16,7 +18,6 @@ import {
   stripKnownOpenCodePrefix,
 } from '../lib/provider-models.js';
 import { PageHeader } from '../components/ui/PageHeader.js';
-import { CollapsibleSection } from '../components/ui/CollapsibleSection.js';
 
 interface ProviderStatus {
   name: string;
@@ -289,11 +290,13 @@ export function Providers(): React.JSX.Element {
           </>
         }
       />
-      <p className="body-secondary" style={{ margin: 0 }}>
-        Save encrypts the credential with the OS keychain, persists it, and loads it into the host
-        process immediately — it survives application restarts. Secret values are never displayed
-        and never leave the desktop host process.
-      </p>
+      <div className="info-aligned-row" style={{ justifyContent: 'flex-end' }}>
+        <InfoPopover title="Provider credentials">
+          Save encrypts the credential with the OS keychain, persists it, and loads it into the host
+          process immediately — it survives application restarts. Secret values are never displayed
+          and never leave the desktop host process.
+        </InfoPopover>
+      </div>
       {error !== undefined ? (
         <div className="error-box" role="alert">
           {error}{' '}
@@ -318,7 +321,7 @@ export function Providers(): React.JSX.Element {
           </button>
         </div>
       ) : null}
-      {statuses.isLoading ? <div className="skeleton">Loading provider status…</div> : null}
+      {statuses.isLoading ? <LoadingOverlay>Loading provider status…</LoadingOverlay> : null}
       {statuses.isError ? (
         <div className="error-box" role="alert">
           Provider status unavailable. Credential presence could not be checked.{' '}
@@ -336,10 +339,18 @@ export function Providers(): React.JSX.Element {
       <div className="cards">
         {AGENT_CARDS.map((card) => (
           <section className="card" key={card.title} aria-label={card.title + ' provider settings'}>
-            <h2 className="section-title">{card.title}</h2>
-            <p className="metadata" style={{ margin: '4px 0 12px' }}>
-              {card.subtitle}
-            </p>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                marginBottom: 12,
+                justifyContent: 'space-between',
+              }}
+            >
+              <h2 className="section-title">{card.title}</h2>
+              <InfoPopover title={card.title}>{card.subtitle}</InfoPopover>
+            </div>
             {card.title === 'OpenCode' ? <OpenCodeProviderGuidance byName={byName} /> : null}
             {card.title === 'OpenCode' ? (
               <OpenCodeCard {...fieldProps} />
@@ -378,20 +389,22 @@ export function Providers(): React.JSX.Element {
           </section>
         ))}
       </div>
-      <CollapsibleSection title="Advanced runtime binaries">
-        <HarnessBinaryCard
-          statuses={statuses.isError ? [] : (statuses.data ?? [])}
-          statusPending={statuses.isLoading}
-          detectedOpenCodeBinary={detectedOpenCodeBinary}
-          values={values}
-          setValues={setValues}
-          onSave={(name, value) => save.mutate({ name, value })}
-          onClear={(name) => clear.mutate(name)}
-          savePending={save.isPending}
-          clearPending={clear.isPending}
-          onError={fail}
-        />
-      </CollapsibleSection>
+      <div className="info-aligned-row" style={{ justifyContent: 'flex-end' }}>
+        <InfoPopover title="Advanced runtime binaries">
+          <HarnessBinaryCard
+            statuses={statuses.isError ? [] : (statuses.data ?? [])}
+            statusPending={statuses.isLoading}
+            detectedOpenCodeBinary={detectedOpenCodeBinary}
+            values={values}
+            setValues={setValues}
+            onSave={(name, value) => save.mutate({ name, value })}
+            onClear={(name) => clear.mutate(name)}
+            savePending={save.isPending}
+            clearPending={clear.isPending}
+            onError={fail}
+          />
+        </InfoPopover>
+      </div>
       <div className="card">
         <h2 className="section-title">Forget all provider credentials</h2>
         <p className="body-secondary">
@@ -536,6 +549,18 @@ function CredentialField(props: {
                       : 'Status unavailable'}
           {activeHint !== undefined ? ' · ' + activeHint : ''}
         </span>
+        <span className="info-row-spacer" />
+        {disclosureLabel !== null ? (
+          <InfoPopover title={props.label}>
+            <p className="metadata mono" style={{ margin: '4px 0' }}>
+              {props.name}
+              {item !== undefined ? ' · ' + item.persistence + ' · ' + item.source : ''}
+            </p>
+            <p className="metadata" style={{ margin: 0 }}>
+              {DESCRIPTIONS[props.name] ?? ''}
+            </p>
+          </InfoPopover>
+        ) : null}
       </div>
       <div
         style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 4 }}
@@ -574,18 +599,6 @@ function CredentialField(props: {
         <p className="metadata">
           Stored credential unavailable. Check OS secure storage; keep the existing store.
         </p>
-      ) : null}
-      {disclosureLabel !== null ? (
-        <details style={{ marginTop: 4 }}>
-          <summary className="metadata">{disclosureLabel}</summary>
-          <p className="metadata mono" style={{ margin: '4px 0' }}>
-            {props.name}
-            {item !== undefined ? ' · ' + item.persistence + ' · ' + item.source : ''}
-          </p>
-          <p className="metadata" style={{ margin: 0 }}>
-            {DESCRIPTIONS[props.name] ?? ''}
-          </p>
-        </details>
       ) : null}
     </div>
   );
@@ -696,6 +709,18 @@ function ModelSelectField(props: ModelFieldProps): React.JSX.Element {
                       ? 'Not set'
                       : 'Status unavailable'}
         </span>
+        <span className="info-row-spacer" />
+        {disclosureLabel !== null ? (
+          <InfoPopover title={props.label}>
+            <p className="metadata mono" style={{ margin: '4px 0' }}>
+              {props.name}
+              {item !== undefined ? ' · ' + item.persistence + ' · ' + item.source : ''}
+            </p>
+            <p className="metadata" style={{ margin: 0 }}>
+              {props.description ?? ''}
+            </p>
+          </InfoPopover>
+        ) : null}
       </div>
       <div
         style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 4 }}
@@ -765,18 +790,6 @@ function ModelSelectField(props: ModelFieldProps): React.JSX.Element {
         <p className="metadata">
           Stored credential unavailable. Check OS secure storage; keep the existing store.
         </p>
-      ) : null}
-      {disclosureLabel !== null ? (
-        <details style={{ marginTop: 4 }}>
-          <summary className="metadata">{disclosureLabel}</summary>
-          <p className="metadata mono" style={{ margin: '4px 0' }}>
-            {props.name}
-            {item !== undefined ? ' · ' + item.persistence + ' · ' + item.source : ''}
-          </p>
-          <p className="metadata" style={{ margin: 0 }}>
-            {props.description ?? ''}
-          </p>
-        </details>
       ) : null}
     </div>
   );
@@ -873,10 +886,12 @@ function CredentialSourceSelector(props: {
           Use OpenRouter key
         </button>
       </div>
-      <p className="metadata" style={{ margin: '4px 0 0' }}>
-        Both keys are stored securely. Switching only changes which key Sentry uses; the other key
-        stays saved.
-      </p>
+      <div className="info-aligned-row" style={{ justifyContent: 'flex-end' }}>
+        <InfoPopover title="Provider keys">
+          Both keys are stored securely. Switching only changes which key Sentry uses; the other key
+          stays saved.
+        </InfoPopover>
+      </div>
     </div>
   );
 }
@@ -1101,13 +1116,18 @@ export function HarnessBinaryCard(props: {
   }, [openCodeSuggestion, openCodeDraft, openCodeSaved?.configured === true, props.setValues]);
   return (
     <div className="card" style={{ marginBottom: 12, marginTop: 8 }}>
-      <h3 className="card-title">Execution runtime</h3>
-      <p className="body-secondary">
-        Provider CLIs (opencode, dsh, Claude Code) execute inside the WSL2 Sentry runtime on Linux.
-        Optional absolute Linux paths below override PATH lookup; leaving a field empty keeps
-        automatic discovery. Paths refer to the selected WSL Linux runtime — Windows paths (C:… ) do
-        not apply. See <Link to="/environment">Environment</Link> for the runtime doctor state.
-      </p>
+      <div
+        style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}
+      >
+        <h3 className="card-title">Execution runtime</h3>
+        <InfoPopover title="Execution runtime">
+          Provider CLIs (opencode, dsh, Claude Code) execute inside the WSL2 Sentry runtime on
+          Linux. Optional absolute Linux paths below override PATH lookup; leaving a field empty
+          keeps automatic discovery. Paths refer to the selected WSL Linux runtime — Windows paths
+          (C:… ) do not apply. See <Link to="/environment">Environment</Link> for the runtime doctor
+          state.
+        </InfoPopover>
+      </div>
       {BINARY_FIELDS.map((field) => {
         const status = props.statuses.find((s) => s.name === field.name);
         const current = props.values[field.name] ?? '';
@@ -1132,9 +1152,7 @@ export function HarnessBinaryCard(props: {
                     : 'Status unavailable'}
               {status?.hint !== undefined && status.hint.length > 0 ? '; ' + status.hint : ''})
             </span>
-            <p className="muted" style={{ margin: '4px 0' }}>
-              {DESCRIPTIONS[field.name] ?? ''}
-            </p>
+            <InfoPopover title={field.label}>{DESCRIPTIONS[field.name] ?? ''}</InfoPopover>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
               <input
                 type="text"

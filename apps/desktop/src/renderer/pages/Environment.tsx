@@ -1,4 +1,6 @@
 import React from 'react';
+import { InfoPopover } from '../components/InfoPopover.js';
+import { LoadingOverlay } from '../components/BlockingOverlay.js';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Check, X } from 'lucide-react';
@@ -6,7 +8,6 @@ import { sentryApi } from '../lib/sentry-api.js';
 import { runtimeConnectionState, useRuntimeStatus } from '../lib/use-runtime-status.js';
 import { PageHeader, PageSection } from '../components/ui/PageHeader.js';
 import { StatusPill } from '../components/ui/StatusPill.js';
-import { CollapsibleSection } from '../components/ui/CollapsibleSection.js';
 
 interface RuntimeStatus {
   connected: boolean;
@@ -86,7 +87,7 @@ export function Environment(): React.JSX.Element {
   const hello = data?.runtime ?? status?.hello;
   const connection = runtimeConnectionState(runtime);
   const connected = connection === 'connected';
-  if (environment.isLoading) return <div className="skeleton">Loading environment…</div>;
+  if (environment.isLoading) return <LoadingOverlay>Loading environment…</LoadingOverlay>;
   if (environment.isError || data === undefined)
     return (
       <div className="page">
@@ -131,6 +132,30 @@ export function Environment(): React.JSX.Element {
             <span className="metadata">
               WSL distribution: {status?.distro ?? hello?.distro ?? '—'}
             </span>
+            <span className="info-row-spacer" />
+            <InfoPopover title="Advanced details">
+              <dl className="kv" style={{ marginTop: 8 }}>
+                {hello !== undefined ? (
+                  <>
+                    <dt>Node host path</dt>
+                    <dd className="mono truncate" title={hello.processExecPath}>
+                      {hello.processExecPath}
+                    </dd>
+                    <dt>Data root</dt>
+                    <dd className="mono truncate" title={hello.dataRoot}>
+                      {hello.dataRoot}
+                    </dd>
+                    <dt>Protocol version</dt>
+                    <dd className="mono">v{hello.protocolVersion}</dd>
+                  </>
+                ) : (
+                  <>
+                    <dt>Status</dt>
+                    <dd className="metadata">Runtime details not recorded.</dd>
+                  </>
+                )}
+              </dl>
+            </InfoPopover>
           </div>
           {hello !== undefined ? (
             <dl className="kv" style={{ marginTop: 10 }}>
@@ -146,29 +171,6 @@ export function Environment(): React.JSX.Element {
               </dd>
             </dl>
           ) : null}
-          <CollapsibleSection title="Advanced details">
-            <dl className="kv" style={{ marginTop: 8 }}>
-              {hello !== undefined ? (
-                <>
-                  <dt>Node host path</dt>
-                  <dd className="mono truncate" title={hello.processExecPath}>
-                    {hello.processExecPath}
-                  </dd>
-                  <dt>Data root</dt>
-                  <dd className="mono truncate" title={hello.dataRoot}>
-                    {hello.dataRoot}
-                  </dd>
-                  <dt>Protocol version</dt>
-                  <dd className="mono">v{hello.protocolVersion}</dd>
-                </>
-              ) : (
-                <>
-                  <dt>Status</dt>
-                  <dd className="metadata">Runtime details not recorded.</dd>
-                </>
-              )}
-            </dl>
-          </CollapsibleSection>
         </div>
       </PageSection>
       <PageSection title="Local CLI">
@@ -187,17 +189,19 @@ export function Environment(): React.JSX.Element {
             {(cliStatus?.connectedClients ?? []).length === 0 && cliStatus?.started === true ? (
               <span className="metadata">No external clients</span>
             ) : null}
+            <span className="info-row-spacer" />
+            {cliStatus?.error === undefined ? (
+              <InfoPopover title="Local CLI">
+                External automation can drive this same Sentry instance with `sentry cli ...` while
+                the Desktop stays open.
+              </InfoPopover>
+            ) : null}
           </div>
           {cliStatus?.error !== undefined ? (
             <p className="metadata" style={{ marginBottom: 0 }}>
               {cliStatus.error}
             </p>
-          ) : (
-            <p className="metadata" style={{ marginBottom: 0 }}>
-              External automation can drive this same Sentry instance with `sentry cli ...` while
-              the Desktop stays open.
-            </p>
-          )}
+          ) : null}
         </div>
       </PageSection>
       <PageSection title="Agent health">
@@ -207,6 +211,10 @@ export function Environment(): React.JSX.Element {
               <div className="agent-row">
                 <span className="grow card-title">{stack.displayName}</span>
                 <StatusPill status={stack.readiness ?? 'unknown'} />
+                <InfoPopover title={stack.displayName + ' readiness'}>
+                  A saved credential does not imply the provider works until a non-billable doctor
+                  verifies it inside the WSL runtime.
+                </InfoPopover>
               </div>
               <div
                 className="mono metadata truncate"
@@ -246,10 +254,6 @@ export function Environment(): React.JSX.Element {
                   {stack.note}
                 </p>
               ) : null}
-              <p className="metadata" style={{ marginBottom: 0 }}>
-                A saved credential does not imply the provider works until a non-billable doctor
-                verifies it inside the WSL runtime.
-              </p>
             </div>
           ))}
         </div>

@@ -1,4 +1,6 @@
 import React from 'react';
+import { InfoPopover } from '../components/InfoPopover.js';
+import { LoadingOverlay } from '../components/BlockingOverlay.js';
 import { Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { sentryApi } from '../lib/sentry-api.js';
@@ -85,7 +87,7 @@ export function RuntimeSettings(): React.JSX.Element {
           </button>
         </div>
       ) : null}
-      {distros.isLoading ? <div className="skeleton">Loading distributions…</div> : null}
+      {distros.isLoading ? <LoadingOverlay>Loading distributions…</LoadingOverlay> : null}
       {view.showDistroSelector && (info?.distros ?? []).length === 0 && !distros.isLoading ? (
         <div className="error-box" role="alert">
           {info?.listError !== undefined ? (
@@ -103,7 +105,7 @@ export function RuntimeSettings(): React.JSX.Element {
       ) : null}
       <PageSection title={isLinux ? 'Native Runtime' : 'WSL Runtime'}>
         <div className="card">
-          <div style={{ marginBottom: 10 }}>
+          <div className="info-aligned-row" style={{ marginBottom: 10 }}>
             <StatusPill
               status={connection === 'checking' ? 'checking' : connected ? 'connected' : 'offline'}
               label={
@@ -115,6 +117,11 @@ export function RuntimeSettings(): React.JSX.Element {
               }
               pulse={connected}
             />
+            {!view.showDistroSelector ? (
+              <InfoPopover title="Native runtime">
+                The native runtime follows the current host; no distribution selection is needed.
+              </InfoPopover>
+            ) : null}
           </div>
           <dl className="kv">
             <dt>Host</dt>
@@ -165,11 +172,7 @@ export function RuntimeSettings(): React.JSX.Element {
                 reconnects automatically. Changes require restart.
               </p>
             </>
-          ) : (
-            <p className="metadata" style={{ marginBottom: 0 }}>
-              The native runtime follows the current host; no distribution selection is needed.
-            </p>
-          )}
+          ) : null}
         </div>
       </PageSection>
       {view.kind === 'windows' ? (

@@ -1,4 +1,5 @@
 import React from 'react';
+import { LoadingOverlay } from '../components/BlockingOverlay.js';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronsLeft, ChevronsRight } from 'lucide-react';
@@ -274,7 +275,7 @@ export function RunWorkspace(): React.JSX.Element {
     window.addEventListener('pointerup', onUp);
   }, []);
 
-  if (snapshot.isLoading) return <div className="skeleton">Loading run…</div>;
+  if (snapshot.isLoading) return <LoadingOverlay>Loading run…</LoadingOverlay>;
   if (data === undefined) {
     return (
       <div className="error-box" role="alert">
@@ -448,7 +449,7 @@ export function RunWorkspace(): React.JSX.Element {
       ) : null}
       {!terminal ? <div className="inline-notice">Export unlocks at terminal status.</div> : null}
       {graph === undefined ? (
-        <div className="skeleton">Building execution graph…</div>
+        <LoadingOverlay>Building execution graph…</LoadingOverlay>
       ) : (
         <div className="workspace" role="region" aria-label="Run workspace">
           {collapseLeft ? (
@@ -602,7 +603,7 @@ function SelectedNodeInspector({
         <CopyId id={nodeId} short={22} />
       </div>
       {developerMode ? (
-        <pre className="mono" style={{ whiteSpace: 'pre-wrap', fontSize: 11 }}>
+        <pre className="mono" style={{ whiteSpace: 'pre-wrap', fontSize: 13 }}>
           {JSON.stringify(payload, null, 2).slice(0, 4000)}
         </pre>
       ) : (

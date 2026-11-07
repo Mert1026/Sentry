@@ -55,6 +55,19 @@ function mountSettings(initialEntry = '/settings', setEnabled = vi.fn()) {
 }
 
 describe('Application settings & localization', () => {
+  it('keeps setting help separate from navigation and switches', async () => {
+    mountSettings();
+    const help = screen.getByRole('button', { name: 'About Application' });
+    expect(help.closest('a')).toBeNull();
+    fireEvent.click(help);
+    expect(screen.getByRole('link', { name: 'Application' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('link', { name: 'Application' }));
+    const toggle = await screen.findByRole('switch', { name: 'Developer mode' });
+    const before = toggle.getAttribute('aria-checked');
+    fireEvent.click(screen.getByRole('button', { name: 'About Developer mode' }));
+    expect(toggle.getAttribute('aria-checked')).toBe(before);
+  });
+
   it('defaults to English and translates static and dynamic UI strings to Bulgarian', () => {
     expect(translateText('Dashboard')).toBe('Dashboard');
     expect(translateText('Dashboard', 'bg')).toBe('Табло');
