@@ -729,5 +729,7 @@
   "Use API key": "Използвай API ключ",
   "Use ChatGPT account": "Използвай ChatGPT акаунт",
   "OpenAI API key": "OpenAI API ключ",
-  "Open this link in your browser and sign in. This page updates when it finishes.": "Отворете този линк в браузъра си и влезте. Страницата се обновява, когато приключи."
+  "Open this link in your browser and sign in. This page updates when it finishes.": "Отворете този линк в браузъра си и влезте. Страницата се обновява, когато приключи.",
+  "Sign in with": "Вход чрез",
+  "OpenAI": "OpenAI"
 }

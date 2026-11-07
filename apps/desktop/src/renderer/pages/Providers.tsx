@@ -820,7 +820,7 @@ const OPENCODE_PROVIDER_OPTIONS: ReadonlyArray<{ value: string; label: string }>
   },
   { value: 'opencode', label: 'OpenCode Zen — pay-as-you-go (uses the OpenCode API key)' },
   { value: 'openrouter', label: 'OpenRouter — pay-as-you-go (uses the OpenRouter API key)' },
-  { value: 'openai', label: 'OpenAI — your own API key (uses the OpenAI API key)' },
+  { value: 'openai', label: 'OpenAI — API key or ChatGPT account' },
 ];
 
 /**
@@ -1093,51 +1093,60 @@ function OpenCodeCard(props: {
         detailsLabel="Explanation"
         {...common}
       />
-      {effectiveProvider === 'openai' ? (
-        <div style={{ marginBottom: 12 }}>
-          <span id="openai-auth-label" className="card-title">
-            OpenAI sign-in
-          </span>
-          <div
-            role="group"
-            aria-labelledby="openai-auth-label"
-            style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}
-          >
-            <button
-              className={openAiAccount ? 'compact ghost' : 'primary compact'}
-              aria-pressed={!openAiAccount}
-              disabled={props.savePending}
-              onClick={() => props.onSave('SENTRY_OPENAI_AUTH', 'key')}
-            >
-              Use API key
-            </button>
-            <button
-              className={openAiAccount ? 'primary compact' : 'compact ghost'}
-              aria-pressed={openAiAccount}
-              disabled={props.savePending}
-              onClick={() => props.onSave('SENTRY_OPENAI_AUTH', 'account')}
-            >
-              Use ChatGPT account
-            </button>
-          </div>
-        </div>
-      ) : null}
-      {effectiveProvider === 'openai' && openAiAccount ? (
-        <OpenAiAccountPanel onError={props.onError} />
-      ) : (
-        <CredentialField
-          label="OpenAI API key"
-          name="OPENAI_API_KEY"
-          detailsLabel="Explanation"
-          {...common}
-        />
-      )}
       <CredentialField
         label="OpenRouter API key (Pay-as-you-go)"
         name="OPENROUTER_API_KEY"
         detailsLabel="Explanation"
         {...common}
       />
+      <div
+        role="group"
+        aria-label="OpenAI"
+        style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 12, marginTop: 4 }}
+      >
+        <h3 className="card-title" style={{ margin: '0 0 8px' }}>
+          OpenAI
+        </h3>
+        {effectiveProvider === 'openai' ? (
+          <div style={{ marginBottom: 12 }}>
+            <span id="openai-auth-label" className="metadata">
+              Sign in with
+            </span>
+            <div
+              role="group"
+              aria-labelledby="openai-auth-label"
+              style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}
+            >
+              <button
+                className={openAiAccount ? 'compact ghost' : 'primary compact'}
+                aria-pressed={!openAiAccount}
+                disabled={props.savePending}
+                onClick={() => props.onSave('SENTRY_OPENAI_AUTH', 'key')}
+              >
+                API key
+              </button>
+              <button
+                className={openAiAccount ? 'primary compact' : 'compact ghost'}
+                aria-pressed={openAiAccount}
+                disabled={props.savePending}
+                onClick={() => props.onSave('SENTRY_OPENAI_AUTH', 'account')}
+              >
+                ChatGPT account
+              </button>
+            </div>
+          </div>
+        ) : null}
+        {effectiveProvider === 'openai' && openAiAccount ? (
+          <OpenAiAccountPanel onError={props.onError} />
+        ) : (
+          <CredentialField
+            label="OpenAI API key"
+            name="OPENAI_API_KEY"
+            detailsLabel="Explanation"
+            {...common}
+          />
+        )}
+      </div>
     </div>
   );
 }

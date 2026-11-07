@@ -135,15 +135,15 @@ export function OpenAiAccountPanel({
           <p className="metadata" style={{ margin: '0 0 4px' }}>
             Open this link in your browser and sign in. This page updates when it finishes.
           </p>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-            <input
-              type="text"
-              readOnly
-              value={shownLink}
-              aria-label="ChatGPT sign-in link"
-              onFocus={(event) => event.currentTarget.select()}
-              style={{ minWidth: 200, flex: 1 }}
-            />
+          <input
+            type="text"
+            readOnly
+            value={shownLink}
+            aria-label="ChatGPT sign-in link"
+            onFocus={(event) => event.currentTarget.select()}
+            style={{ width: '100%', boxSizing: 'border-box' }}
+          />
+          <div style={{ marginTop: 6 }}>
             <button
               className="compact"
               onClick={() => {
