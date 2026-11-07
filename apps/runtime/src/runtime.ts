@@ -13,7 +13,7 @@ import { spawnSync } from 'node:child_process';
 import { accessSync, constants, statSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
 import { z } from 'zod';
-import { INITIAL_AGENT_STACKS } from '@qa/domain';
+import { AGENT_STACKS } from '@qa/domain';
 import {
   SentryDatabase,
   SentryRepository,
@@ -29,6 +29,8 @@ import {
   sandboxStagingParent,
 } from '@qa/run-engine';
 import {
+  createChatGptRegistration,
+  chatGptEnvironment,
   createOpenCodeRegistration,
   credentialEnvForProvider,
   managedOpenCodeExecutable,
@@ -459,7 +461,12 @@ export class SentryRuntimeHost {
   private readonly activeImports = new Set<AbortController>();
   private readonly activeUpdates = new Set<AbortController>();
   private readonly notify: (event: string, payload?: unknown) => void;
-  private configuredModels: { opencode?: string; deepseek?: string; glm?: string } = {};
+  private configuredModels: {
+    opencode?: string;
+    deepseek?: string;
+    glm?: string;
+    chatgpt?: string;
+  } = {};
   private closed = false;
   private shutdownRequested = false;
 
@@ -482,6 +489,13 @@ export class SentryRuntimeHost {
     this.registry = new HarnessAdapterRegistry()
       .register(
         createOpenCodeRegistration({
+          managedExecutable: managedOpenCodeExecutable(this.dataRoot),
+          toolchains: (workspace) => this.toolchains.setup(workspace),
+          openAiAccountBridge: () => this.openAiAccount.ensureBridge(),
+        }),
+      )
+      .register(
+        createChatGptRegistration({
           managedExecutable: managedOpenCodeExecutable(this.dataRoot),
           toolchains: (workspace) => this.toolchains.setup(workspace),
           openAiAccountBridge: () => this.openAiAccount.ensureBridge(),
@@ -590,6 +604,10 @@ export class SentryRuntimeHost {
     if (parsed.models.opencode !== undefined) {
       process.env['SENTRY_OPENCODE_MODEL'] = parsed.models.opencode;
       this.configuredModels = { ...this.configuredModels, opencode: parsed.models.opencode };
+    }
+    if (parsed.models.chatgpt !== undefined) {
+      process.env['SENTRY_CHATGPT_MODEL'] = parsed.models.chatgpt;
+      this.configuredModels = { ...this.configuredModels, chatgpt: parsed.models.chatgpt };
     }
     if (parsed.models.deepseek !== undefined) {
       process.env['SENTRY_DEEPSEEK_MODEL'] = parsed.models.deepseek;
@@ -1124,9 +1142,13 @@ export class SentryRuntimeHost {
     // (not in harness code): presence + versions + a minimal no-model
     // bubblewrap init smoke. Never throws; unknown means unverified.
     const sandboxDeps = probeSandboxDeps();
-    const [opencode, deepseek, glm] = await Promise.all([
+    const [opencode, chatgpt, deepseek, glm] = await Promise.all([
       doctorOpenCode({
         managedExecutable: managedOpenCodeExecutable(this.dataRoot),
+      }).catch(() => undefined),
+      doctorOpenCode({
+        managedExecutable: managedOpenCodeExecutable(this.dataRoot),
+        environment: chatGptEnvironment(),
       }).catch(() => undefined),
       doctorDeepSeek().catch(() => undefined),
       doctorGlm().catch(() => undefined),
@@ -1167,8 +1189,8 @@ export class SentryRuntimeHost {
         reason: error instanceof Error ? error.message.slice(0, 300) : 'probe failed',
       };
     }
-    const stacks = INITIAL_AGENT_STACKS.map((s) => {
-      const opencodeDoctor = opencode as
+    const stacks = AGENT_STACKS.map((s) => {
+      const opencodeDoctor = (s.id === 'stack_chatgpt_main' ? chatgpt : opencode) as
         | {
             executable?: string;
             executableSource?: string;
@@ -1183,9 +1205,9 @@ export class SentryRuntimeHost {
         .slice(0, 3)
         .join('; ');
       const base =
-        s.id === 'stack_opencode_main'
+        s.id === 'stack_opencode_main' || s.id === 'stack_chatgpt_main'
           ? {
-              ...stackStatus(s.id, opencode as never),
+              ...stackStatus(s.id, (s.id === 'stack_chatgpt_main' ? chatgpt : opencode) as never),
               ...(opencodeDoctor?.modelId === undefined ? {} : { modelId: opencodeDoctor.modelId }),
               ...(opencodeDoctor?.provider === undefined
                 ? {}
@@ -1369,16 +1391,21 @@ export class SentryRuntimeHost {
     };
     // Sandbox/isolation probes run per requested provider that needs them —
     // never defaulted to true for unprobed providers.
-    if (wants('stack_opencode_main')) {
+    // OpenCode and ChatGPT share the harness; ChatGPT sees its own provider/model.
+    for (const [openStackId, openEnv] of [
+      ['stack_opencode_main', env],
+      ['stack_chatgpt_main', chatGptEnvironment(env)],
+    ] as const) {
+      if (!wants(openStackId)) continue;
       const provider = normalizeOpenCodeProvider(
-        env['SENTRY_OPENCODE_PROVIDER'],
-        env['SENTRY_OPENCODE_MODEL'],
+        openEnv['SENTRY_OPENCODE_PROVIDER'],
+        openEnv['SENTRY_OPENCODE_MODEL'],
       );
       // Shared resolution+probe: the exact executable production execution
       // would launch, probed with the spawn-based helper (PATH-aware — the
       // same effective runtime environment production uses).
       const probed = await SentryRuntimeHost.probeOpencodeResolved(
-        env,
+        openEnv,
         managedOpenCodeExecutable(this.dataRoot),
       );
       const version = probed.available ? probed.version : undefined;
@@ -1397,11 +1424,11 @@ export class SentryRuntimeHost {
       // complete (transient unit launch, bwrap smoke, masking primitive).
       const sandbox = linux ? await SentryRuntimeHost.probeOpencodeSandbox(env) : undefined;
       pushVerdict(
-        'stack_opencode_main',
+        openStackId,
         evaluateOpencodeGate({
           credential: openCodeCredentialPresent(provider, env),
-          credentialName: credentialEnvForProvider(provider),
-          model: (env['SENTRY_OPENCODE_MODEL'] ?? '').length > 0,
+          credentialName: credentialEnvForProvider(provider, openEnv),
+          model: (openEnv['SENTRY_OPENCODE_MODEL'] ?? '').length > 0,
           executable: probed.executable,
           exists: probed.available,
           version,

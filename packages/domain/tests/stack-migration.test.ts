@@ -2,7 +2,12 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { AgentRunSchema, AgentStackDefinitionSchema } from '@qa/schemas';
-import { INITIAL_AGENT_STACKS, OPENCODE_QA_STACK } from '../src/index.js';
+import {
+  AGENT_STACKS,
+  CHATGPT_QA_STACK,
+  INITIAL_AGENT_STACKS,
+  OPENCODE_QA_STACK,
+} from '../src/index.js';
 
 const dir = join(__dirname, 'fixtures');
 const load = (name: string) => JSON.parse(readFileSync(join(dir, name), 'utf8'));
@@ -19,6 +24,17 @@ describe('agent stack migration (muse → opencode)', () => {
       'stack_deepseek_main',
       'stack_glm_main',
     ]);
+  });
+
+  it('offers ChatGPT as a fourth runnable stack on the OpenCode harness against OpenAI', () => {
+    expect(AGENT_STACKS.map((stack) => stack.id)).toEqual([
+      'stack_opencode_main',
+      'stack_deepseek_main',
+      'stack_glm_main',
+      'stack_chatgpt_main',
+    ]);
+    expect(CHATGPT_QA_STACK.harness.adapterId).toBe('opencode');
+    expect(CHATGPT_QA_STACK.model.provider).toBe('openai');
   });
 
   it('separates harness, provider, and model on the OpenCode stack', () => {

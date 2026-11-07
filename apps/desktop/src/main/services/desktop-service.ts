@@ -434,9 +434,11 @@ export class DesktopApplicationService {
     const opencode = get('SENTRY_OPENCODE_MODEL');
     const deepseek = get('SENTRY_DEEPSEEK_MODEL');
     const glm = get('SENTRY_GLM_MODEL');
+    const chatgpt = get('SENTRY_CHATGPT_MODEL');
     if (opencode !== undefined) models['opencode'] = opencode;
     if (deepseek !== undefined) models['deepseek'] = deepseek;
     if (glm !== undefined) models['glm'] = glm;
+    if (chatgpt !== undefined) models['chatgpt'] = chatgpt;
     const providers: Record<string, string> = {};
     const openRouterKey = get('OPENROUTER_API_KEY');
     const openCodeKey = get('OPENCODE_API_KEY');

@@ -198,6 +198,7 @@ export const RuntimeConfigureParamsSchema = z
         opencode: z.string().min(1).max(300).optional(),
         deepseek: z.string().min(1).max(300).optional(),
         glm: z.string().min(1).max(300).optional(),
+        chatgpt: z.string().min(1).max(300).optional(),
       })
       .strict()
       .default({}),

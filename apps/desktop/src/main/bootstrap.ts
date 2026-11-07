@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module';
-import { INITIAL_AGENT_STACKS } from '@qa/domain';
+import { AGENT_STACKS } from '@qa/domain';
 import { resolveSentryDataRoot } from '@qa/persistence';
 
 /**
@@ -140,7 +140,7 @@ export async function bootstrapDesktop(dataRootOverride?: string): Promise<Boots
     runtime: client,
     host,
     credentials,
-    agentStacks: [...INITIAL_AGENT_STACKS],
+    agentStacks: [...AGENT_STACKS],
     legacyDataRoot: resolveSentryDataRoot(),
   });
   await service.pushRuntimeConfiguration().catch((error: unknown) => {

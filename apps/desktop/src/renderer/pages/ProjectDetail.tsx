@@ -40,7 +40,12 @@ import { InfoPopover } from '../components/InfoPopover.js';
 import { BlockingOverlay } from '../components/BlockingOverlay.js';
 import './project-detail.css';
 
-const AGENT_ORDER = ['stack_opencode_main', 'stack_deepseek_main', 'stack_glm_main'];
+const AGENT_ORDER = [
+  'stack_opencode_main',
+  'stack_deepseek_main',
+  'stack_glm_main',
+  'stack_chatgpt_main',
+];
 
 function shortModel(modelId: string | undefined): string {
   if (modelId === undefined || modelId === '') return 'Default model';
@@ -123,7 +128,8 @@ export function ProjectDetail(): React.JSX.Element {
       (s) =>
         s.id === 'stack_opencode_main' ||
         s.id === 'stack_deepseek_main' ||
-        s.id === 'stack_glm_main',
+        s.id === 'stack_glm_main' ||
+        s.id === 'stack_chatgpt_main',
     )
     .sort((a, b) => AGENT_ORDER.indexOf(a.id) - AGENT_ORDER.indexOf(b.id));
   const [selectedStacks, setSelectedStacks] = React.useState<string[] | undefined>(undefined);

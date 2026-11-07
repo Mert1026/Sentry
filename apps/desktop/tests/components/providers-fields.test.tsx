@@ -72,7 +72,8 @@ describe('Providers harness binary section', () => {
     expect(html).toContain('Value for OPENROUTER_API_KEY');
     expect(html).toContain('OpenAI API key');
     expect(html).toContain('Value for OPENAI_API_KEY');
-    expect(html).toContain('value="openai"');
+    expect(html).toContain('Value for SENTRY_CHATGPT_MODEL');
+    expect(html).toContain('ChatGPT');
     expect(html).toContain('Value for DEEPSEEK_API_KEY');
     expect(html).toContain('Value for ANTHROPIC_AUTH_TOKEN');
   });
