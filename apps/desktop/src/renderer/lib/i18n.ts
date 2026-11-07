@@ -174,6 +174,10 @@ function translateCore(trimmed: string): string {
   if (addons !== null) return `${addons[1]} инсталирани · собствена команда за инсталиране`;
   const installedCount = /^(\d+) of (\d+) installed$/.exec(trimmed);
   if (installedCount !== null) return `${installedCount[1]} от ${installedCount[2]} инсталирани`;
+  const packCount = /^(\d+) of (\d+) packs$/.exec(trimmed);
+  if (packCount !== null) return `${packCount[1]} от ${packCount[2]} пакета`;
+  const installAllCount = /^Install all \((\d+)\)$/.exec(trimmed);
+  if (installAllCount !== null) return `Инсталирай всички (${installAllCount[1]})`;
   const installAll = /^Install all (.+) versions$/.exec(trimmed);
   if (installAll !== null) return `Инсталирай всички версии на ${installAll[1]}`;
   const installVersions = /^Install (\d+) version\(s\) of (.+)\? About (\d+) MB in total\.$/.exec(

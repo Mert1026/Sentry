@@ -1,0 +1,305 @@
+/* Toolchains page: search toolbar, pack rows and the version table. */
+
+.tc-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  margin: 4px 0 6px;
+}
+.tc-toolbar input[type='search'] {
+  flex: 1 1 280px;
+  max-width: 440px;
+  min-width: 0;
+}
+.tc-toolbar label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.tc-toolbar .tc-count {
+  margin-left: auto;
+}
+
+/* One pack per row, full width: names and descriptions line up and the list scans top to bottom. */
+.tc-packs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+.tc-pack {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  transition: border-color 140ms ease;
+}
+.tc-pack:hover,
+.tc-pack[open] {
+  border-color: var(--border-default);
+}
+.tc-pack[open] {
+  background: var(--bg-panel);
+}
+.tc-pack > summary.disclosure {
+  flex-wrap: nowrap;
+  gap: 12px;
+  min-height: 46px;
+  padding: 8px 44px 8px 12px; /* room on the right for the info button */
+}
+.tc-pack > summary.disclosure::before {
+  margin-right: 2px;
+}
+.tc-pack-name {
+  flex: none;
+  min-width: 120px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.tc-pack-desc {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+}
+.tc-pack.info-disclosure > .project-info-button {
+  right: 10px;
+  top: 7px;
+}
+
+/* A small status chip instead of a large pill. */
+.tc-chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 9px;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.tc-chip--some {
+  color: var(--success);
+  border-color: rgba(109, 155, 102, 0.4);
+  background: rgba(109, 155, 102, 0.1);
+}
+.tc-chip--busy {
+  color: var(--running);
+  border-color: rgba(212, 192, 11, 0.4);
+  background: rgba(212, 192, 11, 0.08);
+}
+.tc-chip--failed {
+  color: #d68785;
+  border-color: rgba(185, 100, 98, 0.45);
+  background: rgba(185, 100, 98, 0.1);
+}
+
+.tc-body {
+  padding: 0 12px 12px;
+}
+.tc-note {
+  margin: 0 0 8px;
+  padding: 6px 10px;
+  border-left: 2px solid var(--warning);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  background: rgba(194, 167, 96, 0.08);
+  color: var(--text-secondary);
+  font-size: 12.5px;
+}
+
+/* The version table: one aligned row per version. */
+.tc-versions {
+  display: grid;
+  grid-template-columns: minmax(96px, auto) minmax(132px, auto) minmax(0, 1fr) auto auto;
+  align-items: center;
+  border-top: 1px solid var(--border-subtle);
+}
+.tc-row {
+  display: contents;
+}
+/* Gaps are cell padding, not column-gap, so the row borders run unbroken. */
+.tc-row > * {
+  padding: 7px 14px 7px 0;
+  border-bottom: 1px solid rgba(160, 190, 160, 0.1);
+}
+.tc-row > .tc-action {
+  padding-right: 0;
+}
+.tc-row--installed > .tc-version {
+  color: var(--text-primary);
+}
+.tc-version {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+.tc-default {
+  padding: 0 6px;
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+.tc-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+.tc-dot {
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+  border: 1.5px solid var(--text-tertiary);
+}
+.tc-state--installed {
+  color: var(--success);
+}
+.tc-state--installed .tc-dot {
+  border-color: var(--success);
+  background: var(--success);
+}
+.tc-state--busy {
+  color: var(--running);
+}
+.tc-state--busy .tc-dot {
+  border-color: var(--running);
+  background: var(--running);
+  animation: tc-pulse 1.2s ease-in-out infinite;
+}
+.tc-state--failed {
+  color: #d68785;
+}
+.tc-state--failed .tc-dot {
+  border-color: var(--danger);
+  background: var(--danger);
+}
+@keyframes tc-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tc-state--busy .tc-dot {
+    animation: none;
+  }
+}
+.tc-detail {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.tc-size {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.tc-action {
+  display: flex;
+  justify-content: flex-end;
+}
+.tc-action button {
+  min-width: 76px;
+  min-height: 28px;
+  padding: 3px 12px;
+  font-size: 12px;
+}
+.tc-action .tc-remove {
+  color: var(--text-secondary);
+  background: transparent;
+}
+.tc-action .tc-remove:hover:not(:disabled) {
+  color: #d68785;
+  border-color: rgba(185, 100, 98, 0.5);
+}
+.tc-row > .tc-error {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 8px 10px;
+  border-left: 2px solid var(--danger);
+  background: rgba(185, 100, 98, 0.09);
+  color: #e2b1af;
+  font-size: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.tc-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 14px;
+  margin-top: 10px;
+}
+.tc-foot button {
+  min-height: 28px;
+  padding: 3px 12px;
+  font-size: 12px;
+}
+
+/* Narrow windows: the version, state and action stay on one line; the details drop below. */
+@media (max-width: 880px) {
+  .tc-pack-desc {
+    display: none;
+  }
+  .tc-versions {
+    display: block;
+  }
+  .tc-row {
+    display: grid;
+    grid-template-columns: minmax(70px, auto) 1fr auto;
+    align-items: center;
+    column-gap: 12px;
+    padding: 7px 0;
+    border-bottom: 1px solid rgba(160, 190, 160, 0.1);
+  }
+  .tc-row > * {
+    padding: 0;
+    border-bottom: none;
+  }
+  .tc-row > .tc-error {
+    padding: 8px 10px;
+  }
+  .tc-version {
+    grid-area: 1 / 1;
+  }
+  .tc-state {
+    grid-area: 1 / 2;
+  }
+  .tc-action {
+    grid-area: 1 / 3;
+  }
+  .tc-detail {
+    grid-area: 2 / 1 / 3 / -1;
+    padding-top: 4px;
+  }
+  .tc-size {
+    display: none;
+  }
+  .tc-error {
+    grid-area: 3 / 1 / 4 / -1;
+    margin-top: 6px;
+  }
+}

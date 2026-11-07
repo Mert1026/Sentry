@@ -4,11 +4,11 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { sentryApi } from '../lib/sentry-api.js';
 import { PageHeader, PageSection } from '../components/ui/PageHeader.js';
-import { StatusPill } from '../components/ui/StatusPill.js';
 import { CustomAddons } from '../components/CustomAddons.js';
 import { InfoPopover } from '../components/InfoPopover.js';
 import { packMatches, verificationLine } from '../lib/toolchain-filter.js';
 import type { ToolchainPackStatus } from '../../shared/ipc-contract.js';
+import './toolchains.css';
 
 const POLL_MS = 3000;
 
@@ -122,16 +122,15 @@ export function Toolchains(): React.JSX.Element {
             {message}
           </p>
         ) : null}
-        <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div className="tc-toolbar">
           <input
             type="search"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search toolchains (name, version, what it does)"
             aria-label="Search toolchains"
-            style={{ minWidth: 280 }}
           />
-          <label style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <label>
             <input
               type="checkbox"
               checked={installedOnly}
@@ -139,7 +138,7 @@ export function Toolchains(): React.JSX.Element {
             />
             <span>Installed only</span>
           </label>
-          <span className="metadata">
+          <span className="metadata tc-count">
             {(status.data ?? []).filter((pack) => packMatches(pack, query, installedOnly)).length}{' '}
             of {(status.data ?? []).length} packs
           </span>
@@ -174,111 +173,124 @@ export function Toolchains(): React.JSX.Element {
                 </span>
               </summary>
               <InfoPopover title={category.title}>{category.hint}</InfoPopover>
-              <div className="cards toolchain-cards">
+              <div className="tc-packs">
                 {packs.map((pack) => {
                   const installed = pack.versions.filter((v) => v.installed).length;
                   const installing = pack.versions.some((v) => v.installing);
                   const failed = pack.versions.some((v) => v.error !== undefined && !v.installing);
+                  const missing = pack.versions.filter((v) => !v.installed && !v.installing).length;
                   return (
                     <details
-                      className="card info-disclosure"
+                      className="tc-pack info-disclosure"
                       key={pack.id}
                       open={installing || failed}
                     >
                       <summary className="disclosure">
-                        <span className="card-title" style={{ margin: 0 }}>
-                          {pack.label}
+                        <span className="tc-pack-name">{pack.label}</span>
+                        <span className="tc-pack-desc">{pack.description}</span>
+                        <span
+                          className={
+                            'tc-chip' +
+                            (installing
+                              ? ' tc-chip--busy'
+                              : failed
+                                ? ' tc-chip--failed'
+                                : installed > 0
+                                  ? ' tc-chip--some'
+                                  : '')
+                          }
+                        >
+                          {installing
+                            ? 'Installing…'
+                            : failed
+                              ? 'An install failed'
+                              : installed + ' of ' + pack.versions.length + ' installed'}
                         </span>
-                        <StatusPill
-                          status={
-                            installing ? 'running' : installed > 0 ? 'completed' : 'cancelled'
-                          }
-                          label={
-                            installing
-                              ? 'Installing…'
-                              : installed + ' of ' + pack.versions.length + ' installed'
-                          }
-                        />
-                        {failed ? <span className="metadata">An install failed</span> : null}
                       </summary>
                       <InfoPopover title={pack.label}>
                         <p>{pack.description}</p>
                         <p>Allow about {pack.approxSizeMb} MB per version.</p>
                         {pack.note !== undefined ? <p>{pack.note}</p> : null}
                       </InfoPopover>
-                      <span className="metadata">About {pack.approxSizeMb} MB per version</span>
-                      {pack.versions.map((v) => (
-                        <div
-                          key={v.version}
-                          style={{
-                            display: 'flex',
-                            gap: 12,
-                            alignItems: 'center',
-                            flexWrap: 'wrap',
-                            margin: '6px 0',
-                          }}
-                        >
-                          <span style={{ minWidth: 70 }}>
-                            {v.version}
-                            {v.version === pack.defaultVersion ? ' (default)' : ''}
-                          </span>
-                          <StatusPill
-                            status={
-                              v.installing ? 'running' : v.installed ? 'completed' : 'cancelled'
-                            }
-                            label={
-                              v.installing
-                                ? 'Installing…'
-                                : v.installed
-                                  ? 'Installed'
-                                  : 'Not installed'
-                            }
-                          />
-                          {v.installed && verificationLine(v.verification) !== undefined ? (
-                            <span className="metadata mono" title={v.verification}>
-                              {verificationLine(v.verification)}
-                            </span>
-                          ) : null}
-                          {v.installed && v.sizeMb !== undefined ? (
-                            <span className="metadata">{v.sizeMb} MB</span>
-                          ) : null}
-                          {v.installed ? (
+                      <div className="tc-body">
+                        {pack.note !== undefined ? <p className="tc-note">{pack.note}</p> : null}
+                        <div className="tc-versions">
+                          {pack.versions.map((v) => {
+                            const failedHere = v.error !== undefined && !v.installing;
+                            const state = v.installing
+                              ? 'busy'
+                              : v.installed
+                                ? 'installed'
+                                : failedHere
+                                  ? 'failed'
+                                  : 'none';
+                            return (
+                              <div
+                                key={v.version}
+                                className={'tc-row' + (v.installed ? ' tc-row--installed' : '')}
+                              >
+                                <span className="tc-version">
+                                  {v.version}
+                                  {v.version === pack.defaultVersion ? (
+                                    <span className="tc-default">default</span>
+                                  ) : null}
+                                </span>
+                                <span className={'tc-state tc-state--' + state}>
+                                  <span className="tc-dot" aria-hidden="true" />
+                                  {v.installing
+                                    ? 'Installing…'
+                                    : v.installed
+                                      ? 'Installed'
+                                      : failedHere
+                                        ? 'Failed'
+                                        : 'Not installed'}
+                                </span>
+                                <span className="tc-detail mono" title={v.verification}>
+                                  {v.installed ? (verificationLine(v.verification) ?? '') : ''}
+                                </span>
+                                <span className="tc-size">
+                                  {v.installed && v.sizeMb !== undefined ? v.sizeMb + ' MB' : ''}
+                                </span>
+                                <span className="tc-action">
+                                  {v.installed ? (
+                                    <button
+                                      className="tc-remove"
+                                      disabled={remove.isPending}
+                                      onClick={() =>
+                                        remove.mutate({ packId: pack.id, version: v.version })
+                                      }
+                                      aria-label={'Remove ' + pack.label + ' ' + v.version}
+                                    >
+                                      Remove
+                                    </button>
+                                  ) : (
+                                    <button
+                                      disabled={v.installing}
+                                      onClick={() =>
+                                        install.mutate({ packId: pack.id, version: v.version })
+                                      }
+                                      aria-label={'Install ' + pack.label + ' ' + v.version}
+                                    >
+                                      Install
+                                    </button>
+                                  )}
+                                </span>
+                                {failedHere ? <pre className="tc-error mono">{v.error}</pre> : null}
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div className="tc-foot">
+                          <span className="metadata">About {pack.approxSizeMb} MB per version</span>
+                          {missing > 1 ? (
                             <button
-                              disabled={remove.isPending}
-                              onClick={() => remove.mutate({ packId: pack.id, version: v.version })}
-                              aria-label={'Remove ' + pack.label + ' ' + v.version}
+                              onClick={() => installAll(pack)}
+                              aria-label={'Install all ' + pack.label + ' versions'}
                             >
-                              Remove
+                              Install all ({missing})
                             </button>
-                          ) : (
-                            <button
-                              disabled={v.installing}
-                              onClick={() =>
-                                install.mutate({ packId: pack.id, version: v.version })
-                              }
-                              aria-label={'Install ' + pack.label + ' ' + v.version}
-                            >
-                              Install
-                            </button>
-                          )}
-                          {v.error !== undefined && !v.installing ? (
-                            <pre
-                              className="error-box mono"
-                              style={{ flexBasis: '100%', whiteSpace: 'pre-wrap' }}
-                            >
-                              {v.error}
-                            </pre>
                           ) : null}
                         </div>
-                      ))}
-                      <div style={{ marginTop: 10 }}>
-                        <button
-                          className="primary"
-                          disabled={pack.versions.every((v) => v.installed || v.installing)}
-                          onClick={() => installAll(pack)}
-                        >
-                          Install all {pack.label} versions
-                        </button>
                       </div>
                     </details>
                   );

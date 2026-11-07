@@ -702,5 +702,18 @@
   "OpenCode Zen — pay-as-you-go (uses the OpenCode API key)": "OpenCode Zen — според употребата (използва API ключа на OpenCode)",
   "OpenRouter — pay-as-you-go (uses the OpenRouter API key)": "OpenRouter — според употребата (използва API ключа на OpenRouter)",
   "linked by this agent; record not in this snapshot": "свързано от този агент; записът не е в тази снимка",
-  "Structured failure details were not recorded.": "Не са записани структурирани подробности за грешката."
+  "Structured failure details were not recorded.": "Не са записани структурирани подробности за грешката.",
+  "Search toolchains (name, version, what it does)": "Търсене на инструменти (име, версия, какво прави)",
+  "Search toolchains": "Търсене на инструменти",
+  "Installed only": "Само инсталирани",
+  "Failed": "Неуспешно",
+  "default": "по подразбиране",
+  "Package managers": "Мениджъри на пакети",
+  "QA and security tools": "Инструменти за QA и сигурност",
+  "Infrastructure": "Инфраструктура",
+  "Databases and services": "Бази данни и услуги",
+  "pnpm, Yarn, Poetry and others. A project that names one in its files gets that one.": "pnpm, Yarn, Poetry и други. Проект, който назовава един в своите файлове, получава именно него.",
+  "C and C++ compilers, make, cmake, Gradle, Bazelisk and everyday utilities.": "Компилатори за C и C++, make, cmake, Gradle, Bazelisk и ежедневни помощни програми.",
+  "Linters and scanners. A project that brings its own version uses that one first.": "Линтери и скенери. Проект със собствена версия използва първо нея.",
+  "Validate and plan only: installing a tool never changes real infrastructure.": "Само проверка и планиране: инсталирането на инструмент никога не променя реална инфраструктура."
 }

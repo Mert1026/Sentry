@@ -151,14 +151,14 @@ describe('Toolchains page', () => {
     expect(screen.getByText('curl: (6) could not resolve host')).toBeTruthy();
   });
 
-  it('gives every heading a visible arrow and keeps neighbouring cards from stretching', async () => {
+  it('gives every heading a visible arrow and lists the packs one per row', async () => {
     show();
     await waitFor(() => expect(screen.getByText('Python')).toBeTruthy());
     // The arrow comes from the "disclosure" class (a custom marker; display:flex hides the native one).
     for (const title of ['Languages and runtimes', 'Python', 'PostgreSQL'])
       expect(sectionOf(title).querySelector(':scope > summary.disclosure')).not.toBeNull();
-    // Opening one card must not stretch the other cards in its grid row.
-    expect(sectionOf('Python').parentElement?.className).toContain('toolchain-cards');
+    // One pack per row, so opening one never leaves gaps or stretches a neighbour.
+    expect(sectionOf('Python').parentElement?.className).toBe('tc-packs');
   });
 
   it('puts the versions inside the pack, ready to open', async () => {
@@ -167,6 +167,77 @@ describe('Toolchains page', () => {
     const python = sectionOf('Python');
     expect(within(python).getByRole('button', { name: 'Remove Python 3.13' })).toBeTruthy();
     expect(within(python).getByRole('button', { name: 'Install Python 3.12' })).toBeTruthy();
-    expect(within(python).getByText('3.13 (default)')).toBeTruthy();
+    // The default version carries a badge next to its number.
+    expect(within(python).getByText('default')).toBeTruthy();
+  });
+
+  it('lines each version up as one row: number, state, what it printed, size and one action', async () => {
+    const python = pack('python', 'Python', 'language', [
+      { version: '3.13', installed: true },
+      { version: '3.12' },
+      { version: '3.11', error: 'Install failed (exit 22): 404' },
+    ]);
+    const first = python.versions[0]!;
+    show([
+      {
+        ...python,
+        versions: [
+          { ...first, sizeMb: 91, verification: 'Python 3.13.9\nuv 0.13.7' },
+          ...python.versions.slice(1),
+        ],
+      },
+    ]);
+    await waitFor(() => expect(screen.getByText('Python')).toBeTruthy());
+    const rows = [...document.querySelectorAll('.tc-row')] as HTMLElement[];
+    expect(rows).toHaveLength(3);
+    const text = (row: HTMLElement, selector: string) => row.querySelector(selector)?.textContent;
+    // installed: green state, the first line it printed, its size, and Remove
+    expect(text(rows[0]!, '.tc-version')).toContain('3.13');
+    expect(text(rows[0]!, '.tc-state')).toBe('Installed');
+    expect(rows[0]!.querySelector('.tc-state--installed')).not.toBeNull();
+    expect(text(rows[0]!, '.tc-detail')).toBe('Python 3.13.9');
+    expect(text(rows[0]!, '.tc-size')).toBe('91 MB');
+    expect(text(rows[0]!, '.tc-action')).toBe('Remove');
+    // not installed: muted state, nothing printed, Install
+    expect(text(rows[1]!, '.tc-state')).toBe('Not installed');
+    expect(text(rows[1]!, '.tc-detail')).toBe('');
+    expect(text(rows[1]!, '.tc-action')).toBe('Install');
+    // failed: red state with its error inside the same row, and the pack chip says so
+    expect(text(rows[2]!, '.tc-state')).toBe('Failed');
+    expect(rows[2]!.querySelector('.tc-error')?.textContent).toBe('Install failed (exit 22): 404');
+    expect(document.querySelector('.tc-chip--failed')?.textContent).toBe('An install failed');
+  });
+
+  it('offers "Install all" only when more than one version is missing, and counts them', async () => {
+    show([
+      pack('python', 'Python', 'language', [
+        { version: '3.13', installed: true },
+        { version: '3.12' },
+        { version: '3.11' },
+        { version: '3.10' },
+      ]),
+      pack('go', 'Go', 'language', [{ version: '1.26', installed: true }, { version: '1.25' }]),
+    ]);
+    await waitFor(() => expect(screen.getByText('Python')).toBeTruthy());
+    expect(screen.getByRole('button', { name: 'Install all Python versions' }).textContent).toBe(
+      'Install all (3)',
+    );
+    // Go has a single version missing: its own Install button is enough.
+    expect(screen.queryByRole('button', { name: 'Install all Go versions' })).toBeNull();
+  });
+
+  it('colours the pack chip by what is in it', async () => {
+    show([
+      pack('python', 'Python', 'language', [{ version: '3.13', installed: true }]),
+      pack('go', 'Go', 'language', [{ version: '1.26' }]),
+      pack('node', 'Node.js', 'language', [{ version: '24', installing: true }]),
+    ]);
+    await waitFor(() => expect(screen.getByText('Python')).toBeTruthy());
+    const chipOf = (name: string) =>
+      sectionOf(name).querySelector(':scope > summary .tc-chip') as HTMLElement;
+    expect(chipOf('Python').className).toContain('tc-chip--some');
+    expect(chipOf('Go').className).toBe('tc-chip');
+    expect(chipOf('Node.js').className).toContain('tc-chip--busy');
+    expect(chipOf('Node.js').textContent).toBe('Installing…');
   });
 });
