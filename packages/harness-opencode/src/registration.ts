@@ -14,8 +14,59 @@ import {
 } from './discovery.js';
 import { OpenCodeHarnessError } from './errors.js';
 
+/**
+ * The ChatGPT agent runs the OpenCode harness against provider `openai`.
+ * Live view of the process environment where the OpenCode provider/model
+ * variables are replaced by the ChatGPT agent's own, so it never shares the
+ * OpenCode agent's model or provider choice. Live (a Proxy), because the
+ * desktop pushes configuration after registration.
+ */
+export function chatGptEnvironment(source: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  return new Proxy(source, {
+    get(target, key) {
+      if (key === 'SENTRY_OPENCODE_PROVIDER') return 'openai';
+      if (key === 'SENTRY_OPENCODE_MODEL') return target['SENTRY_CHATGPT_MODEL'];
+      return typeof key === 'string' ? target[key] : undefined;
+    },
+    has(target, key) {
+      if (key === 'SENTRY_OPENCODE_PROVIDER') return true;
+      if (key === 'SENTRY_OPENCODE_MODEL') return target['SENTRY_CHATGPT_MODEL'] !== undefined;
+      return typeof key === 'string' && key in target;
+    },
+  });
+}
+
+export interface OpenCodeRegistrationIdentity {
+  readonly stackId: string;
+  readonly displayName: string;
+  readonly provider: string;
+  readonly modelDisplayName: string;
+}
+
+export const CHATGPT_REGISTRATION_IDENTITY: OpenCodeRegistrationIdentity = {
+  stackId: 'stack_chatgpt_main',
+  displayName: 'ChatGPT QA Agent',
+  provider: 'openai',
+  modelDisplayName: 'OpenAI model',
+};
+
+export function createChatGptRegistration(
+  options: OpenCodeHarnessAdapterOptions = {},
+): HarnessAdapterRegistration {
+  return createOpenCodeRegistration(
+    { ...options, environment: options.environment ?? chatGptEnvironment() },
+    CHATGPT_REGISTRATION_IDENTITY,
+  );
+}
+
 export function createOpenCodeRegistration(
   options: OpenCodeHarnessAdapterOptions = {},
+  identity: OpenCodeRegistrationIdentity = {
+    stackId: 'stack_opencode_main',
+    displayName: 'OpenCode QA Agent',
+    provider: 'openrouter',
+    modelDisplayName: 'OpenRouter model',
+  },
 ): HarnessAdapterRegistration {
   // Runtime config resolves lazily so registering an unselected stack
   // never throws: only the selected stacks' preflight/adapter paths report
@@ -26,16 +77,16 @@ export function createOpenCodeRegistration(
   const resolveRuntime = () => resolveOpenCodeRuntime(options);
   const stack = AgentStackDefinitionSchema.parse({
     schemaVersion: 1,
-    id: 'stack_opencode_main',
-    displayName: 'OpenCode QA Agent',
+    id: identity.stackId,
+    displayName: identity.displayName,
     enabled: true,
     // Placeholder until preflight resolves the real model: the stack
     // definition requires a non-empty modelId, and the authoritative
     // configured value is reported by preflight/runtimeIdentity.
     model: {
-      provider: 'openrouter',
+      provider: identity.provider,
       modelId: 'unconfigured',
-      displayName: 'OpenRouter model',
+      displayName: identity.modelDisplayName,
     },
     harness: { adapterId: 'opencode', expectedProtocolVersion: 1 },
     execution: { supportsLocalExecution: true },

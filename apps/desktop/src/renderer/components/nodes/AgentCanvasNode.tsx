@@ -10,6 +10,7 @@ const ACCENTS: Record<string, string> = {
   stack_opencode_main: 'var(--opencode, var(--muse))',
   stack_deepseek_main: 'var(--deepseek)',
   stack_glm_main: 'var(--glm)',
+  stack_chatgpt_main: 'var(--chatgpt)',
 };
 
 function stageTone(state: string): string {

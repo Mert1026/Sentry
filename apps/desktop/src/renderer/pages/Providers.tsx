@@ -48,11 +48,13 @@ const DESCRIPTIONS: Record<string, string> = {
   OPENCODE_API_KEY:
     'OpenCode Console provider key (secret, from opencode.ai/console). Used for both OpenCode Go monthly subscriptions (Provider: opencode-go) and OpenCode Zen pay-as-you-go credits (Provider: opencode).',
   SENTRY_OPENAI_AUTH:
-    'How provider openai signs in (non-secret): key (OpenAI API key) or account (your ChatGPT account through the local bridge).',
+    'How the ChatGPT agent signs in (non-secret): key (OpenAI API key) or account (your ChatGPT account through the local bridge).',
   SENTRY_OPENCODE_PROVIDER:
-    'OpenCode upstream provider (non-secret): opencode-go (OpenCode Go monthly subscription gateway), opencode (OpenCode Zen pay-as-you-go Console gateway), openai (OpenAI API with your own key), or openrouter (OpenRouter pay-as-you-go gateway; default when unset).',
+    'OpenCode upstream provider (non-secret): opencode-go (OpenCode Go monthly subscription gateway), opencode (OpenCode Zen pay-as-you-go Console gateway), or openrouter (OpenRouter pay-as-you-go gateway; default when unset).',
   OPENAI_API_KEY:
-    'OpenAI API key (secret, from platform.openai.com/api-keys). Used by the OpenCode harness only when Provider is openai. Pay-as-you-go on your OpenAI account.',
+    'OpenAI API key (secret, from platform.openai.com/api-keys). Used by the ChatGPT agent when it signs in with an API key. Pay-as-you-go on your OpenAI account.',
+  SENTRY_CHATGPT_MODEL:
+    'ChatGPT agent model id (non-secret), an OpenAI model such as gpt-5.5. The ChatGPT agent runs the OpenCode harness against OpenAI.',
 };
 
 const SECRET_NAMES: ReadonlySet<string> = new Set([
@@ -81,12 +83,12 @@ const AGENT_CARDS: readonly AgentCardSpec[] = [
   {
     title: 'OpenCode',
     subtitle:
-      'Primary coding agent · OpenCode Go (subscription), OpenCode Zen (pay-as-you-go), OpenAI, or OpenRouter',
+      'Primary coding agent · OpenCode Go (subscription), OpenCode Zen (pay-as-you-go), or OpenRouter',
     fields: [
       {
         name: 'SENTRY_OPENCODE_PROVIDER',
         label: 'Provider',
-        placeholder: 'opencode-go, opencode, openai, or openrouter',
+        placeholder: 'opencode-go, opencode, or openrouter',
         detailsLabel: null,
       },
       {
@@ -99,11 +101,6 @@ const AGENT_CARDS: readonly AgentCardSpec[] = [
       {
         name: 'OPENCODE_API_KEY',
         label: 'OpenCode API key (Zen & Go)',
-        detailsLabel: 'Explanation',
-      },
-      {
-        name: 'OPENAI_API_KEY',
-        label: 'OpenAI API key',
         detailsLabel: 'Explanation',
       },
       {
@@ -142,6 +139,17 @@ const AGENT_CARDS: readonly AgentCardSpec[] = [
         placeholder: 'https://api.z.ai/api/anthropic',
       },
       { name: 'ANTHROPIC_AUTH_TOKEN', label: 'Token' },
+    ],
+  },
+  {
+    title: 'ChatGPT',
+    subtitle: 'Fourth reviewer · OpenAI through your API key or your ChatGPT account',
+    fields: [
+      {
+        name: 'SENTRY_CHATGPT_MODEL',
+        label: 'Model',
+        placeholder: 'e.g. gpt-5.5',
+      },
     ],
   },
 ];
@@ -364,7 +372,9 @@ export function Providers(): React.JSX.Element {
             </div>
             {card.title === 'OpenCode' ? <OpenCodeProviderGuidance byName={byName} /> : null}
             {card.title === 'OpenCode' ? (
-              <OpenCodeCard {...fieldProps} onError={fail} />
+              <OpenCodeCard {...fieldProps} />
+            ) : card.title === 'ChatGPT' ? (
+              <ChatGptCard {...fieldProps} onError={fail} />
             ) : (
               card.fields.map((field) =>
                 field.modelList === undefined ? (
@@ -459,7 +469,7 @@ function inferOpenCodeProvider(
   const head = configuredModel.includes('/')
     ? (configuredModel.split('/')[0] ?? '').toLowerCase()
     : '';
-  if (head === 'opencode-go' || head === 'opencode' || head === 'openrouter' || head === 'openai') {
+  if (head === 'opencode-go' || head === 'opencode' || head === 'openrouter') {
     return { provider: head, explicit: true };
   }
   return { provider: 'openrouter', explicit: false };
@@ -806,12 +816,7 @@ function ModelSelectField(props: ModelFieldProps): React.JSX.Element {
   );
 }
 
-const VALID_OPENCODE_PROVIDERS: readonly string[] = [
-  'opencode-go',
-  'opencode',
-  'openrouter',
-  'openai',
-];
+const VALID_OPENCODE_PROVIDERS: readonly string[] = ['opencode-go', 'opencode', 'openrouter'];
 
 const OPENCODE_PROVIDER_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   {
@@ -820,7 +825,6 @@ const OPENCODE_PROVIDER_OPTIONS: ReadonlyArray<{ value: string; label: string }>
   },
   { value: 'opencode', label: 'OpenCode Zen — pay-as-you-go (uses the OpenCode API key)' },
   { value: 'openrouter', label: 'OpenRouter — pay-as-you-go (uses the OpenRouter API key)' },
-  { value: 'openai', label: 'OpenAI — API key or ChatGPT account' },
 ];
 
 /**
@@ -870,7 +874,6 @@ function CredentialSourceSelector(props: {
   const persisted = props.byName.get('SENTRY_OPENCODE_PROVIDER');
   const persistedValue = persisted?.configured === true ? persisted.hint.trim().toLowerCase() : '';
   const active = draft !== '' ? draft : persistedValue;
-  if (active === 'openai') return null;
   const usingOpenRouter = active === '' || active === 'openrouter';
   return (
     <div style={{ marginBottom: 12 }}>
@@ -922,7 +925,6 @@ function CredentialSourceSelector(props: {
  * never presents a draft as activated.
  */
 function OpenCodeCard(props: {
-  readonly onError: (error: unknown) => void;
   readonly values: Record<string, string>;
   readonly setValues: React.Dispatch<React.SetStateAction<Record<string, string>>>;
   readonly onSave: (name: string, value: string) => void;
@@ -957,10 +959,6 @@ function OpenCodeCard(props: {
       setRememberedGoZen(persistedProvider);
     }
   }, [persistedProvider]);
-  const openAiAuthStatus = props.byName.get('SENTRY_OPENAI_AUTH');
-  const openAiAccount =
-    openAiAuthStatus?.configured === true &&
-    openAiAuthStatus.hint.trim().toLowerCase() === 'account';
   const common = {
     values: props.values,
     setValues: props.setValues,
@@ -1064,9 +1062,7 @@ function OpenCodeCard(props: {
           placeholder={
             mode === 'zen'
               ? 'e.g. gpt-5.5, claude-opus-4-6, or kimi-k3'
-              : effectiveProvider === 'openai'
-                ? 'e.g. gpt-5.5'
-                : 'e.g. anthropic/claude-sonnet-4'
+              : 'e.g. anthropic/claude-sonnet-4'
           }
           detailsLabel={null}
           listId={mode === 'zen' ? 'opencode-zen-model-suggestions' : undefined}
@@ -1099,54 +1095,84 @@ function OpenCodeCard(props: {
         detailsLabel="Explanation"
         {...common}
       />
-      <div
-        role="group"
-        aria-label="OpenAI"
-        style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 12, marginTop: 4 }}
-      >
-        <h3 className="card-title" style={{ margin: '0 0 8px' }}>
-          OpenAI
-        </h3>
-        {effectiveProvider === 'openai' ? (
-          <div style={{ marginBottom: 12 }}>
-            <span id="openai-auth-label" className="metadata">
-              Sign in with
-            </span>
-            <div
-              role="group"
-              aria-labelledby="openai-auth-label"
-              style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}
-            >
-              <button
-                className={openAiAccount ? 'compact ghost' : 'primary compact'}
-                aria-pressed={!openAiAccount}
-                disabled={props.savePending}
-                onClick={() => props.onSave('SENTRY_OPENAI_AUTH', 'key')}
-              >
-                API key
-              </button>
-              <button
-                className={openAiAccount ? 'primary compact' : 'compact ghost'}
-                aria-pressed={openAiAccount}
-                disabled={props.savePending}
-                onClick={() => props.onSave('SENTRY_OPENAI_AUTH', 'account')}
-              >
-                ChatGPT account
-              </button>
-            </div>
-          </div>
-        ) : null}
-        {effectiveProvider === 'openai' && openAiAccount ? (
-          <OpenAiAccountPanel onError={props.onError} />
-        ) : (
-          <CredentialField
-            label="OpenAI API key"
-            name="OPENAI_API_KEY"
-            detailsLabel="Explanation"
-            {...common}
-          />
-        )}
+    </div>
+  );
+}
+/**
+ * ChatGPT agent card: its own model, plus how it signs in to OpenAI: an API key, or the person's
+ * ChatGPT account through the local bridge. Both choices stay saved; switching only changes which
+ * one runs use.
+ */
+function ChatGptCard(props: {
+  readonly onError: (error: unknown) => void;
+  readonly values: Record<string, string>;
+  readonly setValues: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  readonly onSave: (name: string, value: string) => void;
+  readonly onClear: (name: string) => void;
+  readonly savePending: boolean;
+  readonly clearPending: boolean;
+  readonly byName: Map<string, ProviderStatus>;
+  readonly statusPending: boolean;
+}): React.JSX.Element {
+  const authStatus = props.byName.get('SENTRY_OPENAI_AUTH');
+  const account =
+    authStatus?.configured === true && authStatus.hint.trim().toLowerCase() === 'account';
+  const common = {
+    values: props.values,
+    setValues: props.setValues,
+    onSave: props.onSave,
+    onClear: props.onClear,
+    savePending: props.savePending,
+    clearPending: props.clearPending,
+    byName: props.byName,
+    statusPending: props.statusPending,
+  };
+  return (
+    <div>
+      <CredentialField
+        label="Model"
+        name="SENTRY_CHATGPT_MODEL"
+        placeholder="e.g. gpt-5.5"
+        detailsLabel="Explanation"
+        {...common}
+      />
+      <div style={{ marginBottom: 12 }}>
+        <span id="openai-auth-label" className="metadata">
+          Sign in with
+        </span>
+        <div
+          role="group"
+          aria-labelledby="openai-auth-label"
+          style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}
+        >
+          <button
+            className={account ? 'compact ghost' : 'primary compact'}
+            aria-pressed={!account}
+            disabled={props.savePending}
+            onClick={() => props.onSave('SENTRY_OPENAI_AUTH', 'key')}
+          >
+            API key
+          </button>
+          <button
+            className={account ? 'primary compact' : 'compact ghost'}
+            aria-pressed={account}
+            disabled={props.savePending}
+            onClick={() => props.onSave('SENTRY_OPENAI_AUTH', 'account')}
+          >
+            ChatGPT account
+          </button>
+        </div>
       </div>
+      {account ? (
+        <OpenAiAccountPanel onError={props.onError} />
+      ) : (
+        <CredentialField
+          label="OpenAI API key"
+          name="OPENAI_API_KEY"
+          detailsLabel="Explanation"
+          {...common}
+        />
+      )}
     </div>
   );
 }

@@ -23,6 +23,7 @@ export const AGENT_DISPLAY_NAMES: Record<string, string> = {
   stack_opencode_main: 'OpenCode',
   stack_deepseek_main: 'DeepSeek',
   stack_glm_main: 'GLM',
+  stack_chatgpt_main: 'ChatGPT',
 };
 
 const STAGE_LABELS: Record<AgentStageId, string> = {

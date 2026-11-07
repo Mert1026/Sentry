@@ -41,7 +41,7 @@
   "Runtime communication unavailable. Cached results remain available; execution status may have changed. Check": "Няма връзка със средата за изпълнение. Кешираните резултати остават достъпни; състоянието може да се е променило. Проверете",
   "Runtime settings": "Настройки на средата",
   "before starting another run. No execution is restarted automatically.": "преди да стартирате ново изпълнение. Никое изпълнение не се рестартира автоматично.",
-  "Independent AI QA across OpenCode, DeepSeek, and GLM.": "Независим AI QA анализ чрез OpenCode, DeepSeek и GLM.",
+  "Independent AI QA across OpenCode, DeepSeek, GLM, and ChatGPT.": "Независим AI QA анализ чрез OpenCode, DeepSeek, GLM и ChatGPT.",
   "Add Project": "Добави проект",
   "Adding…": "Добавяне…",
   "Adding project to Sentry": "Добавяне на проект в Sentry",
