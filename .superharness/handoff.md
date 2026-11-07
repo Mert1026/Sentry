@@ -1727,3 +1727,284 @@ tests passed, plus a temporary actual-loop second-pass regression probe (1):
 51 tests total. Evidence-pipeline typecheck passed. Probe removed after execution.
 No live provider run or full CI performed. Product code unchanged; only protocol
 records appended. shux contract attempted and remains unavailable on PATH.
+
+## 2026-11-06 - UI improvement branch (complete)
+
+Owner requested a new branch for upcoming UI improvements. Inspected clean working
+tree on dev at 277c2f99ffba8454f9dfa1cfb265c1ef58b0d53a, then created and switched
+to codex/ui-improvements at that same commit. No product edits, commit or push.
+Only protocol records appended; UI implementation scope awaits owner's next request.
+shux contract attempted; shux remains unavailable on PATH.
+
+## 2026-11-06 - UI branch renamed (complete)
+
+Owner explicitly requested removing the codex prefix. Renamed the current branch
+from codex/ui-improvements to ui-improvements, preserving HEAD and all working-tree
+changes. No product edit, commit or push. Previous shux contract attempts established
+that shux is unavailable; task status, ledger and handoff updated directly.
+
+## 2026-11-06 - UI branch category naming (complete)
+
+Owner requested a conventional fix/chore-style branch name. Renamed the current
+ui-improvements branch to chore/ui-improvements, preserving HEAD and existing
+working-tree changes. No product edit, commit or push. Protocol records updated.
+
+## 2026-11-06 - Project detail page inspection (complete)
+
+Owner requested inspection of the page opened for a selected project before UI
+changes. Read ProjectDetail.tsx, its panel composition, desktop launch README and
+renderer API boundary. Current order: header/update/remove, Overview, Project
+profile, Toolchain needs, Findings by revision, Run QA, Recent runs, Revisions.
+Run QA includes full/targeted mode, revision, access/download/profile controls,
+agent selection and start confirmation. Preparatory panels precede primary QA
+controls in a single vertical page. Computer-use app/window inventory found no
+running Sentry window, so live visual inspection was unavailable; conclusions
+are source-based. No UI code changed, no app launched, no provider run or tests.
+shux contract attempted and unavailable; protocol records updated directly.
+
+## 2026-11-06 - Organize project detail UI (complete)
+
+Owner requested closing Sentry first, then improving the selected-project page.
+Computer-use window inventory confirmed Sentry was already closed. It stayed closed;
+visual validation used a headless browser and synthetic bridge, not a real runtime.
+Implemented on chore/ui-improvements: compact persistent project summary, Run QA /
+Findings / Setup / Activity sections, default Run QA view, numbered Scope/Agents/
+Run options groups, responsive option cards, and clear launch footer. Supporting
+profiles/toolchain needs are under Setup; recent runs and revisions under Activity.
+All panels remain mounted to retain form values and finding selections. Keyboard
+navigation supports arrows/Home/End with tab/panel IDs and roving focus.
+
+Verified: 32 targeted desktop tests pass (project-update including two new interaction
+checks, project-removal, revision-findings-panel, toolchain-needs-panel, retest-options).
+Desktop main/preload/renderer typechecks pass. Renderer production build passes,
+with the existing >500kB bundle warning. Scoped ESLint, Prettier and git diff --check
+pass. Playwright browser checks confirm all sections, preserved access option and
+targeted paths, no page errors and no horizontal overflow at 960px width. Eight
+screenshots generated; wide/narrow, populated/empty/loading and Activity/Setup/
+Findings states inspected. Composition/hierarchy/spacing/density and existing-theme
+colors verified on rendered output; no approved reference mockup was supplied.
+Artifacts: C:/Users/merte/.codex/visualizations/2026/11/06/01a1b1fc-9622-7f12-b9f6-cf96b49c01b6/project-detail/.
+
+Not verified: native Electron/WSL/provider execution, which was unchanged. No paid
+provider calls, deployment, commit or push. Product changes are ProjectDetail.tsx,
+new ProjectSections.tsx and project-detail.css, plus project-update interaction tests.
+Existing protocol changes preserved. shux contract attempted; unavailable on PATH.
+
+## 2026-11-06 - Modular project cards and icon toggles (complete)
+
+Owner clarified that the upper board should become four separate summary cards
+(state, readiness, revision, run count). Replaced the joined board with independent
+cards, staggered entrance/hover lift, icon headings, larger values and status text.
+Motion respects OS/app reduced-motion preferences. Configure QA now has separate
+Scope and Agents boxes beside each other, a full-width Run options module, and a
+separate launch bar. Responsive grids prevent horizontal overflow.
+New RunOptionToggle uses native keyboard-accessible checkbox switches: web/book/
+download icons, purpose below, gray off / Sentry green on, explicit On/Off or
+Unavailable text, focus outline and disabled behavior. Agent statuses use badges.
+
+Verified: 33 targeted desktop tests passed, including icon-tile choices reaching
+the QA request and disabled profiles, section preservation/navigation, project
+update/removal, findings, toolchain needs and retest options. Main/preload/renderer
+typechecks, renderer production build, scoped ESLint, Prettier and diff whitespace
+check passed. Existing >500kB bundle warning remains. Browser fixture verification
+passed for mouse/Space toggles and distinct icon colors, preserved options/target
+paths, reduced-motion animation suppression, no JS errors and no horizontal overflow
+at 960px. Eleven screenshots captured; wide/narrow/targeted/loading views and the
+narrow options module visually inspected. Artifacts are in the previous project-detail
+artifact folder under modular/; script is modular-preview.mjs. No live provider,
+native Electron or WSL run; Sentry not launched. No commit or push. Existing branch
+and prior uncommitted work preserved. shux contract still unavailable on PATH.
+
+## 2026-11-06 - GitAscii profile refresh (completed)
+
+Scope: owner's GitHub profile repository Mert1026/Mert1026, unrelated to Sentry product changes. shux contract attempted; executable unavailable on PATH.
+Inspected README, main/gitascii branch heads, latest GitAscii configuration and SVGs, publisher workflow and latest job log. Latest editor publish: 2c7e6b1, 2026-11-06 18:47:58 UTC. README already referenced gitascii correctly. Public raw SVG cache lifetime is 300 seconds; current dark/light SVGs contain latest 800x696 layout. Scheduled publisher was green but skipped due to enforced 1440-minute interval.
+Implemented: remote README image URLs now use ?v=2c7e6b1 to refresh image cache. Commit 98be5bad656f47d86b01f3af4752022c9b802021. Preserves branch-based URLs for future updates.
+Verified: README reread matches replacement; fresh public GitHub profile HTML contains all versioned image URLs; dark/light URLs return HTTP 200 and latest layout. Browser/user-visible appearance remains unverified. No regression suite added: README-only cache refresh at external rendering boundary; HTTP/content checks executed instead. User asked to identify specific missing edit; reply pending at receipt time.
+No Sentry product files changed. Existing uncommitted Sentry work and prior protocol receipts preserved; appended this receipt to task status, ledger and handoff.
+
+## 2026-11-06 - Run option sizing, information popovers and padding (complete)
+
+Owner requested larger option icons/text, removal of power glyphs beside On/Off,
+help text hidden until an info button is pressed, and proper summary badge/main
+workspace padding. Implemented: 40px option glyphs in 72px icon tiles, 16px labels
+(14px on narrow windows), text-only On/Off, independent info triggers for every
+option plus package/toolchain guidance. New InfoPopover uses native top-layer
+popovers with close buttons, Escape/light dismissal, accurate expanded/hidden
+accessibility state and distinct dialog names. Help buttons are siblings of toggle
+labels, so requesting help never toggles a switch, including disabled profiles.
+Added rounded/padded summary status badges and a padded framed main workspace.
+
+Verified: 33 targeted desktop tests pass; main/preload/renderer typechecks,
+renderer production build, scoped ESLint, Prettier and git diff --check pass.
+Existing >500kB renderer bundle warning remains. Native popover browser checks
+cover all four help buttons, unchanged switch states on opening help, Close/Escape/
+outside dismissal, and the toolchain link. Existing mouse/Space toggle, state
+preservation, reduced-motion and 960px no-overflow checks pass. Twelve screenshots
+captured under project-detail/refined/ in the existing visualization artifact root;
+wide page, info message and narrow options layout inspected. No provider/WSL/native
+Electron execution, commit or push. Sentry not launched. Existing product and
+protocol changes, including unrelated newer receipts, preserved. shux unavailable.
+
+## 2026-11-06 - Collapsed findings and option motion (complete)
+
+Agent findings sections now default closed, reset on revision change, and use
+separate framed disclosures with improved spacing and run separators. Run option
+icons briefly lift on activation and honor system/app reduced-motion preferences.
+Removed 01/02/03 from all QA configuration headings. Verified 19 targeted tests,
+desktop typechecks, renderer build, scoped ESLint, and fixture browser interaction/
+responsive checks. Rendered findings screenshot inspected. No live provider run.
+shux contract unavailable; protocol updated directly. Existing changes preserved.
+
+## 2026-11-06 - Full revision IDs and visible toggle motion (complete)
+
+Scope revision options display full IDs alongside their date and current marker.
+Run option icons now replay a stronger lift/scale/rotation on every user toggle,
+including turning off and rapid successive toggles; no startup animation. System
+and app reduced-motion settings still disable it. Verified 10 component tests,
+renderer typecheck, scoped lint, plus a browser probe confirming complete option
+labels, four successive active animations, keyboard access and 960px overflow.
+No native Electron or provider run. shux contract unavailable on PATH.
+
+## 2026-11-06 - Project page descriptions in information boxes (complete)
+
+Moved explanatory copy for summary cards, QA configuration/options and targeted
+scope, findings/retesting, project setup/profiles and toolchain requirements into
+info popovers, with expanded descriptions. Agent assessment summaries and reasons
+also open in info boxes. Statuses, findings, errors, budget notices and other live
+operational information remain visible. Reused accessible native popover behavior.
+Verified 24 focused tests, desktop typechecks, renderer build, scoped lint and
+browser fixture checks across sections, popover opening/dismissal, option/target
+preservation and 960px overflow. Screenshot inspected. No live provider run.
+shux contract unavailable; protocol updated directly; existing changes preserved.
+
+## 2026-11-06 - Project descriptions follow-up audit (complete)
+
+Owner repeated the request to show descriptions only through info buttons. Audited
+all project detail sections and moved remaining retest result details and the update
+progress explanation into info popovers. Expanded profile and toolchain descriptions
+with provider-budget details. A concise budget indicator remains visible so users
+can see cost before invoking those actions; operational statuses, errors, findings,
+confirmation details and agent notes remain accessible as data, not generic copy.
+
+Verified 24 focused tests, desktop typechecks, scoped ESLint and renderer build.
+Browser fixture checks passed across the project sections and specifically verified
+opening/dismissing the update info inside the progress dialog, plus previous option,
+keyboard and 960px layout checks. No paid calls or native Electron run. Sentry was
+not launched. shux unavailable; previous work and protocol records preserved.
+
+## 2026-11-06 - Targeted QA project file picker (complete)
+
+Added separate native Browse files and Browse folder controls in targeted scope.
+Main process gets the trusted project source through the desktop service, maps
+Linux/WSL source paths to host paths, opens the native picker, checks that selected
+paths are inside the project, and returns project-relative paths through preload.
+Multiple files, folder selection, cancellation, duplicate removal and manual entry
+are supported. Selected snapshot validation remains in the run engine; the picker
+browses the original current source, so an older revision may differ.
+
+Boundary review: runtime project record and frozen snapshot remain canonical; main
+owns dialog and renderer owns transient selection; dependency is renderer -> preload
+-> main -> existing service/host. IPC accepts project ID and files/folder, returns
+relative strings only; invalid requests, out-of-project choices and unavailable
+sources fail visibly. The OS owns dialog lifecycle; cancel returns empty list.
+Pure path functions and injected renderer bridge provide test seams. No schema/data
+migration: existing manually entered scopes and run validation are unchanged;
+rollback removes picker UI and channel. Errors are visible in the scope control.
+Containment is checked before paths are returned and snapshot validation still runs.
+
+Verified 13 focused tests, desktop typechecks, scoped lint, formatting and full
+desktop build. Browser fixture verified selection, preserved paths and 960px layout;
+rendered target scope inspected. Native Electron/WSL file dialog was not exercised;
+Sentry remained closed. Build retains existing >500kB warning. No commit/push.
+shux contract unavailable; existing changes and protocol records preserved.
+
+## 2026-11-06 - Settings descriptions handoff
+
+Page headers and settings descriptions now use shared info popovers; settings links
+and help buttons are independent. Runtime warnings and other action-critical details
+remain visible. All edits remain in the existing UI branch and uncommitted alongside
+prior work. Verified 38 focused tests, desktop typecheck, renderer build, scoped lint,
+and browser fixture navigation/help/switch/Escape/960px checks. Native Electron and
+live provider calls were not exercised. shux contract unavailable on PATH.
+
+## 2026-11-06 - Section motion handoff
+
+Agent selections use the shared ready icon; app cards, modules and workspace panels
+have an entrance animation that respects reduced motion. Preference help translated
+in English and Bulgarian. Verified 15 focused tests, desktop typechecks, renderer
+build, scoped lint, formatting and browser motion/selection/persistence checks.
+Native Electron was not run; changes remain uncommitted with previous work.
+shux contract unavailable on PATH.
+
+## 2026-11-06 - Toolchains research handoff
+
+Research delivered in chat; no catalog or installer changes made. Existing catalog
+has 23 packs. Investigate browser/version compatibility, exact version selection,
+Node Corepack availability, service lifecycle and download integrity before adding
+packs. Prior work remains uncommitted. shux contract unavailable on PATH.
+
+## 2026-11-06 - Info-button follow-up handoff
+
+Advanced and Explanation controls now open info popovers; runtime binary fields and
+manual path entry remain usable inside them. Project card/help typography enlarged.
+Verified 41 focused tests, desktop typecheck, renderer build, scoped lint, formatting
+and browser interactions; native Electron not exercised. Changes uncommitted alongside
+prior work. shux contract unavailable on PATH.
+
+## 2026-11-06 - Information alignment handoff
+
+Environment, settings, provider, project section and toolchain information buttons
+now align to card edges/headers while remaining independent of neighboring controls.
+Verified 50 focused component tests, desktop typechecks, renderer build, lint and
+browser fixture interaction and 960px layout checks. Native Electron not run; changes
+remain uncommitted with prior work. shux contract unavailable on PATH.
+
+## 2026-11-06 - Sidebar cleanup handoff
+
+Sidebar navigation no longer has group labels or the active dot; active highlight and
+collapse remain. Improved shared info content spacing and budget notes. Verified 24
+focused tests, desktop typechecks, renderer build, scoped lint, formatting and browser
+checks; native Electron not run. Existing work remains uncommitted; shux unavailable.
+
+## 2026-11-06 - Typography handoff
+
+Shared page, control, metadata, badge, project and workspace text enlarged; status
+icons aligned and constrained badges can wrap. Verified 53 focused tests, desktop
+typechecks, renderer build, lint, formatting and Bulgarian browser checks at
+1280/960/700px. Native Electron not run. Existing changes remain uncommitted; shux
+contract unavailable on PATH.
+
+## 2026-11-07 - Profile and loading handoff
+
+Profile option links to Setup and displays per-selected-agent use; older revision
+compatibility is checked by the run engine. Existing profile status API describes
+current revision only. Project import/update and generic loaders are viewport-centered
+and lock background scrolling while active. Verified 31 focused tests, desktop
+typechecks, renderer build, scoped lint, formatting and browser interactions.
+Native Electron not exercised. Work remains uncommitted; shux unavailable on PATH.
+
+## 2026-11-07 - Bulgarian translation handoff
+
+Translated newer project/setup, settings, providers, toolchains and workspace UI;
+updated info labels, dynamic counters and native confirmations. DOM observer tracks
+changed placeholder/title/aria-label and restores English correctly. Verified 56
+focused tests, typechecks, renderer build, scoped lint, formatting and browser locale
+switching/page audits. Dynamic agent output and identifiers remain source data. Native
+Electron not run; existing work uncommitted. shux unavailable on PATH.
+
+## 2026-11-07 - Message translations handoff
+
+Audited hidden help and dialogs; fixed provider runtime help, confirmation labels,
+budget/options, provider status and dynamic toolchain/retest labels. Identifiers and
+agent-written data preserved. Verified 36 focused tests, desktop typechecks, renderer
+build, lint, formatting and browser popover/confirmation checks. Native Electron not
+run; changes remain uncommitted. shux unavailable on PATH.
+
+## 2026-11-07 - UI commits handoff
+
+Committed picker bridge, localization, shared UI and project QA changes separately
+on chore/ui-improvements; protocol records follow as a separate commit. Full desktop
+suite passed 574 tests with 3 skipped after an SSR portal fix; desktop typechecks,
+renderer build, lint and focused browser checks passed. No native Electron or live
+provider run, and no push. shux contract unavailable on PATH.
