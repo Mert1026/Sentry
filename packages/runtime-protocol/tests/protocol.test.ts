@@ -99,6 +99,13 @@ describe('runtime protocol framing', () => {
         openCodeProvider: 'opencode-go',
       }).openCodeProvider,
     ).toBe('opencode-go');
+    const openai = RuntimeConfigureParamsSchema.parse({
+      models: {},
+      providers: { openAiApiKey: 'sk-test-openai' },
+      openCodeProvider: 'openai',
+    });
+    expect(openai.providers.openAiApiKey).toBe('sk-test-openai');
+    expect(openai.openCodeProvider).toBe('openai');
     expect(RUNTIME_PROTOCOL_VERSION).toBe(1);
   });
 

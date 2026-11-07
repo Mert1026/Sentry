@@ -23,6 +23,7 @@ import { dirname, join } from 'node:path';
 export const MANAGED_PROVIDER_KEYS = [
   'OPENROUTER_API_KEY',
   'OPENCODE_API_KEY',
+  'OPENAI_API_KEY',
   'DEEPSEEK_API_KEY',
   'ANTHROPIC_AUTH_TOKEN',
   'ANTHROPIC_BASE_URL',
@@ -40,6 +41,7 @@ export type ManagedProviderKey = (typeof MANAGED_PROVIDER_KEYS)[number];
 export const SECRET_PROVIDER_KEYS = [
   'OPENROUTER_API_KEY',
   'OPENCODE_API_KEY',
+  'OPENAI_API_KEY',
   'DEEPSEEK_API_KEY',
   'ANTHROPIC_AUTH_TOKEN',
 ] as const;

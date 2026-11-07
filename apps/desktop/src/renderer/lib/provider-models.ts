@@ -244,7 +244,12 @@ export const ZAI_GLM_MODELS: readonly string[] = [
 ];
 
 /** Provider prefixes that may qualify a saved OpenCode model id. */
-const KNOWN_OPENCODE_PREFIXES: readonly string[] = ['opencode-go', 'opencode', 'openrouter'];
+const KNOWN_OPENCODE_PREFIXES: readonly string[] = [
+  'opencode-go',
+  'opencode',
+  'openrouter',
+  'openai',
+];
 
 /**
  * Strip a known provider prefix (`opencode-go/`, `opencode/`,

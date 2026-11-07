@@ -47,12 +47,15 @@ const DESCRIPTIONS: Record<string, string> = {
   OPENCODE_API_KEY:
     'OpenCode Console provider key (secret, from opencode.ai/console). Used for both OpenCode Go monthly subscriptions (Provider: opencode-go) and OpenCode Zen pay-as-you-go credits (Provider: opencode).',
   SENTRY_OPENCODE_PROVIDER:
-    'OpenCode upstream provider (non-secret): opencode-go (OpenCode Go monthly subscription gateway), opencode (OpenCode Zen pay-as-you-go Console gateway), or openrouter (OpenRouter pay-as-you-go gateway; default when unset).',
+    'OpenCode upstream provider (non-secret): opencode-go (OpenCode Go monthly subscription gateway), opencode (OpenCode Zen pay-as-you-go Console gateway), openai (OpenAI API with your own key), or openrouter (OpenRouter pay-as-you-go gateway; default when unset).',
+  OPENAI_API_KEY:
+    'OpenAI API key (secret, from platform.openai.com/api-keys). Used by the OpenCode harness only when Provider is openai. Pay-as-you-go on your OpenAI account.',
 };
 
 const SECRET_NAMES: ReadonlySet<string> = new Set([
   'OPENROUTER_API_KEY',
   'OPENCODE_API_KEY',
+  'OPENAI_API_KEY',
   'DEEPSEEK_API_KEY',
   'ANTHROPIC_AUTH_TOKEN',
 ]);
@@ -75,12 +78,12 @@ const AGENT_CARDS: readonly AgentCardSpec[] = [
   {
     title: 'OpenCode',
     subtitle:
-      'Primary coding agent · OpenCode Go (subscription), OpenCode Zen (pay-as-you-go), or OpenRouter',
+      'Primary coding agent · OpenCode Go (subscription), OpenCode Zen (pay-as-you-go), OpenAI, or OpenRouter',
     fields: [
       {
         name: 'SENTRY_OPENCODE_PROVIDER',
         label: 'Provider',
-        placeholder: 'opencode-go, opencode, or openrouter',
+        placeholder: 'opencode-go, opencode, openai, or openrouter',
         detailsLabel: null,
       },
       {
@@ -93,6 +96,11 @@ const AGENT_CARDS: readonly AgentCardSpec[] = [
       {
         name: 'OPENCODE_API_KEY',
         label: 'OpenCode API key (Zen & Go)',
+        detailsLabel: 'Explanation',
+      },
+      {
+        name: 'OPENAI_API_KEY',
+        label: 'OpenAI API key',
         detailsLabel: 'Explanation',
       },
       {
@@ -448,7 +456,7 @@ function inferOpenCodeProvider(
   const head = configuredModel.includes('/')
     ? (configuredModel.split('/')[0] ?? '').toLowerCase()
     : '';
-  if (head === 'opencode-go' || head === 'opencode' || head === 'openrouter') {
+  if (head === 'opencode-go' || head === 'opencode' || head === 'openrouter' || head === 'openai') {
     return { provider: head, explicit: true };
   }
   return { provider: 'openrouter', explicit: false };
@@ -795,7 +803,12 @@ function ModelSelectField(props: ModelFieldProps): React.JSX.Element {
   );
 }
 
-const VALID_OPENCODE_PROVIDERS: readonly string[] = ['opencode-go', 'opencode', 'openrouter'];
+const VALID_OPENCODE_PROVIDERS: readonly string[] = [
+  'opencode-go',
+  'opencode',
+  'openrouter',
+  'openai',
+];
 
 const OPENCODE_PROVIDER_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   {
@@ -804,6 +817,7 @@ const OPENCODE_PROVIDER_OPTIONS: ReadonlyArray<{ value: string; label: string }>
   },
   { value: 'opencode', label: 'OpenCode Zen — pay-as-you-go (uses the OpenCode API key)' },
   { value: 'openrouter', label: 'OpenRouter — pay-as-you-go (uses the OpenRouter API key)' },
+  { value: 'openai', label: 'OpenAI — your own API key (uses the OpenAI API key)' },
 ];
 
 /**
@@ -853,6 +867,7 @@ function CredentialSourceSelector(props: {
   const persisted = props.byName.get('SENTRY_OPENCODE_PROVIDER');
   const persistedValue = persisted?.configured === true ? persisted.hint.trim().toLowerCase() : '';
   const active = draft !== '' ? draft : persistedValue;
+  if (active === 'openai') return null;
   const usingOpenRouter = active === '' || active === 'openrouter';
   return (
     <div style={{ marginBottom: 12 }}>
@@ -1041,7 +1056,9 @@ function OpenCodeCard(props: {
           placeholder={
             mode === 'zen'
               ? 'e.g. gpt-5.5, claude-opus-4-6, or kimi-k3'
-              : 'e.g. anthropic/claude-sonnet-4'
+              : effectiveProvider === 'openai'
+                ? 'e.g. gpt-5.5'
+                : 'e.g. anthropic/claude-sonnet-4'
           }
           detailsLabel={null}
           listId={mode === 'zen' ? 'opencode-zen-model-suggestions' : undefined}
@@ -1065,6 +1082,12 @@ function OpenCodeCard(props: {
       <CredentialField
         label="OpenCode API key (Zen & Go)"
         name="OPENCODE_API_KEY"
+        detailsLabel="Explanation"
+        {...common}
+      />
+      <CredentialField
+        label="OpenAI API key"
+        name="OPENAI_API_KEY"
         detailsLabel="Explanation"
         {...common}
       />

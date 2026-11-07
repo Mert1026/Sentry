@@ -43,6 +43,14 @@ describe('OpenCode model composition', () => {
     );
   });
 
+  it('composes OpenAI models without doubling the provider prefix', () => {
+    expect(buildOpenCodeModelId('openai', 'gpt-5.5').effectiveModelId).toBe('openai/gpt-5.5');
+    expect(buildOpenCodeModelId('openai', 'openai/gpt-5.5').effectiveModelId).toBe(
+      'openai/gpt-5.5',
+    );
+    expect(normalizeOpenCodeProvider(undefined, 'openai/gpt-5.5')).toBe('openai');
+  });
+
   it('rejects missing models', () => {
     for (const model of ['', undefined]) {
       try {

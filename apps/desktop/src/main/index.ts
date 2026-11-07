@@ -456,7 +456,8 @@ if (sentryControl.mode === 'stop') {
           await credentials.load({ strict: true });
           const isSet = (name: string): boolean => (credentials.getValue(name) ?? '').length > 0;
           const report = {
-            opencode: isSet('OPENROUTER_API_KEY') || isSet('OPENCODE_API_KEY'),
+            opencode:
+              isSet('OPENROUTER_API_KEY') || isSet('OPENCODE_API_KEY') || isSet('OPENAI_API_KEY'),
             deepseek: isSet('DEEPSEEK_API_KEY'),
             glm: isSet('ANTHROPIC_AUTH_TOKEN'),
           };

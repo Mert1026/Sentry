@@ -347,6 +347,11 @@ export const OPENCODE_PROVIDER_SPECS: Record<string, OpenCodeProviderSpec> = {
     upstreamBaseUrl: 'https://opencode.ai/zen/go/v1',
     displayName: 'OpenCode Go',
   },
+  openai: {
+    credentialEnv: 'OPENAI_API_KEY',
+    upstreamBaseUrl: 'https://api.openai.com/v1',
+    displayName: 'OpenAI',
+  },
 };
 
 /** Resolve how a provider's SDK/transport is selected (never guess per model). */
@@ -379,7 +384,7 @@ export function assertSupportedOpenCodeProvider(provider: string, customEndpoint
       'OPENCODE_MODEL_NOT_CONFIGURED',
       'Unsupported OpenCode provider: ' +
         provider +
-        '. Supported: openrouter, opencode, opencode-go. Set SENTRY_OPENCODE_PROVIDER.',
+        '. Supported: openrouter, opencode, opencode-go, openai. Set SENTRY_OPENCODE_PROVIDER.',
     );
   }
 }

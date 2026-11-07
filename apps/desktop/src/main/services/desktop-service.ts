@@ -429,6 +429,8 @@ export class DesktopApplicationService {
     const glmEndpoint = get('ANTHROPIC_BASE_URL');
     if (openRouterKey !== undefined) providers['openRouterApiKey'] = openRouterKey;
     if (openCodeKey !== undefined) providers['openCodeApiKey'] = openCodeKey;
+    const openAiKey = get('OPENAI_API_KEY');
+    if (openAiKey !== undefined) providers['openAiApiKey'] = openAiKey;
     if (deepseekKey !== undefined) providers['deepseekApiKey'] = deepseekKey;
     if (glmToken !== undefined) providers['anthropicAuthToken'] = glmToken;
     if (glmEndpoint !== undefined) providers['anthropicBaseUrl'] = glmEndpoint;
@@ -443,7 +445,8 @@ export class DesktopApplicationService {
     const provider =
       openCodeProvider === 'openrouter' ||
       openCodeProvider === 'opencode' ||
-      openCodeProvider === 'opencode-go'
+      openCodeProvider === 'opencode-go' ||
+      openCodeProvider === 'openai'
         ? { openCodeProvider }
         : {};
     return this.call('runtime.configure', { models, providers, binaries, ...provider });

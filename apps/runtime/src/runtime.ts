@@ -592,6 +592,9 @@ export class SentryRuntimeHost {
     if (parsed.providers.openCodeApiKey !== undefined) {
       process.env['OPENCODE_API_KEY'] = parsed.providers.openCodeApiKey;
     }
+    if (parsed.providers.openAiApiKey !== undefined) {
+      process.env['OPENAI_API_KEY'] = parsed.providers.openAiApiKey;
+    }
     if (parsed.openCodeProvider !== undefined) {
       process.env['SENTRY_OPENCODE_PROVIDER'] = parsed.openCodeProvider;
     }

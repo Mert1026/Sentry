@@ -175,7 +175,7 @@ export function parseRequestMessage(
 }
 
 const SECRET_SHAPE =
-  /(api[_-]?key|token|secret|password|authorization|bearer|anthropic_auth_token|openrouter_api_key|opencode_api_key|deepseek_api_key)/i;
+  /(api[_-]?key|token|secret|password|authorization|bearer|anthropic_auth_token|openrouter_api_key|opencode_api_key|openai_api_key|deepseek_api_key)/i;
 
 export function containsSecretShapedValue(value: string): boolean {
   return SECRET_SHAPE.test(value);
