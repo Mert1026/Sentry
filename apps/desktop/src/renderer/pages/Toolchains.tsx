@@ -153,11 +153,16 @@ export function Toolchains(): React.JSX.Element {
             (total, pack) => total + pack.versions.filter((v) => v.installed).length,
             0,
           );
+          // Groups start closed. One opens by itself when the person is searching or filtering, or
+          // when a pack in it is installing or failed, so that pack's progress or error is not hidden.
+          const needsAttention = packs.some((pack) =>
+            pack.versions.some((v) => v.installing || v.error !== undefined),
+          );
           return (
             <details
               className="info-disclosure"
               key={category.id}
-              open
+              open={filtering || needsAttention}
               style={{ margin: '14px 0' }}
             >
               <summary className="disclosure">

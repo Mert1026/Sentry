@@ -93,14 +93,47 @@ describe('Toolchains page', () => {
     );
   });
 
-  it('groups packs into collapsible sections that start open', async () => {
-    show();
+  it('groups packs into collapsible sections that start closed', async () => {
+    // Nothing installing and nothing failed: every group is closed.
+    show([
+      pack('python', 'Python', 'language', [{ version: '3.13', installed: true }]),
+      pack('c', 'C / C++', 'build', [{ version: '14' }]),
+      pack('postgres', 'PostgreSQL', 'database', [{ version: '17' }]),
+    ]);
     await waitFor(() => expect(screen.getByText('Languages and runtimes')).toBeTruthy());
     for (const title of ['Languages and runtimes', 'Build tools', 'Databases and services']) {
       expect(sectionOf(title).tagName).toBe('DETAILS');
-      expect(sectionOf(title).open).toBe(true);
+      expect(sectionOf(title).open, title).toBe(false);
     }
+    // Closed groups still say what is inside.
+    expect(screen.getByText('1 pack, 1 version installed')).toBeTruthy();
+    // Opening one is the person's choice and sticks.
+    const languages = sectionOf('Languages and runtimes');
+    languages.open = true;
+    expect(languages.open).toBe(true);
+  });
+
+  it('opens a group by itself when a pack in it is installing or failed, and the others stay closed', async () => {
+    show();
+    await waitFor(() => expect(screen.getByText('Languages and runtimes')).toBeTruthy());
+    // Node.js is installing and Ruby failed, both in the languages group.
+    expect(sectionOf('Languages and runtimes').open).toBe(true);
+    expect(sectionOf('Build tools').open).toBe(false);
+    expect(sectionOf('Databases and services').open).toBe(false);
     expect(screen.getByText('3 packs, 1 version installed')).toBeTruthy();
+  });
+
+  it('opens the groups that have matches while searching, and closes them again afterwards', async () => {
+    show([
+      pack('python', 'Python', 'language', [{ version: '3.13', installed: true }]),
+      pack('postgres', 'PostgreSQL', 'database', [{ version: '17' }]),
+    ]);
+    await waitFor(() => expect(screen.getByText('Python')).toBeTruthy());
+    expect(sectionOf('Databases and services').open).toBe(false);
+    fireEvent.change(screen.getByLabelText('Search toolchains'), { target: { value: 'postgres' } });
+    expect(sectionOf('Databases and services').open).toBe(true);
+    fireEvent.change(screen.getByLabelText('Search toolchains'), { target: { value: '' } });
+    expect(sectionOf('Databases and services').open).toBe(false);
   });
 
   it('keeps every pack collapsed behind a one-line summary, unless it needs attention', async () => {
