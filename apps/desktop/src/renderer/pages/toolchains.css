@@ -18,6 +18,37 @@
   gap: 6px;
   white-space: nowrap;
 }
+/* Round tick like the success marks elsewhere, instead of the square box. */
+.tc-toolbar input[type='checkbox'] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  flex: none;
+  border: 1.5px solid var(--text-tertiary);
+  border-radius: 50%;
+  background: transparent center / 12px 12px no-repeat;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    border-color 140ms ease;
+}
+.tc-toolbar input[type='checkbox']:hover {
+  border-color: var(--success);
+}
+.tc-toolbar input[type='checkbox']:checked {
+  border-color: var(--success);
+  background-color: var(--success);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23fff' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7.5'/%3E%3C/svg%3E");
+}
+.tc-toolbar input[type='checkbox']:focus-visible {
+  outline: 2px solid var(--success);
+  outline-offset: 2px;
+}
+.tc-toolbar label {
+  cursor: pointer;
+}
 .tc-toolbar .tc-count {
   margin-left: auto;
 }
