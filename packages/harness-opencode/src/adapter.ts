@@ -104,7 +104,7 @@ import {
   buildOpenCodeProviderConfig,
   buildOpenCodeToolEnvironment,
 } from './environment.js';
-import { OpenCodeHarnessError } from './errors.js';
+import { OpenCodeHarnessError, isProviderSafetyRefusal } from './errors.js';
 import { redactDiagnostic, redactStructured, redactText, secretValues } from './redaction.js';
 import {
   cleanupOpenCodeRunScope,
@@ -1279,6 +1279,8 @@ export class OpenCodeHarnessAdapter implements HarnessAdapter {
           cause instanceof OpenCodeHarnessError &&
           cause.code === 'OPENCODE_CANCEL_FAILED' &&
           this.observedOperations.size > 0,
+        // The provider's own safety filter declined a check: skip that check, keep the rest.
+        isProviderRefusal: isProviderSafetyRefusal,
       });
       conclusionBlock = renderCheckConclusions(planResult, investigation.checkConclusions);
       const { blockedChecks, unprovenChecks, redRetryChecks, checkConclusions } = investigation;

@@ -655,6 +655,56 @@ describe('investigateChecks second pass', () => {
   });
 });
 
+describe('investigateChecks when the provider declines a check', () => {
+  it('reports that check inconclusive and carries on with the rest in a fresh session', async () => {
+    let fresh = 0;
+    const prompts: string[] = [];
+    const { hooks } = harness(() => ({ text: 'unused' }), {
+      plan: { plannedChecks: ['Check A', 'Check B', 'Check C'] },
+      freshSession: async () => {
+        fresh += 1;
+      },
+      isProviderRefusal: (cause: unknown) =>
+        cause instanceof Error && /flagged for possible cybersecurity risk/.test(cause.message),
+      streamTurn: (text: string) =>
+        (async function* () {
+          prompts.push(text);
+          const alias = /CHECK (check_\d)/.exec(text)?.[1] ?? '';
+          const name = 'Check ' + 'ABC'[Number(alias.replace('check_', '')) - 1];
+          if (name === 'Check B') {
+            yield* [];
+            throw new Error('This content was flagged for possible cybersecurity risk.');
+          }
+          addOp(hooks.operations as Ops, 'bash', 'node probe-' + prompts.length + '.mjs', 0);
+          yield eventOf({ type: 'tool.completed' });
+          return { text: 'ok ' + name };
+        })(),
+    });
+    const { events, value } = await drain(investigateChecks(hooks));
+    expect(codes(events)).toContain('QA_PROVIDER_REFUSED');
+    // The refused check is inconclusive; the checks before and after it are decided as usual.
+    expect(value.blockedChecks).toContain('Check B');
+    expect(value.checkConclusions[0]).toBe('ok Check A');
+    expect(value.checkConclusions[2]).toBe('ok Check C');
+    // The next check did not run inside the declined session.
+    expect(fresh).toBeGreaterThanOrEqual(1);
+  }, 30_000);
+
+  it('still fails the agent for a provider error that is not a safety refusal', async () => {
+    const { hooks } = harness(() => ({ text: 'unused' }), {
+      plan: { plannedChecks: ['Check A'] },
+      isProviderRefusal: (cause: unknown) =>
+        cause instanceof Error && /flagged for possible cybersecurity risk/.test(cause.message),
+      streamTurn: () =>
+        (async function* (): AsyncGenerator<HarnessEvent, InvestigationTurn> {
+          yield* [];
+          throw new Error('invalid api key');
+        })(),
+    });
+    await expect(drain(investigateChecks(hooks))).rejects.toThrow('invalid api key');
+  });
+});
+
 describe('investigateChecks after a stopped turn', () => {
   /** A session that dies when stopped, like OpenCode's aborted client: later turns on it throw. */
   function mortalSession(failingChecks: string[]) {

@@ -95,6 +95,12 @@ export interface CheckInvestigationHooks<T extends InvestigationTurn> {
   readonly isTurnTimeout: (cause: unknown) => boolean;
   /** Infrastructure loss with banked work (spawn failure, mid-run sandbox death) that must not fail the run. */
   readonly isSalvageable?: (cause: unknown) => boolean;
+  /**
+   * The provider declined one check's content (a safety filter, not an outage). That check is
+   * reported inconclusive and the remaining checks continue in a fresh session, instead of the
+   * whole agent failing and discarding the checks already decided.
+   */
+  readonly isProviderRefusal?: (cause: unknown) => boolean;
   /** Events a failed turn never flushed, emitted before the failure is handled. */
   readonly partialEvents?: (cause: unknown) => Iterable<HarnessEvent>;
   /** Cleanup after the investigation was interrupted (before the report context starts). */
@@ -530,7 +536,7 @@ export async function* investigateChecks<T extends InvestigationTurn>(
   }
 
   try {
-    for (; currentCheck < plan.plannedChecks.length; currentCheck += 1) {
+    checkLoop: for (; currentCheck < plan.plannedChecks.length; currentCheck += 1) {
       yield hooks.event({
         type: 'agent.status',
         status: 'investigating',
@@ -589,6 +595,22 @@ export async function* investigateChecks<T extends InvestigationTurn>(
           else issued = outcome.value.steps ?? 1;
           turn = outcome.stopped ? ({ text: '' } as T) : outcome.value;
         } catch (cause) {
+          if ((hooks.isProviderRefusal?.(cause) ?? false) && !hooks.cancelled()) {
+            // The provider's safety filter declined this check. Skip it, keep what the earlier
+            // checks established, and give the next check a clean session: the declined turn
+            // is still part of this one.
+            yield hooks.event({
+              type: 'warning',
+              code: 'QA_PROVIDER_REFUSED',
+              message:
+                'The model provider declined this check (its safety filter flagged the content); it is reported inconclusive and the remaining checks continue in a fresh session.',
+            });
+            blockedChecks.push(description(currentCheck));
+            unprovenChecks.push(description(currentCheck));
+            checkEndKeys[currentCheck] = new Set(operations.keys());
+            await rotate(currentCheck);
+            continue checkLoop;
+          }
           // Reactive compaction: one fresh-session retry of THIS check.
           if (!isContextWindowExceeded(cause) || contextRetried || hooks.cancelled()) throw cause;
           contextRetried = true;
