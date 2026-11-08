@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -94,6 +94,24 @@ describe('symbolic links planted below a trusted root', () => {
     await symlink(outside, join(destination, 'dir'), 'dir');
     await expect(copyTree(source, destination)).rejects.toThrow(/PATH_ESCAPE/);
     expect(await readFile(join(outside, 'file.txt'), 'utf8')).toBe('original');
+  });
+
+  it('copyTree replaces a link sitting where a file goes instead of writing through it', async () => {
+    const root = await scratch();
+    if (!(await canLink(root))) return;
+    const source = join(root, 'source');
+    const destination = join(root, 'dest');
+    const outside = join(root, 'outside.txt');
+    await mkdir(source);
+    await mkdir(destination);
+    await writeFile(join(source, 'file.txt'), 'new');
+    await writeFile(outside, 'original');
+    await symlink(outside, join(destination, 'file.txt'), 'file');
+    await copyTree(source, destination);
+    // The file outside is untouched, and the destination now holds a real file with the new bytes.
+    expect(await readFile(outside, 'utf8')).toBe('original');
+    expect(await readFile(join(destination, 'file.txt'), 'utf8')).toBe('new');
+    expect((await lstat(join(destination, 'file.txt'))).isSymbolicLink()).toBe(false);
   });
 
   it('artifact write, open and discard refuse a link that points outside the data root', async () => {

@@ -157,6 +157,19 @@ describe('Phase 7 TARGETED QA (§8-§13, §82)', () => {
     f.database.close();
   });
 
+  it('accepts an empty directory that is recorded in the frozen snapshot', async () => {
+    const f = await fixture();
+    await mkdir(join(f.source, 'src', 'empty-folder'));
+    await f.manager.updateProjectCopy(f.added.project.id);
+    const result = await f.runs.run(f.added.project.id, {
+      executionKind: 'simulation',
+      mode: 'targeted',
+      target: { includePaths: ['src/empty-folder'] },
+    });
+    expect(result.run.status).toBe('completed');
+    f.database.close();
+  });
+
   it('rejects missing paths against the frozen snapshot (§10, §82)', async () => {
     const f = await fixture();
     await expect(

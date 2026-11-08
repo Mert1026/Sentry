@@ -137,15 +137,58 @@ export function assertExportTransportSize(sizeBytes: number, runId: string): voi
   );
 }
 
+interface ExportContentLike {
+  readonly format: 'log' | 'json';
+  readonly sizeBytes: number;
+  readonly contentBase64: string;
+}
+
+/**
+ * Export content travels as base64, which the string redactor cannot see into. Decode it, apply
+ * the same redaction every other runtime response gets, and re-encode. JSON stays valid JSON
+ * because it is redacted as a parsed value, not as text.
+ */
+export function sanitizeExportContent<T extends ExportContentLike>(content: T): T {
+  const text = Buffer.from(content.contentBase64, 'base64').toString('utf8');
+  let redacted: string;
+  if (content.format === 'json') {
+    try {
+      redacted =
+        JSON.stringify(sanitize(JSON.parse(text)), null, 2) + (text.endsWith('\n') ? '\n' : '');
+    } catch {
+      redacted = sanitize(text) as string;
+    }
+  } else {
+    redacted = sanitize(text) as string;
+  }
+  if (redacted === text) return content;
+  const bytes = Buffer.from(redacted, 'utf8');
+  return { ...content, sizeBytes: bytes.byteLength, contentBase64: bytes.toString('base64') };
+}
+
 function sanitize(value: unknown): unknown {
   // Defense in depth: never let KEY/TOKEN/SECRET-looking values reach stdout.
   if (typeof value === 'string') {
     return value.replace(/\b(Bearer)\s+\S+/gi, '$1 [REDACTED]').replace(
-      /\b([A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD))(\s*[:=]\s*)([^\s,;]+)/gi,
-      // Keep the author's spacing and separator, and leave an already redacted value as it is,
-      // so redaction never rewrites text that held no secret (for example a stored excerpt).
-      (match, name: string, separator: string, secret: string) =>
-        secret === '[REDACTED]' ? match : name + separator + '[REDACTED]',
+      // Optional quotes around the name and a quoted or bare value, so JSON such as
+      // {"authToken":"abc"} is masked like authToken=abc.
+      /(["']?)\b([A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD))\1(\s*[:=]\s*)(?:"([^"]*)"|'([^']*)'|([^\s,;"'}]+))/gi,
+      // Keep the author's spacing, separator and quotes, and leave an already redacted value as
+      // it is, so redaction never rewrites text that held no secret (for example a stored excerpt).
+      (
+        match,
+        quote: string,
+        name: string,
+        separator: string,
+        doubleQuoted: string | undefined,
+        singleQuoted: string | undefined,
+        bare: string | undefined,
+      ) => {
+        const secret = doubleQuoted ?? singleQuoted ?? bare ?? '';
+        if (secret === '[REDACTED]') return match;
+        const valueQuote = doubleQuoted !== undefined ? '"' : singleQuoted !== undefined ? "'" : '';
+        return quote + name + quote + separator + valueQuote + '[REDACTED]' + valueQuote;
+      },
     );
   }
   if (Array.isArray(value)) return value.map((entry) => sanitize(entry));
@@ -1123,7 +1166,11 @@ export class SentryRuntimeHost {
       }
       if (sizeBytes >= 0) assertExportTransportSize(sizeBytes, id);
     }
-    return this.coordinator.exportContent(id as never, parsed);
+    const content = (await this.coordinator.exportContent(
+      id as never,
+      parsed,
+    )) as ExportContentLike;
+    return sanitizeExportContent(content);
   }
 
   exportRun(runId: string, format: string): Promise<unknown> {

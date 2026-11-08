@@ -461,6 +461,61 @@ describe('managed project lifecycle', () => {
     f.database.close();
   });
 
+  describe('overlapping updates', () => {
+    it('keeps each update its own rollback backup', async () => {
+      let releaseFirst!: () => void;
+      const firstPaused = new Promise<void>((resolve) => {
+        releaseFirst = resolve;
+      });
+      let reachedFirstPause!: () => void;
+      const firstReached = new Promise<void>((resolve) => {
+        reachedFirstPause = resolve;
+      });
+      let releaseSecond!: () => void;
+      const secondPaused = new Promise<void>((resolve) => {
+        releaseSecond = resolve;
+      });
+      let reachedSecondBackup!: () => void;
+      const secondReached = new Promise<void>((resolve) => {
+        reachedSecondBackup = resolve;
+      });
+      let firstCommitted = false;
+      const f = await fixture(async (stage) => {
+        if (stage === 'after_database_committed' && !firstCommitted) {
+          // The first update has committed (the project is free again) but not cleaned up yet.
+          firstCommitted = true;
+          reachedFirstPause();
+          await firstPaused;
+        } else if (stage === 'after_backup_created' && firstCommitted) {
+          reachedSecondBackup();
+          await secondPaused;
+        }
+      });
+      const added = await f.manager.addProject(f.source);
+      const root = projectDataPaths(f.dataRoot, added.project.id).root;
+      await writeFile(join(f.source, 'README.md'), '# Second\n');
+      const first = f.manager.updateProjectCopy(added.project.id);
+      await firstReached;
+      await writeFile(join(f.source, 'README.md'), '# Third\n');
+      const second = f.manager.updateProjectCopy(added.project.id);
+      await secondReached;
+      // Let the first update finish its cleanup while the second holds its rollback backup.
+      releaseFirst();
+      await first;
+      const backups = (await readdir(root)).filter((name) =>
+        name.startsWith('working-copy.backup'),
+      );
+      expect(backups).toHaveLength(1);
+      releaseSecond();
+      await second;
+      expect(
+        (await readdir(root)).filter((name) => name.startsWith('working-copy.backup')),
+      ).toEqual([]);
+      f.lease.release();
+      f.database.close();
+    });
+  });
+
   describe('links into excluded content and a redirected projects folder', () => {
     it('imports a project whose symlink points into excluded node_modules', async () => {
       const f = await fixture();
