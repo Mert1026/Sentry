@@ -73,6 +73,9 @@ describe('Providers harness binary section', () => {
     expect(html).toContain('OpenAI API key');
     expect(html).toContain('Value for OPENAI_API_KEY');
     expect(html).toContain('Value for SENTRY_CHATGPT_MODEL');
+    // The ChatGPT model is a dropdown of OpenAI models, like the other agents.
+    expect(html).toContain('<option value="gpt-6.1-sol">gpt-6.1-sol</option>');
+    expect(html).toContain('gpt-5.5-pro (higher-effort Pro model (slower, costs more))');
     expect(html).toContain('ChatGPT');
     expect(html).toContain('Value for DEEPSEEK_API_KEY');
     expect(html).toContain('Value for ANTHROPIC_AUTH_TOKEN');

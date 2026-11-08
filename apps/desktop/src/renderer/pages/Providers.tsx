@@ -7,8 +7,10 @@ import { Check } from 'lucide-react';
 import { sentryApi } from '../lib/sentry-api.js';
 import {
   CUSTOM_MODEL_VALUE,
+  CHATGPT_MODELS,
   DEEPSEEK_MODELS,
   LEGACY_DEEPSEEK_ALIASES,
+  chatGptModelNote,
   OPENCODE_GO_MODELS,
   OPENCODE_ZEN_MODELS,
   ZAI_GLM_MODELS,
@@ -69,7 +71,7 @@ interface AgentFieldSpec {
   readonly name: string;
   readonly label: string;
   readonly placeholder?: string;
-  readonly modelList?: 'opencode' | 'deepseek' | 'glm';
+  readonly modelList?: 'opencode' | 'deepseek' | 'glm' | 'chatgpt';
   readonly detailsLabel?: string | null;
 }
 
@@ -147,6 +149,7 @@ const AGENT_CARDS: readonly AgentCardSpec[] = [
     fields: [
       {
         name: 'SENTRY_CHATGPT_MODEL',
+        modelList: 'chatgpt',
         label: 'Model',
         placeholder: 'e.g. gpt-5.5',
       },
@@ -1129,11 +1132,14 @@ function ChatGptCard(props: {
   };
   return (
     <div>
-      <CredentialField
+      <ModelSelectField
         label="Model"
         name="SENTRY_CHATGPT_MODEL"
         placeholder="e.g. gpt-5.5"
         detailsLabel="Explanation"
+        description={DESCRIPTIONS['SENTRY_CHATGPT_MODEL']}
+        options={CHATGPT_MODELS}
+        optionNote={chatGptModelNote}
         {...common}
       />
       <div style={{ marginBottom: 12 }}>
