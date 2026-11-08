@@ -24,6 +24,17 @@ describe('QA proof and coverage labels', () => {
     ).toBe('Partial analysis');
     expect(coverageLabel([], 'completed')).toBe('Analysis coverage unknown');
     expect(coverageLabel([marker], 'completed')).toBe('Planned checks reported');
+    // Notes that do not describe plan coverage never make a completed run "partial".
+    expect(
+      coverageLabel(
+        [
+          marker,
+          { type: 'warning', code: 'QA_PREPARATION_LIMITED' },
+          { type: 'warning', code: 'QA_CHALLENGE_NOT_RUN' },
+        ],
+        'completed',
+      ),
+    ).toBe('Planned checks reported');
     expect(
       coverageLabel([marker, { type: 'warning', code: 'QA_COVERAGE_PARTIAL' }], 'completed'),
     ).toBe('Partial analysis');
