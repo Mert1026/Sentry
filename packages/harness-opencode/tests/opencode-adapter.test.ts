@@ -741,6 +741,14 @@ describe('OpenCodeHarnessAdapter', () => {
       type: 'run.failed',
       failure: { code: 'OPENCODE_CANCEL_FAILED' },
     });
+    // The generic failure message hides which cancel-style failure it was; the cause is kept.
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'warning',
+        code: 'OPENCODE_CANCEL_CAUSE',
+        message: expect.stringContaining('OpenCode turn was cancelled.'),
+      }),
+    );
   });
 
   it('runs all turns in one OpenCode session with composed model id', async () => {

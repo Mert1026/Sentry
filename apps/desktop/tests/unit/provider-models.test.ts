@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   CHATGPT_MODELS,
+  CHATGPT_MODELS_BEYOND_ZEN,
   CUSTOM_MODEL_VALUE,
   DEEPSEEK_MODELS,
   LEGACY_DEEPSEEK_ALIASES,
@@ -19,7 +20,11 @@ describe('ChatGPT model catalog', () => {
   it('lists OpenAI models from the Zen table, newest first, with no duplicates', () => {
     expect(CHATGPT_MODELS[0]).toBe('gpt-6.1-sol');
     expect(new Set(CHATGPT_MODELS).size).toBe(CHATGPT_MODELS.length);
-    for (const id of CHATGPT_MODELS) expect(OPENCODE_ZEN_MODELS).toContain(id);
+    // Every id is either in the documented Zen table or deliberately listed as an addition.
+    for (const id of CHATGPT_MODELS)
+      expect(OPENCODE_ZEN_MODELS.includes(id) || CHATGPT_MODELS_BEYOND_ZEN.includes(id)).toBe(true);
+    expect(CHATGPT_MODELS).toContain('gpt-6.1-terra');
+    expect(CHATGPT_MODELS.indexOf('gpt-6.1-terra')).toBe(CHATGPT_MODELS.indexOf('gpt-6.1-sol') + 1);
   });
 
   it('notes only what the model id itself says', () => {

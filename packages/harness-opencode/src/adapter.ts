@@ -1658,6 +1658,14 @@ export class OpenCodeHarnessAdapter implements HarnessAdapter {
       }
     } catch (cause) {
       if (cause instanceof OpenCodeHarnessError && cause.code === 'OPENCODE_CANCEL_FAILED') {
+        // Every cancel-style failure ends with the same generic message; keep what actually
+        // happened (session ended, run cancelled before report recovery, aborted turn) so a run
+        // that fails with it can be explained afterwards.
+        yield event(request.agentRunId, {
+          type: 'warning',
+          code: 'OPENCODE_CANCEL_CAUSE',
+          message: redactDiagnostic(cause, this.secrets).slice(0, 400),
+        });
         yield event(request.agentRunId, {
           type: 'run.failed',
           failure: {

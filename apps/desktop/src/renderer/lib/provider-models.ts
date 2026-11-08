@@ -244,12 +244,20 @@ export const ZAI_GLM_MODELS: readonly string[] = [
 ];
 
 /**
+ * Models offered to the ChatGPT agent that are not in the Zen table below. They were added because
+ * an account can use them, so they are listed by request rather than from that documentation.
+ */
+export const CHATGPT_MODELS_BEYOND_ZEN: readonly string[] = ['gpt-6.1-terra'];
+
+/**
  * OpenAI models offered to the ChatGPT agent: the OpenAI rows of the official OpenCode Zen model
- * table (verified 2026-10-25), newest first. Exact API ids. The dropdown also accepts any custom
- * id, because the models a ChatGPT plan can use differ from the models an API key can use.
+ * table (verified 2026-10-25) plus `CHATGPT_MODELS_BEYOND_ZEN`, newest first. Exact API ids. The
+ * dropdown also accepts any custom id, because the models a ChatGPT plan can use differ from the
+ * models an API key can use.
  */
 export const CHATGPT_MODELS: readonly string[] = [
   'gpt-6.1-sol',
+  'gpt-6.1-terra',
   'gpt-6-sol',
   'gpt-6-astra',
   'gpt-6-luna',
