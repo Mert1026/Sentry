@@ -48,6 +48,8 @@ export interface OpenCodePromptResult {
   readonly usage?: AgentUsage | undefined;
   /** Model steps observed (step-finish count). */
   readonly steps: number;
+  /** Largest single-step prompt of the turn: how full the session got. */
+  readonly peakContextTokens?: number | undefined;
   /** OpenCode-owned session id captured from this turn's envelopes. */
   readonly sessionId?: string | undefined;
   readonly envelopes: number;
@@ -516,6 +518,7 @@ class ProductionSession implements OpenCodeSessionView {
             toolCalls: parsed.tools,
             usage: parsed.usage,
             steps: parsed.steps,
+            peakContextTokens: parsed.peakContextTokens,
             sessionId: parsed.sessionId,
             envelopes: parsed.envelopes,
           });

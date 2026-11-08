@@ -6,6 +6,37 @@ import { parseOpenCodeTurn } from '../src/index.js';
 const dir = join(__dirname, 'fixtures');
 const load = (name: string): string => readFileSync(join(dir, name), 'utf8');
 
+describe('context occupancy of a multi-step turn', () => {
+  const step = (input: number, read: number, write: number) =>
+    JSON.stringify({
+      type: 'step_finish',
+      sessionID: 'ses_x',
+      part: {
+        id: 'prt_' + String(input),
+        sessionID: 'ses_x',
+        type: 'step-finish',
+        reason: 'tool-calls',
+        tokens: { input, output: 10, reasoning: 0, cache: { read, write } },
+      },
+    });
+
+  it('reports the largest single-step prompt, while usage still sums every step', () => {
+    const jsonl = [step(30_000, 0, 5_000), step(8_000, 35_000, 0), step(9_000, 43_000, 0)].join(
+      String.fromCharCode(10),
+    );
+    const parsed = parseOpenCodeTurn(jsonl);
+    expect(parsed.steps).toBe(3);
+    // Billing figure: summed across steps.
+    expect(parsed.usage?.inputTokens).toBe(47_000);
+    // Occupancy: the biggest prompt any one step sent (9k new + 43k cached = 52k; first step 35k).
+    expect(parsed.peakContextTokens).toBe(52_000);
+  });
+
+  it('leaves the figure absent when OpenCode reports no step tokens', () => {
+    expect(parseOpenCodeTurn('').peakContextTokens).toBeUndefined();
+  });
+});
+
 describe('real OpenCode wire parsing', () => {
   it('parses a planning turn to the exact plan text', () => {
     const parsed = parseOpenCodeTurn(load('planning-output.jsonl'));
