@@ -655,6 +655,86 @@ describe('investigateChecks second pass', () => {
   });
 });
 
+describe('investigateChecks reporting after an extension turn that died', () => {
+  const MIN = 60_000;
+
+  it('starts the report in a fresh context even though no extension turn finished', async () => {
+    const start = Date.now();
+    const clock = { t: start };
+    let dead = false;
+    let reportContexts = 0;
+    const { hooks } = harness(() => ({ text: 'unused' }), {
+      plan: { plannedChecks: ['Check A'] },
+      depth: { deadlineAt: start + 172 * MIN },
+      now: () => clock.t,
+      hazardFiles: async () => [
+        {
+          file: 'packages/risky/src/index.ts',
+          hazards: ['deletes files or directories'],
+          score: 5,
+        },
+      ],
+      stop: async () => {
+        dead = true;
+      },
+      freshSession: async () => {
+        dead = false;
+      },
+      startReportContext: async () => {
+        reportContexts += 1;
+        dead = false;
+      },
+      streamTurn: (text: string) =>
+        (async function* () {
+          clock.t += MIN;
+          if (dead) throw new Error('OpenCode session was aborted.');
+          if (text.includes('DEEPENING PASS') || text.includes('HAZARD SWEEP')) {
+            // The extension turn dies and its error is swallowed: extra work only.
+            dead = true;
+            yield* [];
+            throw new Error('OpenCode session was aborted.');
+          }
+          addOp(hooks.operations as Ops, 'bash', 'node probe.mjs', 0);
+          yield eventOf({ type: 'tool.completed' });
+          return { text: 'first pass ok' };
+        })(),
+    });
+    const { value } = await drain(investigateChecks(hooks));
+    expect(value.checkConclusions[0]).toBe('first pass ok');
+    // Before: the report was handed the dead session and the whole run failed at the last step.
+    expect(reportContexts).toBeGreaterThanOrEqual(1);
+    expect(dead).toBe(false);
+  }, 30_000);
+
+  it('also starts a fresh report context when the last main turn was stopped', async () => {
+    let dead = false;
+    let reportContexts = 0;
+    const { hooks } = harness(() => ({ text: 'unused' }), {
+      plan: { plannedChecks: ['Check A'] },
+      stop: async () => {
+        dead = true;
+      },
+      startReportContext: async () => {
+        reportContexts += 1;
+        dead = false;
+      },
+      streamTurn: () =>
+        (async function* () {
+          if (dead) throw new Error('OpenCode session was aborted.');
+          // The same command fails again and again until the watchdog stops the turn.
+          for (let i = 0; i < 6; i += 1) {
+            await new Promise((resolve) => setTimeout(resolve, 200));
+            addOp(hooks.operations as Ops, 'bash', 'vitest run a.test.ts', 1);
+            yield eventOf({ type: 'tool.completed' });
+          }
+          return { text: 'unreached' };
+        })(),
+    });
+    await drain(investigateChecks(hooks));
+    expect(reportContexts).toBeGreaterThanOrEqual(1);
+  }, 30_000);
+});
+
 describe('investigateChecks when the provider declines a check', () => {
   it('reports that check inconclusive and carries on with the rest in a fresh session', async () => {
     let fresh = 0;

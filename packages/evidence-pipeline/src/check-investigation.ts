@@ -294,8 +294,9 @@ export async function* investigateChecks<T extends InvestigationTurn>(
           );
         seed = '';
         const before = new Set(operations.keys());
-        const outcome = yield* guarded(text, before);
+        // The session may be left dead if this turn throws, so a report context is needed either way.
         ran = true;
+        const outcome = yield* guarded(text, before);
         if (!outcome.stopped) {
           usage = sumAgentUsage(usage, outcome.value.usage ?? {});
           steps += outcome.value.steps ?? 1;
@@ -408,11 +409,13 @@ export async function* investigateChecks<T extends InvestigationTurn>(
         checkStartedAt = now();
         softAt = checkStartedAt + checkSoftBudgetMs(left, tasks.length - n);
         await rotate(plan.plannedChecks.length);
+        // From here the session may be left stopped or dead (a turn that threw is swallowed
+        // below), so the report must start in a fresh context whether or not the turn finished.
+        ran = true;
         const text = seed + task.prompt();
         seed = '';
         const before = new Set(operations.keys());
         const outcome = yield* guarded(text, before);
-        ran = true;
         if (!outcome.stopped) {
           usage = sumAgentUsage(usage, outcome.value.usage ?? {});
           steps += outcome.value.steps ?? 1;
@@ -500,8 +503,8 @@ export async function* investigateChecks<T extends InvestigationTurn>(
         const text = seed + buildHazardPrompt(file.file, file.hazards);
         seed = '';
         const before = new Set(operations.keys());
-        const outcome = yield* guarded(text, before);
         ran = true;
+        const outcome = yield* guarded(text, before);
         if (outcome.stopped) {
           idle += 1;
           continue;
@@ -811,12 +814,20 @@ export async function* investigateChecks<T extends InvestigationTurn>(
     blockedChecks.push(...plan.plannedChecks.slice(currentCheck));
     hooks.onInterrupted?.();
     await hooks.startReportContext(renderCheckConclusions(plan, checkConclusions));
+    sessionStopped = false;
     yield hooks.event({
       type: 'warning',
       code: 'QA_INVESTIGATION_INCOMPLETE',
       message:
         'Investigation turn ended early; remaining checks are inconclusive. Reporting only this agent’s observed facts in a fresh report-only context; analysis is partial.',
     });
+  }
+  // The report continues in whatever session is current. If the last turn left it stopped, that
+  // session is dead ("OpenCode session was aborted"), and the report would fail after the whole
+  // investigation was done. Start it fresh instead.
+  if (sessionStopped) {
+    await hooks.startReportContext(renderCheckConclusions(plan, checkConclusions));
+    sessionStopped = false;
   }
   return { blockedChecks, unprovenChecks, redRetryChecks, checkConclusions, usage, steps };
 }
