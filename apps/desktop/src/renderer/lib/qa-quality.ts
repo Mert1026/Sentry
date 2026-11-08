@@ -26,13 +26,12 @@ export function coverageLabel(
     events.some(
       (event) =>
         event.type === 'warning' &&
-        [
-          'QA_PREPARATION_LIMITED',
-          'QA_COVERAGE_PARTIAL',
-          'QA_CHALLENGE_NOT_RUN',
-          'QA_VALIDATION_INCOMPLETE',
-          'QA_INVESTIGATION_INCOMPLETE',
-        ].includes(event.code ?? ''),
+        // QA_PREPARATION_LIMITED (not a Node/pnpm project) and QA_CHALLENGE_NOT_RUN
+        // (always emitted when the checkpoint report is final) say nothing about
+        // how much of the plan was verified, so they do not make a run "partial".
+        ['QA_COVERAGE_PARTIAL', 'QA_VALIDATION_INCOMPLETE', 'QA_INVESTIGATION_INCOMPLETE'].includes(
+          event.code ?? '',
+        ),
     )
   )
     return 'Partial analysis';

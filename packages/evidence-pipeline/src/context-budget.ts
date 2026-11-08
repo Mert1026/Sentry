@@ -56,11 +56,21 @@ export class ContextBudget {
 
   constructor(private readonly contextWindowTokens: number) {}
 
-  /** Observe one completed turn. Summed per-turn input usage is an upper
-   *  bound on session occupancy, so rotation errs early, never late. */
-  observeTurn(usage: { readonly inputTokens?: number | undefined } | undefined): void {
-    if (usage?.inputTokens !== undefined && Number.isFinite(usage.inputTokens)) {
-      this.peakInputTokens = Math.max(this.peakInputTokens, usage.inputTokens);
+  /** Observe one completed turn. When the adapter reports the largest single
+   *  prompt of the turn (`contextTokens`), that is the session's real occupancy
+   *  and is used as is. Without it, summed per-turn input usage is an upper
+   *  bound, so rotation errs early, never late. That bound grows with every
+   *  step of a long tool-using turn, so adapters that can should report it. */
+  observeTurn(
+    usage: { readonly inputTokens?: number | undefined } | undefined,
+    contextTokens?: number | undefined,
+  ): void {
+    const observed =
+      contextTokens !== undefined && Number.isFinite(contextTokens)
+        ? contextTokens
+        : usage?.inputTokens;
+    if (observed !== undefined && Number.isFinite(observed)) {
+      this.peakInputTokens = Math.max(this.peakInputTokens, observed);
     }
   }
 

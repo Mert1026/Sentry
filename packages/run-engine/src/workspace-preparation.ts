@@ -86,7 +86,9 @@ export function createWorkspacePreparer(
         await readFile(join(workspaceRoot, 'package.json'), 'utf8'),
       ) as typeof manifest;
     } catch {
-      return limited('No readable Node package manifest; source review only.');
+      return limited(
+        'Not a Node project (no readable package.json); nothing to prepare. The agent installs and runs its own tools.',
+      );
     }
     const version =
       manifest !== null &&

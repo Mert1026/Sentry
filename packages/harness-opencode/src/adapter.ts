@@ -272,6 +272,8 @@ interface CollectedTurn {
   readonly events: readonly HarnessEvent[];
   readonly usage?: AgentUsage | undefined;
   readonly steps: number;
+  /** Largest single-step prompt in the turn: the session's real occupancy (see ParsedOpenCodeTurn). */
+  readonly contextTokens?: number | undefined;
 }
 
 /** Owned per-AgentRun execution state (Sentry IDs and OpenCode IDs tracked separately). */
@@ -905,6 +907,7 @@ export class OpenCodeHarnessAdapter implements HarnessAdapter {
         events: collected,
         usage: result.usage,
         steps: result.steps,
+        contextTokens: result.peakContextTokens,
       };
     } catch (error) {
       throw withUpstreamEvidence(error);
@@ -1165,7 +1168,7 @@ export class OpenCodeHarnessAdapter implements HarnessAdapter {
           'planning',
         );
         for (const emitted of planning.events) yield emitted;
-        contextBudget.observeTurn(planning.usage);
+        contextBudget.observeTurn(planning.usage, planning.contextTokens);
         planningSteps += planning.steps;
         planningUsage = sumUsage(planningUsage, planning.usage ?? {});
         if (planning.text.trim().length === 0) {

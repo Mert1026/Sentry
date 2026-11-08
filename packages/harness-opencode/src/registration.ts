@@ -36,7 +36,22 @@ export function chatGptEnvironment(source: NodeJS.ProcessEnv = process.env): Nod
   });
 }
 
+/**
+ * Context window the ChatGPT agent assumes for its OpenAI model. The OpenCode
+ * default (200k) made it restart its session four times in one run; current
+ * OpenAI models accept at least this much input. Override with
+ * SENTRY_CHATGPT_CONTEXT_TOKENS in the runtime environment.
+ */
+export const CHATGPT_CONTEXT_WINDOW_TOKENS = 272_000;
+
+export function chatGptContextWindow(environment: NodeJS.ProcessEnv = process.env): number {
+  const parsed = Number.parseInt(environment['SENTRY_CHATGPT_CONTEXT_TOKENS'] ?? '', 10);
+  return Number.isFinite(parsed) && parsed >= 32_000 ? parsed : CHATGPT_CONTEXT_WINDOW_TOKENS;
+}
+
 export interface OpenCodeRegistrationIdentity {
+  /** Context window for this agent's model; absent keeps the harness default. */
+  readonly contextWindowTokens?: () => number;
   readonly stackId: string;
   readonly displayName: string;
   readonly provider: string;
@@ -48,6 +63,7 @@ export const CHATGPT_REGISTRATION_IDENTITY: OpenCodeRegistrationIdentity = {
   displayName: 'ChatGPT QA Agent',
   provider: 'openai',
   modelDisplayName: 'OpenAI model',
+  contextWindowTokens: () => chatGptContextWindow(),
 };
 
 export function createChatGptRegistration(
@@ -162,6 +178,9 @@ export function createOpenCodeRegistration(
     createAdapter: () =>
       new OpenCodeHarnessAdapter({
         ...options,
+        ...(options.contextWindowTokens === undefined && identity.contextWindowTokens !== undefined
+          ? { contextWindowTokens: identity.contextWindowTokens() }
+          : {}),
         onRuntimeIdentity: (identity) => {
           if (identity.harnessVersion !== undefined)
             runtimeIdentity.harnessVersion = identity.harnessVersion;

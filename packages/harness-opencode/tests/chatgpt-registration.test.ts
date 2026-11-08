@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  CHATGPT_CONTEXT_WINDOW_TOKENS,
+  chatGptContextWindow,
   chatGptEnvironment,
   createChatGptRegistration,
   createOpenCodeRegistration,
@@ -48,6 +50,19 @@ describe('ChatGPT agent (OpenCode harness against OpenAI)', () => {
     // Other variables fall through untouched.
     process.env['SENTRY_OPENAI_AUTH'] = 'account';
     expect(env['SENTRY_OPENAI_AUTH']).toBe('account');
+  });
+
+  it('assumes a larger context window than the 200k OpenCode default, with a safe override', () => {
+    expect(CHATGPT_CONTEXT_WINDOW_TOKENS).toBeGreaterThan(200_000);
+    expect(chatGptContextWindow({})).toBe(CHATGPT_CONTEXT_WINDOW_TOKENS);
+    expect(chatGptContextWindow({ SENTRY_CHATGPT_CONTEXT_TOKENS: '1000000' })).toBe(1_000_000);
+    // Nonsense or tiny values fall back instead of rotating on every turn.
+    expect(chatGptContextWindow({ SENTRY_CHATGPT_CONTEXT_TOKENS: 'abc' })).toBe(
+      CHATGPT_CONTEXT_WINDOW_TOKENS,
+    );
+    expect(chatGptContextWindow({ SENTRY_CHATGPT_CONTEXT_TOKENS: '100' })).toBe(
+      CHATGPT_CONTEXT_WINDOW_TOKENS,
+    );
   });
 
   it('fails preflight without a model or credential instead of running unconfigured', async () => {

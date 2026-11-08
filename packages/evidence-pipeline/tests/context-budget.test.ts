@@ -35,6 +35,29 @@ describe('isContextWindowExceeded', () => {
   });
 });
 
+describe('ContextBudget with a reported single-step prompt', () => {
+  it('uses the largest single prompt, not the input summed over every step of the turn', () => {
+    const budget = new ContextBudget(272_000);
+    // 25 steps of ~28k new input each: 700k summed, but the session never held more than 60k.
+    budget.observeTurn({ inputTokens: 700_000 }, 60_000);
+    expect(budget.peakTokens).toBe(60_000);
+    expect(budget.shouldRotate(5_000)).toBe(false);
+  });
+
+  it('still rotates when a single prompt really nears the window', () => {
+    const budget = new ContextBudget(272_000);
+    budget.observeTurn({ inputTokens: 300_000 }, 200_000);
+    expect(budget.shouldRotate()).toBe(true);
+  });
+
+  it('keeps the older upper bound when the adapter reports no single-step figure', () => {
+    const budget = new ContextBudget(272_000);
+    budget.observeTurn({ inputTokens: 250_000 });
+    expect(budget.peakTokens).toBe(250_000);
+    expect(budget.shouldRotate()).toBe(true);
+  });
+});
+
 describe('ContextBudget', () => {
   it('rotates at the safety ratio and resets for a fresh session', () => {
     const budget = new ContextBudget(1_000_000);

@@ -731,5 +731,9 @@
   "OpenAI API key": "OpenAI API ключ",
   "Open this link in your browser and sign in. This page updates when it finishes.": "Отворете този линк в браузъра си и влезте. Страницата се обновява, когато приключи.",
   "Sign in with": "Вход чрез",
-  "OpenAI": "OpenAI"
+  "OpenAI": "OpenAI",
+  "higher-effort Pro model (slower, costs more)": "по-мощен Pro модел (по-бавен и по-скъп)",
+  "smaller, faster model": "по-малък и по-бърз модел",
+  "smaller, faster Codex model": "по-малък и по-бърз Codex модел",
+  "coding-tuned Codex model": "Codex модел, настроен за код"
 }

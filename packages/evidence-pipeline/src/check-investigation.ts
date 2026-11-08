@@ -58,6 +58,11 @@ export interface InvestigationTurn {
   readonly usage?: AgentUsage | undefined;
   /** Provider steps in the turn; adapters without step counts omit it (one turn = one step). */
   readonly steps?: number;
+  /**
+   * How full the session got during the turn, when the adapter can tell (largest single-step
+   * prompt). Absent keeps the older estimate, the turn's summed input usage.
+   */
+  readonly contextTokens?: number | undefined;
 }
 
 /** Everything vendor-specific the host-driven check loop delegates to an adapter. */
@@ -738,6 +743,14 @@ export async function* investigateChecks<T extends InvestigationTurn>(
               ...turn,
               text: nudged.value.text,
               usage: sumAgentUsage(turn.usage, nudged.value.usage ?? {}),
+              ...(turn.contextTokens === undefined && nudged.value.contextTokens === undefined
+                ? {}
+                : {
+                    contextTokens: Math.max(
+                      turn.contextTokens ?? 0,
+                      nudged.value.contextTokens ?? 0,
+                    ),
+                  }),
             };
             issued += nudged.value.steps ?? 1;
           }
@@ -746,7 +759,7 @@ export async function* investigateChecks<T extends InvestigationTurn>(
           // Any other nudge failure keeps the original turn's banked work.
         }
       }
-      contextBudget.observeTurn(turn.usage);
+      contextBudget.observeTurn(turn.usage, turn.contextTokens);
       if (!turnProducedProof(ledgerBeforeTurn, operations))
         unprovenChecks.push(description(currentCheck));
       if (turnRepeatedRedProof(ledgerBeforeTurn, operations) && !closingTriagesFailures(turn.text))
