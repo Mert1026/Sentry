@@ -442,7 +442,9 @@ export class ProjectManager {
     const revisionId = createProjectRevisionId();
     const operationId = createOperationId();
     const staging = resolve(paths.staging, 'update-' + revisionId);
-    const backup = resolve(paths.root, 'working-copy.backup');
+    // One backup per update. A shared name let a second update's rollback copy be deleted by the
+    // first update's cleanup, which runs after its database commit has already freed the project.
+    const backup = updateBackupPath(paths.root, operationId);
     const timestamp = nowIsoTimestamp();
     let operation = RuntimeOperationSchema.parse({
       schemaVersion: 1,
@@ -827,10 +829,16 @@ export class ProjectManager {
 
   private async recoverUpdate(operation: RuntimeOperation): Promise<void> {
     const paths = projectDataPaths(this.dataRoot, operation.projectId);
-    const backup = resolve(paths.root, 'working-copy.backup');
+    const ownBackup = updateBackupPath(paths.root, operation.id);
+    // Updates made before backups were per-operation used one shared name.
+    const legacyBackup = resolve(paths.root, 'working-copy.backup');
+    const backup = (await exists(ownBackup)) ? ownBackup : legacyBackup;
     const copy = this.repository.getManagedCopy(operation.projectId);
     if (operation.stage === 'committed' || copy?.state === 'ready') {
-      await rm(backup, { recursive: true, force: true });
+      await rm(ownBackup, { recursive: true, force: true });
+      if (!(await exists(ownBackup)) && backup === legacyBackup) {
+        await rm(legacyBackup, { recursive: true, force: true });
+      }
       await rm(paths.staging, { recursive: true, force: true });
       await mkdir(paths.staging, { recursive: true });
       this.repository.deleteRuntimeOperation(operation.id);
@@ -915,6 +923,11 @@ export class ProjectManager {
       // Portable free-space checks are best-effort; copy errors remain authoritative.
     }
   }
+}
+
+/** Where one update keeps the working copy it can roll back to. */
+function updateBackupPath(projectRoot: string, operationId: string): string {
+  return resolve(projectRoot, 'working-copy.backup-' + operationId);
 }
 
 export * from './errors.js';

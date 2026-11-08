@@ -564,6 +564,52 @@ describe('finish-pass §25: stale owner recovery is honest', () => {
   }, 120_000);
 });
 
+describe('evidence that points at an artifact', () => {
+  async function runWithArtifactIds(artifactIds: string[]) {
+    const f = await fixture();
+    const registry = new HarnessAdapterRegistry();
+    registry.register({
+      stack: INITIAL_AGENT_STACKS[0]!,
+      createAdapter: ({ qaRunId, agentRunId }) =>
+        new FakeHarnessAdapter({
+          scenario: 'success',
+          evidence: {
+            schemaVersion: 1,
+            id: createEvidenceId(),
+            qaRunId,
+            agentRunId,
+            strength: 'reproduced_behavior',
+            environmentState: 'baseline',
+            type: 'test',
+            test: { framework: 'fixture', name: 'cites artifacts', status: 'passed' },
+            artifactIds,
+            description: 'Evidence that cites artifacts',
+            createdAt: nowIsoTimestamp(),
+          } as never,
+        }),
+    });
+    const result = await new RunCoordinator(f.dataRoot, f.repository, f.lease, registry).run(
+      f.added.project.id,
+      { executionKind: 'simulation' },
+    );
+    const kept = f.repository.listEvidence(result.run.id);
+    f.database.close();
+    return { result, kept };
+  }
+
+  it('keeps no evidence, and does not complete the agent, when the artifact does not exist', async () => {
+    const { result, kept } = await runWithArtifactIds(['artifact_01K7777777777777777777Z8WZ']);
+    expect(kept).toEqual([]);
+    expect(result.agentRuns[0]?.status).not.toBe('completed');
+  }, 120_000);
+
+  it('still accepts evidence that cites no artifact', async () => {
+    const { result, kept } = await runWithArtifactIds([]);
+    expect(kept).toHaveLength(1);
+    expect(result.agentRuns[0]?.status).toBe('completed');
+  }, 120_000);
+});
+
 describe('cancellation that arrives as the last worker settles', () => {
   it('records the owner as having acknowledged the request when it settles the run as cancelled', async () => {
     const f = await fixture();

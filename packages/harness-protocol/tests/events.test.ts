@@ -66,7 +66,8 @@ describe('HarnessEvent protocol', () => {
       ...base,
       type: 'report.checkpoint',
       findings: [{ ...finding, qaRunId: plan.qaRunId, agentRunId: base.agentRunId }],
-      evidence: [],
+      // The finding's own evidence travels with it, so every reference can be followed.
+      evidence: [{ ...evidence, qaRunId: plan.qaRunId, agentRunId: base.agentRunId }],
     });
     const validator = new IncrementalHarnessEventValidator(
       plan.qaRunId as never,
@@ -95,6 +96,34 @@ describe('HarnessEvent protocol', () => {
       ),
     ).toThrow('another AgentRun');
   });
+  it('refuses a finding that cites evidence this AgentRun never submitted', () => {
+    const own = { ...evidence, qaRunId: plan.qaRunId, agentRunId: base.agentRunId };
+    const citing = { ...finding, qaRunId: plan.qaRunId, agentRunId: base.agentRunId };
+    const start = HarnessEventSchema.parse({ ...base, type: 'run.started' });
+    const submitFinding = HarnessEventSchema.parse({
+      ...base,
+      type: 'finding.submitted',
+      finding: citing,
+    });
+    const submitEvidence = HarnessEventSchema.parse({
+      ...base,
+      type: 'evidence.submitted',
+      evidence: own,
+    });
+    const make = () =>
+      new IncrementalHarnessEventValidator(plan.qaRunId as never, base.agentRunId as never);
+    // Evidence first, then the finding that cites it: fine (the order every adapter uses).
+    const ordered = make();
+    ordered.accept(start);
+    ordered.accept(submitEvidence);
+    expect(() => ordered.accept(submitFinding)).not.toThrow();
+    // A finding whose evidence was never submitted in this stream (for example another agent's)
+    // is refused instead of persisting a provenance link nobody can follow.
+    const unsupported = make();
+    unsupported.accept(start);
+    expect(() => unsupported.accept(submitFinding)).toThrow(/did not submit/);
+  });
+
   it('accepts every event variant', () => {
     const variants = [
       { ...base, type: 'run.started' },

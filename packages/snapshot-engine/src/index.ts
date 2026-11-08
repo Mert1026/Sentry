@@ -60,8 +60,9 @@ export class SnapshotEngine {
    * manifest was written at snapshot-creation time from the locked revision.
    */
   /**
-   * Every file and symlink path in the frozen manifest. Targeted QA validates the paths a person
-   * picks against this, so a symlink recorded in the snapshot can be chosen like a file.
+   * Every file, symlink and directory path in the frozen manifest. Targeted QA validates the
+   * paths a person picks against this, so a symlink or an empty directory recorded in the
+   * snapshot can be chosen like a file.
    */
   async manifestPaths(snapshotId: SnapshotId): Promise<ReadonlySet<string>> {
     const snapshot = this.repository.getSnapshot(snapshotId);
@@ -76,7 +77,7 @@ export class SnapshotEngine {
       try {
         const entry = JSON.parse(line) as { relativePath?: unknown; type?: unknown };
         if (
-          (entry.type === 'file' || entry.type === 'symlink') &&
+          (entry.type === 'file' || entry.type === 'symlink' || entry.type === 'directory') &&
           typeof entry.relativePath === 'string'
         )
           paths.add(entry.relativePath);

@@ -1023,8 +1023,10 @@ export class RunCoordinator {
             else if (event.type === 'investigation.hypothesis.discovered')
               this.repository.saveHypothesis(event.hypothesis);
             else if (event.type === 'finding.submitted') this.repository.saveFinding(event.finding);
-            else if (event.type === 'evidence.submitted')
+            else if (event.type === 'evidence.submitted') {
+              this.assertEvidenceArtifactsExist(event.evidence, input.run.id);
               this.repository.saveEvidence(event.evidence);
+            }
             agentRun = this.projectAgentRunEvent(agentRun, event);
           });
           input.onHarnessEventPersisted?.(event, agentRun);
@@ -1845,6 +1847,39 @@ export class RunCoordinator {
         }
       }
     }
+  }
+
+  /**
+   * Evidence that points at an artifact must point at one that exists for this run. Adapters
+   * normally embed their output instead, so this only refuses references that cannot be followed.
+   */
+  private assertEvidenceArtifactsExist(evidence: unknown, runId: QARunId): void {
+    const requireArtifact = (id: string): void => {
+      const artifact = this.repository.getArtifact(id as never);
+      if (
+        artifact === undefined ||
+        (artifact.qaRunId !== undefined && artifact.qaRunId !== runId)
+      ) {
+        throw new HarnessProtocolError(
+          'INVALID_EVENT_SEQUENCE',
+          'Evidence references artifact ' + id + ' that does not exist for this run',
+        );
+      }
+    };
+    const visit = (value: unknown): void => {
+      if (Array.isArray(value)) {
+        for (const entry of value) visit(entry);
+        return;
+      }
+      if (typeof value !== 'object' || value === null) return;
+      for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+        if (/ArtifactId$/.test(key) && typeof entry === 'string') requireArtifact(entry);
+        else if (/^artifactIds$/i.test(key) && Array.isArray(entry)) {
+          for (const id of entry) if (typeof id === 'string') requireArtifact(id);
+        } else visit(entry);
+      }
+    };
+    visit(evidence);
   }
 
   private requireRuntimeLease(): RuntimeInstanceLease {

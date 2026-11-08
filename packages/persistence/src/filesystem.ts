@@ -405,6 +405,13 @@ export async function copyTree(
         symlinkCount += 1;
         continue;
       }
+      // A symbolic link already sitting where this file goes must be replaced, never written
+      // through: createWriteStream follows it and would overwrite whatever it points at.
+      try {
+        if ((await lstat(destination)).isSymbolicLink()) await rm(destination, { force: true });
+      } catch (cause) {
+        if ((cause as NodeJS.ErrnoException).code !== 'ENOENT') throw cause;
+      }
       await schedule(async () => {
         await copyRegularFile(
           entry.absolutePath,
