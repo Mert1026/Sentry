@@ -16,9 +16,9 @@
  *
  * safeStorage unavailable → refuse secret saves, NEVER plaintext fallback.
  */
-import { chmod, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 
 export const MANAGED_PROVIDER_KEYS = [
   'OPENROUTER_API_KEY',
@@ -129,6 +129,27 @@ function parseLegacyEnvFile(text: string): Map<string, string> {
   return out;
 }
 
+/** Same spelling after resolving (case-insensitive on Windows). No file access. */
+function sameResolvedPath(a: string, b: string): boolean {
+  const left = resolve(a);
+  const right = resolve(b);
+  return process.platform === 'win32' ? left.toLowerCase() === right.toLowerCase() : left === right;
+}
+
+/**
+ * True when two paths name the same file: the same text after resolving, or (when both exist) the
+ * same device and inode, which catches links and alternate spellings of one file.
+ */
+async function sameFile(a: string, b: string): Promise<boolean> {
+  if (sameResolvedPath(a, b)) return true;
+  try {
+    const [left, right] = await Promise.all([stat(a), stat(b)]);
+    return left.dev === right.dev && left.ino === right.ino && left.ino !== 0;
+  } catch {
+    return false;
+  }
+}
+
 let atomicWriteCounter = 0;
 
 async function atomicWriteJson(filePath: string, payload: unknown): Promise<void> {
@@ -180,12 +201,16 @@ export class ProviderCredentialService {
       options.filePath ?? (dir !== undefined ? join(dir, 'credentials', 'providers.json') : '');
     // Never a directory named preferences: on case-insensitive filesystems
     // that collides with Chromium's own Preferences file in Electron userData.
+    // With an explicit credential file the preferences sit beside it, but never ON it: a
+    // credential file that happens to be called models.json would be overwritten by preferences.
+    const siblingPrefs =
+      options.filePath === undefined
+        ? ''
+        : sameResolvedPath(join(dirname(options.filePath), 'models.json'), options.filePath)
+          ? join(dirname(options.filePath), 'models.prefs.json')
+          : join(dirname(options.filePath), 'models.json');
     this.modelPrefsPath =
-      dir !== undefined
-        ? join(dir, 'sentry-prefs', 'models.json')
-        : options.filePath !== undefined
-          ? join(dirname(options.filePath), 'models.json')
-          : '';
+      dir !== undefined ? join(dir, 'sentry-prefs', 'models.json') : siblingPrefs;
     this.legacyPath = options.legacyEnvPath ?? defaultLegacyPath();
     // Never collide the new encrypted store with the legacy plaintext path.
     this.safeStorage = options.safeStorage;
@@ -349,7 +374,13 @@ export class ProviderCredentialService {
 
   private async migrateLegacyFile(): Promise<void> {
     if (this.legacyPath === undefined) return;
-    if (this.legacyPath === this.credentialPath) return;
+    // Never read, migrate or delete a "legacy" file that is really the encrypted store or the
+    // preferences file under another spelling.
+    if (
+      (await sameFile(this.legacyPath, this.credentialPath)) ||
+      (await sameFile(this.legacyPath, this.modelPrefsPath))
+    )
+      return;
     let text: string;
     try {
       text = await readFile(this.legacyPath, 'utf8');
@@ -575,7 +606,11 @@ export class ProviderCredentialService {
   async forgetFile(): Promise<void> {
     await this.forgetAll();
     try {
-      if (this.legacyPath !== undefined && this.legacyPath !== this.credentialPath) {
+      if (
+        this.legacyPath !== undefined &&
+        !(await sameFile(this.legacyPath, this.credentialPath)) &&
+        !(await sameFile(this.legacyPath, this.modelPrefsPath))
+      ) {
         await unlink(this.legacyPath);
       }
     } catch {

@@ -341,7 +341,14 @@ export class RunCoordinator {
         sourceRoot = material;
         expectedSnapshotHash = await this.projects.expectedRetainedHash(projectId, stored);
       }
-      const context = project.context ?? this.repository.getContextForRevision(revision.id);
+      // The project's own context describes its CURRENT revision. A run on an older retained
+      // revision must use that revision's context, so its bytes are never judged against
+      // instructions written for different code. Only a revision with no context of its own falls
+      // back to the project's.
+      const context =
+        revision.id === currentId
+          ? (project.context ?? this.repository.getContextForRevision(revision.id))
+          : (this.repository.getContextForRevision(revision.id) ?? project.context);
       if (context === undefined) throw new Error('PROJECT_CONTEXT_NOT_FOUND: ' + revision.id);
       const snapshot = await this.snapshots.createSnapshot({
         projectId,
@@ -1803,6 +1810,18 @@ export class RunCoordinator {
         );
       });
       this.projects.recoverAbandonedRunLock(run.projectId, run.id);
+    }
+    // Runs terminalized just above may still carry a request that was kept open because the
+    // requesting runtime (this one) is alive. Close those now, so one recovery pass leaves the
+    // run and its control request in agreement instead of needing a second pass.
+    for (const pending of this.repository.listPendingRunControlRequests()) {
+      const run = this.repository.getRun(pending.qaRunId as QARunId);
+      if (
+        run !== undefined &&
+        ['completed', 'partial', 'failed', 'cancelled'].includes(run.status)
+      ) {
+        this.repository.saveRunControlRequest({ ...pending, completedAt: timestamp });
+      }
     }
     for (const copy of this.repository.listManagedCopiesByState(['locked_for_run'])) {
       if (copy.lockedByQARunId !== undefined) {

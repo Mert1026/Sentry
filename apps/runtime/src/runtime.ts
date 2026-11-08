@@ -138,12 +138,13 @@ export function assertExportTransportSize(sizeBytes: number, runId: string): voi
 function sanitize(value: unknown): unknown {
   // Defense in depth: never let KEY/TOKEN/SECRET-looking values reach stdout.
   if (typeof value === 'string') {
-    return value
-      .replace(/\b(Bearer)\s+\S+/gi, '$1 [REDACTED]')
-      .replace(
-        /\b([A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD))\s*[:=]\s*([^\s,;]+)/gi,
-        '$1=[REDACTED]',
-      );
+    return value.replace(/\b(Bearer)\s+\S+/gi, '$1 [REDACTED]').replace(
+      /\b([A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD))(\s*[:=]\s*)([^\s,;]+)/gi,
+      // Keep the author's spacing and separator, and leave an already redacted value as it is,
+      // so redaction never rewrites text that held no secret (for example a stored excerpt).
+      (match, name: string, separator: string, secret: string) =>
+        secret === '[REDACTED]' ? match : name + separator + '[REDACTED]',
+    );
   }
   if (Array.isArray(value)) return value.map((entry) => sanitize(entry));
   if (typeof value === 'object' && value !== null) {
