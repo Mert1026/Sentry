@@ -59,6 +59,34 @@ export class SnapshotEngine {
    * from the stored NDJSON manifest (file entries only). No rescan: the
    * manifest was written at snapshot-creation time from the locked revision.
    */
+  /**
+   * Every file and symlink path in the frozen manifest. Targeted QA validates the paths a person
+   * picks against this, so a symlink recorded in the snapshot can be chosen like a file.
+   */
+  async manifestPaths(snapshotId: SnapshotId): Promise<ReadonlySet<string>> {
+    const snapshot = this.repository.getSnapshot(snapshotId);
+    if (snapshot === undefined) throw new Error('SNAPSHOT_NOT_FOUND: ' + snapshotId);
+    const artifact = this.repository.getArtifact(snapshot.manifest.artifactId);
+    if (artifact === undefined) throw new Error('SNAPSHOT_MANIFEST_MISSING: ' + snapshotId);
+    const absolute = resolveInside(this.dataRoot, artifact.relativeStoragePath);
+    const paths = new Set<string>();
+    const lines = createInterface({ input: createReadStream(absolute), crlfDelay: Infinity });
+    for await (const line of lines) {
+      if (line.trim().length === 0) continue;
+      try {
+        const entry = JSON.parse(line) as { relativePath?: unknown; type?: unknown };
+        if (
+          (entry.type === 'file' || entry.type === 'symlink') &&
+          typeof entry.relativePath === 'string'
+        )
+          paths.add(entry.relativePath);
+      } catch {
+        continue;
+      }
+    }
+    return paths;
+  }
+
   async baselineFileHashes(snapshotId: SnapshotId): Promise<ReadonlyMap<string, string>> {
     const snapshot = this.repository.getSnapshot(snapshotId);
     if (snapshot === undefined) throw new Error('SNAPSHOT_NOT_FOUND: ' + snapshotId);

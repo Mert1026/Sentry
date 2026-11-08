@@ -461,6 +461,44 @@ describe('managed project lifecycle', () => {
     f.database.close();
   });
 
+  describe('links into excluded content and a redirected projects folder', () => {
+    it('imports a project whose symlink points into excluded node_modules', async () => {
+      const f = await fixture();
+      try {
+        await symlink(join('node_modules', 'fixture'), join(f.source, 'linked-deps'), 'dir');
+      } catch {
+        return; // this platform refuses symlinks without privileges
+      }
+      // A link into content the import excludes is dangling in the retained copy. Import must
+      // still succeed (a ChatGPT QA run reported REVISION_MATERIAL_CORRUPT for this shape; it did
+      // not reproduce here, so this stays as a regression guard).
+      const added = await f.manager.addProject(f.source);
+      expect(added.revision.id).toBeDefined();
+      f.lease.release();
+      f.database.close();
+    });
+
+    it('refuses to delete through a link planted in the projects folder', async () => {
+      const f = await fixture();
+      const added = await f.manager.addProject(f.source);
+      const projectsFolder = join(f.dataRoot, 'projects');
+      const moved = join(f.root, 'moved-projects');
+      await rename(projectsFolder, moved);
+      try {
+        await symlink(moved, projectsFolder, 'dir');
+      } catch {
+        await rename(moved, projectsFolder);
+        return; // this platform refuses symlinks without privileges
+      }
+      await expect(f.manager.deleteProject(added.project.id)).rejects.toThrow(/PATH_ESCAPE/);
+      // The material behind the link is untouched, and the project is not left half-deleted.
+      expect((await stat(join(moved, added.project.id))).isDirectory()).toBe(true);
+      expect(f.repository.getManagedCopy(added.project.id)?.state).toBe('ready');
+      f.lease.release();
+      f.database.close();
+    });
+  });
+
   describe('sources containing external or broken symlinks', () => {
     /** Symlinks need developer mode on Windows; skip where the platform refuses them. */
     async function withLinks(f: Awaited<ReturnType<typeof fixture>>): Promise<boolean> {

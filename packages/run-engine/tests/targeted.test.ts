@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -133,6 +133,27 @@ describe('Phase 7 TARGETED QA (§8-§13, §82)', () => {
         target: { includePaths: ['../outside'] },
       }),
     ).rejects.toThrowError(RunEngineError);
+    f.database.close();
+  });
+
+  it('accepts a symlink that is recorded in the frozen snapshot as a target', async () => {
+    const f = await fixture();
+    try {
+      await symlink('README.md', join(f.source, 'readme-link.md'));
+    } catch {
+      f.database.close();
+      return; // this platform refuses symlinks without privileges
+    }
+    // A link pointing at a file inside the project is part of the manifest, so it can be picked
+    // like the file it points to (used to fail with INVALID_TARGET and start no workers).
+    await f.manager.updateProjectCopy(f.added.project.id);
+    const result = await f.runs.run(f.added.project.id, {
+      executionKind: 'simulation',
+      mode: 'targeted',
+      target: { includePaths: ['readme-link.md'] },
+    });
+    expect(result.run.status).toBe('completed');
+    expect(f.repository.getTargetSpec(result.run.id)?.includePaths).toEqual(['readme-link.md']);
     f.database.close();
   });
 

@@ -411,6 +411,7 @@ export class RunCoordinator {
       // Frozen manifest file set: the immutable source of truth for scope
       // validation (never the mutable working copy).
       const frozenBaseline = await this.snapshots.baselineFileHashes(snapshot.id);
+      const frozenPaths = await this.snapshots.manifestPaths(snapshot.id);
       const effectiveMode = mode;
       const effectiveIncludePaths: readonly string[] | undefined =
         options.target?.includePaths === undefined ? undefined : [...options.target.includePaths];
@@ -444,6 +445,7 @@ export class RunCoordinator {
         };
         const unknown = scope.includePaths.filter(
           (candidate) =>
+            !frozenPaths.has(candidate) &&
             !frozenBaseline.has(candidate) &&
             ![...frozenBaseline.keys()].some((file) => file.startsWith(candidate + '/')),
         );
@@ -659,7 +661,15 @@ export class RunCoordinator {
       if (outcome === 'cancelled') {
         const pending = this.repository.getRunControlRequest(runId);
         if (pending !== undefined && pending.completedAt === undefined) {
-          this.repository.saveRunControlRequest({ ...pending, completedAt: nowIsoTimestamp() });
+          // A request that arrived as the last worker settled may never have been acknowledged
+          // by the worker loop; the owner settling the run is that acknowledgement. Without it
+          // the record shows "completed" with nobody having acknowledged it.
+          const settledAt = nowIsoTimestamp();
+          this.repository.saveRunControlRequest({
+            ...pending,
+            acknowledgedAt: pending.acknowledgedAt ?? settledAt,
+            completedAt: settledAt,
+          });
         }
       }
       await this.exporter.export(runId, 'log');

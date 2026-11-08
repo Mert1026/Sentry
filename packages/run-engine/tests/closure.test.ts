@@ -564,6 +564,42 @@ describe('finish-pass §25: stale owner recovery is honest', () => {
   }, 120_000);
 });
 
+describe('cancellation that arrives as the last worker settles', () => {
+  it('records the owner as having acknowledged the request when it settles the run as cancelled', async () => {
+    const f = await fixture();
+    // The only worker finishes its work, and only THEN does a foreign runtime persist the cancel
+    // request: the worker loop never gets to acknowledge it before the run settles.
+    class FinishesThenCancelled extends FakeHarnessAdapter {
+      override async *run(request: HarnessRunRequest) {
+        yield* super.run(request);
+        f.repository.saveRunControlRequest({
+          id: 'cancel_last_worker',
+          qaRunId: request.qaRunId,
+          projectId: f.added.project.id,
+          requestType: 'cancel',
+          requestingRuntimeId: 'runtime_other',
+          requestedAt: nowIsoTimestamp(),
+        });
+      }
+    }
+    const registry = new HarnessAdapterRegistry();
+    registry.register({
+      stack: INITIAL_AGENT_STACKS[0]!,
+      createAdapter: () => new FinishesThenCancelled(),
+    });
+    const result = await new RunCoordinator(f.dataRoot, f.repository, f.lease, registry).run(
+      f.added.project.id,
+      { executionKind: 'simulation' },
+    );
+    const request = f.repository.getRunControlRequest(result.run.id);
+    expect(result.run.status).toBe('cancelled');
+    expect(request?.completedAt).toBeDefined();
+    // Used to be completed with nobody having acknowledged it.
+    expect(request?.acknowledgedAt).toBeDefined();
+    f.database.close();
+  }, 120_000);
+});
+
 describe('recovery with a live requester', () => {
   it('closes the cancel request in the same pass that terminalizes the abandoned run', async () => {
     const f = await fixture();
