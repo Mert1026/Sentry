@@ -16,7 +16,7 @@ import { createHash } from 'node:crypto';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { SnapshotFileEntrySchema, type SnapshotFileEntry } from '@qa/schemas';
-import { isPathInside } from './paths.js';
+import { assertNoSymlinkBelow, isPathInside } from './paths.js';
 
 export interface CopyProgress {
   readonly filesProcessed: number;
@@ -132,6 +132,14 @@ export async function* walkTree(
       const stats = await lstat(absolutePath);
       const relativePath = relative(absoluteRoot, absolutePath).replaceAll('\\', '/');
       if (exclude?.(relativePath) === true) continue;
+      // Snapshot paths use forward slashes only. On POSIX a backslash is a legal file name
+      // character, and turning it into a separator would rewrite the name (or, for `..\x`, climb
+      // out of the destination), so such entries are refused instead of silently altered.
+      if (name.includes('\\')) {
+        throw new Error(
+          'UNSUPPORTED_FILESYSTEM_ENTRY: file name contains a backslash: ' + relativePath,
+        );
+      }
       if (stats.isSymbolicLink()) {
         yield {
           absolutePath,
@@ -379,6 +387,8 @@ export async function copyTree(
     })) {
       throwIfAborted(options.signal);
       const destination = destinationForRelative(destinationRoot, entry.relativePath);
+      // A link already present in the destination must not redirect writes outside it.
+      await assertNoSymlinkBelow(destinationRoot, destination, { includeLeaf: false });
       if (entry.type === 'directory') {
         await mkdir(destination, { recursive: true });
         directoryCount += 1;

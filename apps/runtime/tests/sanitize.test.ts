@@ -32,6 +32,18 @@ describe('runtime RPC redaction', () => {
     });
   });
 
+  it('keeps spacing and separators, and leaves already redacted values exactly as stored', () => {
+    expect(sanitizeRpcValue({ excerpt: 'const token = [REDACTED];' })).toEqual({
+      excerpt: 'const token = [REDACTED];',
+    });
+    expect(sanitizeRpcValue({ note: 'api_key: hunter2, next' })).toEqual({
+      note: 'api_key: [REDACTED], next',
+    });
+    expect(sanitizeRpcValue({ note: 'Authorization: Bearer abc123' })).toEqual({
+      note: 'Authorization: Bearer [REDACTED]',
+    });
+  });
+
   it('scrubs embedded credential assignments in free text', () => {
     expect(sanitizeRpcValue({ note: 'failed; DEEPSEEK_API_KEY=hunter2 ok' })).toEqual({
       note: 'failed; DEEPSEEK_API_KEY=[REDACTED] ok',

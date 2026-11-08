@@ -564,6 +564,85 @@ describe('finish-pass §25: stale owner recovery is honest', () => {
   }, 120_000);
 });
 
+describe('cancellation that arrives as the last worker settles', () => {
+  it('records the owner as having acknowledged the request when it settles the run as cancelled', async () => {
+    const f = await fixture();
+    // The only worker finishes its work, and only THEN does a foreign runtime persist the cancel
+    // request: the worker loop never gets to acknowledge it before the run settles.
+    class FinishesThenCancelled extends FakeHarnessAdapter {
+      override async *run(request: HarnessRunRequest) {
+        yield* super.run(request);
+        f.repository.saveRunControlRequest({
+          id: 'cancel_last_worker',
+          qaRunId: request.qaRunId,
+          projectId: f.added.project.id,
+          requestType: 'cancel',
+          requestingRuntimeId: 'runtime_other',
+          requestedAt: nowIsoTimestamp(),
+        });
+      }
+    }
+    const registry = new HarnessAdapterRegistry();
+    registry.register({
+      stack: INITIAL_AGENT_STACKS[0]!,
+      createAdapter: () => new FinishesThenCancelled(),
+    });
+    const result = await new RunCoordinator(f.dataRoot, f.repository, f.lease, registry).run(
+      f.added.project.id,
+      { executionKind: 'simulation' },
+    );
+    const request = f.repository.getRunControlRequest(result.run.id);
+    expect(result.run.status).toBe('cancelled');
+    expect(request?.completedAt).toBeDefined();
+    // Used to be completed with nobody having acknowledged it.
+    expect(request?.acknowledgedAt).toBeDefined();
+    f.database.close();
+  }, 120_000);
+});
+
+describe('recovery with a live requester', () => {
+  it('closes the cancel request in the same pass that terminalizes the abandoned run', async () => {
+    const f = await fixture();
+    const { createFakeHarnessRegistry } = await import('../src/index.js');
+    const completed = await new RunCoordinator(
+      f.dataRoot,
+      f.repository,
+      f.lease,
+      createFakeHarnessRegistry('success'),
+    ).run(f.added.project.id, { executionKind: 'simulation' });
+    f.repository.saveRuntimeInstance({
+      schemaVersion: 1,
+      id: 'runtime_01K7777777777777777777X8W9',
+      processId: 999999,
+      hostname: 'dead-owner',
+      startedAt: '2020-01-01T00:00:00.000Z',
+      heartbeatAt: '2020-01-01T00:00:00.000Z',
+    } as never);
+    f.repository.saveRun({
+      ...completed.run,
+      runtimeInstanceId: 'runtime_01K7777777777777777777X8W9' as never,
+      status: 'agents_running',
+      completedAt: undefined,
+    } as never);
+    // The requester is THIS (live) runtime, so the request is not stale on its own.
+    f.repository.saveRunControlRequest({
+      id: 'cancel_live_requester',
+      qaRunId: completed.run.id,
+      projectId: completed.run.projectId,
+      requestType: 'cancel',
+      requestingRuntimeId: f.lease.instanceId,
+      requestedAt: nowIsoTimestamp(),
+    });
+    await new RunCoordinator(f.dataRoot, f.repository, f.lease).recover();
+    expect(['completed', 'partial', 'failed', 'cancelled']).toContain(
+      f.repository.getRun(completed.run.id)?.status,
+    );
+    // Closed by the first recovery, not left pending until a second one.
+    expect(f.repository.getRunControlRequest(completed.run.id)?.completedAt).toBeDefined();
+    f.database.close();
+  }, 120_000);
+});
+
 describe('private preparation and unconditional teardown', () => {
   it('reports the configured deadline, not the legacy larger activity cap', async () => {
     const f = await fixture();

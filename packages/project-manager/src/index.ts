@@ -32,6 +32,7 @@ import {
 } from '@qa/schemas';
 import {
   assertNoPathOverlap,
+  assertNoSymlinkBelow,
   copyTree,
   DEFAULT_IMPORT_EXCLUSIONS,
   estimateTree,
@@ -709,6 +710,9 @@ export class ProjectManager {
   async deleteProject(projectId: ProjectId): Promise<void> {
     const lease = this.runtimeLease();
     const paths = projectDataPaths(this.dataRoot, projectId);
+    // A link planted in the projects folder must never redirect deletion at material elsewhere.
+    // Checked before anything is marked, so a refusal leaves the project untouched.
+    await assertNoSymlinkBelow(this.dataRoot, paths.root, { includeLeaf: false });
     const tombstone = paths.root + '.deleting';
     const timestamp = nowIsoTimestamp();
     let operation = RuntimeOperationSchema.parse({
