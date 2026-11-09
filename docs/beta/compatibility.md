@@ -1,7 +1,7 @@
 # Beta compatibility
 
-What changes for an existing 1.0.2 install when it moves to this `dev` build. The
-product version stays `1.0.2`; no version numbers changed.
+What changes for an existing 1.0.2 install when it moves to 2.0.0. The product version
+is `2.0.0`; the runtime protocol stays 1.
 
 | Area                             | Status                | Notes                                                                                                                                                                                                             |
 | -------------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

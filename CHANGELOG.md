@@ -2,6 +2,26 @@
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-11-09
+
+Major release. It removes the merge, verification, issue and retest features of 1.x
+(migration 7 is one-way) and adds staged QA, project profiles, toolchains, re-test of
+earlier findings, ChatGPT as an opt-in agent, CLI parity and Bulgarian translations.
+See the [release notes](docs/releases/v2.0.0.md).
+
+- ChatGPT is an opt-in agent (API key or signed-in ChatGPT account); the default agents
+  stay OpenCode, DeepSeek and GLM.
+- CLI parity: `run start --retest/--profile/--tools/--revision`, `project findings`,
+  `project profile`, `project profile-build` and `toolchain status|install|remove`.
+- The re-test tab on a run shows each finding as Passed, Not passed or Could not complete,
+  with the agent's reason. Re-test answers are strict: Passed only when the agent re-ran
+  the check and saw different behaviour.
+- Info buttons on the project profile page open boxes with dropdown sections.
+- Bulgarian translations now cover text built at run time, every status word in any case,
+  and the run graph node labels.
+- Project copy, update, delete and recovery refuse symbolic links below the data root and
+  never follow them; files named like generated folders are kept on import.
+- Toolchain dropdowns slide open and closed.
 - Remove the merger and verifier packages and the merge, verification, issue and
   retest services, RPCs, CLI commands (`run merge`, `issue`, `retest`, `verify`)
   and Desktop pages. See [ADR 0015](docs/adr/0015-remove-merge-verification-issue-retest.md).

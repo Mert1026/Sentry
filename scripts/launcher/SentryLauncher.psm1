@@ -3,8 +3,8 @@
 # Desktop Settings (Electron safeStorage / DPAPI) only.
 $ErrorActionPreference = 'Stop'
 
-$script:SentryProductVersion = '1.0.2'
-$script:SentryReleaseTitle = 'Sentry v1.0.2'
+$script:SentryProductVersion = '2.0.0'
+$script:SentryReleaseTitle = 'Sentry v2.0.0'
 $script:SentryRequiredNodeMajor = 22
 $script:SentryRebootExitCode = 75
 
