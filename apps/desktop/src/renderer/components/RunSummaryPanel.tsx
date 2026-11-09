@@ -77,7 +77,7 @@ export function RunSummaryPanel({
     return match === undefined ? undefined : () => onFocusAgent(String(match['agentStackId']));
   };
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div className="rs-panel" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <section aria-label="Run status">
         <div className="section-title" style={{ marginBottom: 8 }}>
           Run
@@ -98,6 +98,7 @@ export function RunSummaryPanel({
             value={webOn ? 'On' : 'Off'}
             state={webOn ? 'on' : 'off'}
             tone={webOn ? 'on' : undefined}
+            iconWhenNarrow
           />
           <Tile
             icon={Download}
@@ -105,6 +106,7 @@ export function RunSummaryPanel({
             value={downloadsOn ? 'On' : 'Off'}
             state={downloadsOn ? 'on' : 'off'}
             tone={downloadsOn ? 'on' : undefined}
+            iconWhenNarrow
           />
           {profileUsage === undefined ? null : (
             <Tile

@@ -18,6 +18,7 @@ export function InfoTile({
   wide = false,
   count = false,
   compact = false,
+  iconWhenNarrow = false,
   state,
   hintWarn = false,
   title,
@@ -32,6 +33,8 @@ export function InfoTile({
   wide?: boolean;
   count?: boolean;
   compact?: boolean;
+  /** In a narrow panel only the (coloured) icon stays; the tooltip and label keep the meaning. */
+  iconWhenNarrow?: boolean;
   state?: 'on' | 'off';
   hintWarn?: boolean;
   title?: string;
@@ -43,6 +46,7 @@ export function InfoTile({
     (wide ? ' rs-tile--wide' : '') +
     (count ? ' rs-count' : '') +
     (compact ? ' rs-tile--compact' : '') +
+    (iconWhenNarrow ? ' rs-tile--state' : '') +
     (tone === undefined ? '' : ' rs-tile--' + tone);
   const body = (
     <>
@@ -65,8 +69,10 @@ export function InfoTile({
     </>
   );
   const accessibleName = label + (value === undefined ? '' : ': ' + value);
+  // The tooltip says what a tile shows even when its text is hidden in a narrow panel.
+  const tooltip = title ?? (iconWhenNarrow || count ? accessibleName : undefined);
   return onClick === undefined ? (
-    <div className={className} role="group" aria-label={accessibleName} title={title}>
+    <div className={className} role="group" aria-label={accessibleName} title={tooltip}>
       {body}
     </div>
   ) : (
@@ -74,7 +80,7 @@ export function InfoTile({
       type="button"
       className={className}
       aria-label={accessibleName}
-      title={title}
+      title={tooltip}
       onClick={onClick}
     >
       {body}

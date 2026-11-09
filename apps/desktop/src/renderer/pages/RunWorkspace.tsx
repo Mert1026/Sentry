@@ -6,11 +6,8 @@ import { ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { RunCanvas } from '../components/RunCanvas.js';
 import { AgentInspector } from '../components/AgentInspector.js';
 import { RunSummaryPanel } from '../components/RunSummaryPanel.js';
-import { InfoTile } from '../components/InfoTile.js';
-import { Ban, Clock, FileSearch, FlaskConical, Timer, Users } from 'lucide-react';
 import { CopyId } from '../components/CopyId.js';
 import { StatusPill } from '../components/ui/StatusPill.js';
-import { CollapsibleSection } from '../components/ui/CollapsibleSection.js';
 import { ToastStack, type ToastItem } from '../components/ui/Toast.js';
 import { EdgeInspector, NodeStatusHeader } from '../components/PipelineInspectors.js';
 import { AGENT_DISPLAY_NAMES } from '../lib/agent-telemetry.js';
@@ -374,80 +371,73 @@ export function RunWorkspace(): React.JSX.Element {
             ) : null}
           </div>
         </div>
-        <div className="rs-tiles--row run-meta-row" style={{ marginTop: 10 }}>
-          <InfoTile
-            icon={Clock}
-            label="Started"
-            value={formatClock(data.run.startedAt ?? data.run.createdAt)}
-            title={'Started ' + String(data.run.startedAt ?? data.run.createdAt)}
-            compact
-          />
-          <InfoTile
-            icon={Timer}
-            label="Duration"
-            value={formatDuration(data.run.startedAt ?? data.run.createdAt, data.run.completedAt)}
-            tone={data.run.completedAt == null ? 'busy' : undefined}
-            compact
-          />
-          <InfoTile
-            icon={Users}
-            label="Agents"
-            value={
-              String(data.run.configuration?.agentStackIds?.length ?? data.agentRuns.length) +
-              ' selected'
-            }
-            compact
-          />
-          <InfoTile
-            icon={FileSearch}
-            label="Findings"
-            value={String(data.findings.length)}
-            tone={data.findings.length > 0 ? 'warn' : 'zero'}
-            compact
-          />
-          <InfoTile
-            icon={FlaskConical}
-            label="Evidence"
-            value={String(data.evidence.length)}
-            tone={data.evidence.length > 0 ? 'success' : 'zero'}
-            compact
-          />
-          {cancelState !== undefined ? (
-            <InfoTile icon={Ban} label="Cancellation" value={cancelState} tone="danger" compact />
-          ) : null}
-        </div>
-        <CollapsibleSection title="Details">
-          <dl className="kv" style={{ marginTop: 8 }}>
+        <dl className="run-details">
+          <div className="run-detail">
             <dt>Project</dt>
             <dd>
               <Link to={'/projects/' + data.run.projectId}>{resolvedProjectName}</Link>
             </dd>
+          </div>
+          <div className="run-detail">
+            <dt>Started</dt>
+            <dd className="mono" title={String(data.run.startedAt ?? data.run.createdAt)}>
+              {formatClock(data.run.startedAt ?? data.run.createdAt)}
+            </dd>
+          </div>
+          <div className="run-detail">
+            <dt>Duration</dt>
+            <dd className="mono">
+              {formatDuration(data.run.startedAt ?? data.run.createdAt, data.run.completedAt)}
+            </dd>
+          </div>
+          <div className="run-detail">
+            <dt>Agents</dt>
+            <dd>
+              {String(data.run.configuration?.agentStackIds?.length ?? data.agentRuns.length) +
+                ' selected'}
+            </dd>
+          </div>
+          <div className="run-detail">
+            <dt>Findings</dt>
+            <dd>{String(data.findings.length)}</dd>
+          </div>
+          <div className="run-detail">
+            <dt>Evidence</dt>
+            <dd>{String(data.evidence.length)}</dd>
+          </div>
+          {cancelState !== undefined ? (
+            <div className="run-detail">
+              <dt>Cancellation</dt>
+              <dd>{cancelState}</dd>
+            </div>
+          ) : null}
+          <div className="run-detail">
             <dt>Run ID</dt>
             <dd>
               <CopyId id={data.run.id} short={22} />
             </dd>
+          </div>
+          <div className="run-detail">
             <dt>Snapshot</dt>
             <dd>
               <CopyId id={data.run.snapshotId} short={22} />
             </dd>
-            {data.run.projectRevisionId !== undefined ? (
-              <>
-                <dt>Revision</dt>
-                <dd>
-                  <CopyId id={data.run.projectRevisionId} short={22} />
-                </dd>
-              </>
-            ) : null}
-            <dt>Started</dt>
-            <dd className="mono">{String(data.run.startedAt ?? data.run.createdAt)}</dd>
-            {data.run.completedAt != null ? (
-              <>
-                <dt>Completed</dt>
-                <dd className="mono">{String(data.run.completedAt)}</dd>
-              </>
-            ) : null}
-          </dl>
-        </CollapsibleSection>
+          </div>
+          {data.run.projectRevisionId !== undefined ? (
+            <div className="run-detail">
+              <dt>Revision</dt>
+              <dd>
+                <CopyId id={data.run.projectRevisionId} short={22} />
+              </dd>
+            </div>
+          ) : null}
+          {data.run.completedAt != null ? (
+            <div className="run-detail">
+              <dt>Completed</dt>
+              <dd className="mono">{String(data.run.completedAt)}</dd>
+            </div>
+          ) : null}
+        </dl>
       </header>
       {['failed', 'partial', 'cancelled'].includes(data.run.status) ? (
         <div className="inline-notice tone-warning" role="status">

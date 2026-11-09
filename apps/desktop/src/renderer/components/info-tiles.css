@@ -192,3 +192,45 @@ button.rs-tile:focus-visible {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/*
+ * The run overview panel can be dragged narrow. Rather than letting words break letter by letter,
+ * it adapts to its own width: on/off tiles keep only their coloured icon, and count tiles keep
+ * the icon and the number.
+ */
+.rs-panel {
+  container-type: inline-size;
+  container-name: rs;
+}
+@container rs (max-width: 330px) {
+  .rs-tile {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+  .rs-tile--state {
+    justify-content: center;
+  }
+  .rs-tile--state .rs-text {
+    display: none;
+  }
+  /* With the words gone, colour carries on/off. */
+  .rs-tile--state.rs-tile--on {
+    border-color: rgba(109, 155, 102, 0.45);
+    background: rgba(109, 155, 102, 0.08);
+  }
+  .rs-count .rs-label {
+    display: none;
+  }
+  .rs-count {
+    align-items: center;
+  }
+}
+@container rs (max-width: 210px) {
+  .rs-tiles {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .rs-tile .rs-label {
+    font-size: 10px;
+    letter-spacing: 0;
+  }
+}
