@@ -159,7 +159,7 @@ export function Toolchains(): React.JSX.Element {
           );
           return (
             <details
-              className="info-disclosure"
+              className="info-disclosure tc-group"
               key={category.id}
               open={filtering || needsAttention}
               style={{ margin: '14px 0' }}

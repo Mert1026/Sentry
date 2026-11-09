@@ -57,6 +57,29 @@
   margin-left: auto;
 }
 
+/* Dropdowns (category groups and packs) slide open and closed instead of snapping.
+   Uses the native ::details-content part (Chromium 131+, Electron 36 ships 136). The global
+   reduced-motion rule shrinks transition durations, so the Animations switch still applies. */
+.tc-group,
+.tc-pack {
+  interpolate-size: allow-keywords;
+}
+.tc-group::details-content,
+.tc-pack::details-content {
+  block-size: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition:
+    block-size 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 200ms ease,
+    content-visibility 240ms allow-discrete;
+}
+.tc-group[open]::details-content,
+.tc-pack[open]::details-content {
+  block-size: auto;
+  opacity: 1;
+}
+
 /* One pack per row, full width: names and descriptions line up and the list scans top to bottom. */
 .tc-packs {
   display: flex;
