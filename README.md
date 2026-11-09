@@ -5,11 +5,11 @@ investigate the same immutable snapshot of your project on their own and report
 findings, evidence, token usage and a persistent run history. Findings are never
 merged or ranked across agents, so you can compare what each one found.
 
-**Stable release:** [Sentry v1.0.2 — Windows](https://github.com/Mert1026/Sentry/releases/tag/v1.0.2)
+**Stable release:** [Sentry v2.0.0 — Windows](https://github.com/Mert1026/Sentry/releases/tag/v2.0.0)
 for **Windows 11 x64 with WSL2** (Ubuntu preferred). The ZIP is unsigned and uses an
 online Linux runtime bootstrap. Native Linux Desktop is deferred.
-The `dev` and `main` branches include newer work than v1.0.2; see
-[What's new since v1.0.2](#whats-new-since-v102).
+Version 2.0.0 removes the 1.x merge, verification and issue features and keeps your
+Full and Targeted runs; see [What's new in 2.0.0](#whats-new-in-200).
 
 ## Contents
 
@@ -22,7 +22,7 @@ The `dev` and `main` branches include newer work than v1.0.2; see
 - [Toolchains](#toolchains)
 - [CLI automation](#cli-automation)
 - [Security and recovery](#security-and-recovery)
-- [What's new since v1.0.2](#whats-new-since-v102)
+- [What's new in 2.0.0](#whats-new-in-200)
 - [Documentation and development](#documentation-and-development)
 
 ## Features
@@ -182,7 +182,7 @@ Read the [threat model](docs/security/V1_THREAT_MODEL.md), the
 [recovery policy](docs/releases/v1-recovery-policy-decision.md).
 The original beta executable is not an approved credential downgrade target.
 
-## What's new since v1.0.2
+## What's new in 2.0.0
 
 - Re-test of earlier findings with Passed / Not passed / Could not complete answers.
 - Findings by revision, and a project profile with per-agent notes.
@@ -201,7 +201,7 @@ The full list is in the [changelog](CHANGELOG.md).
 - [CLI reference and automation](docs/beta/cli.md)
 - [Contributing and development](CONTRIBUTING.md)
 - [Architecture](docs/architecture/README.md) and [decision records](docs/adr/0001-monorepo.md)
-- [Stable notes](docs/releases/v1.0.2.md) and [changelog](CHANGELOG.md)
+- [Stable notes](docs/releases/v2.0.0.md) and [changelog](CHANGELOG.md)
 - [Testing](docs/development/testing.md), [release procedure](docs/releases/RELEASE_CHECKLIST.md)
   and [branching policy](docs/development/branching.md)
 - [Historical reports and failed-test evidence](docs/history.md)

@@ -5,7 +5,7 @@
 - [Getting started](getting-started.md)
 - [Windows installation, prerequisites, manual updates and maintenance](setup/distribution.md)
 - [Troubleshooting](beta/troubleshooting.md)
-- [Stable v1.0.2 CLI release notes](releases/v1.0.2.md), [v1.0.1 patch notes](releases/v1.0.1.md), [v1.0.0 notes](releases/v1.0.0.md) and [changelog](../CHANGELOG.md)
+- [Stable v2.0.0 release notes](releases/v2.0.0.md), [v1.0.2 CLI release notes](releases/v1.0.2.md), [v1.0.1 patch notes](releases/v1.0.1.md), [v1.0.0 notes](releases/v1.0.0.md) and [changelog](../CHANGELOG.md)
 - [Recovery policy](releases/v1-recovery-policy-decision.md) and [paired-backup contract](releases/v1-g10-recovery-contract.md)
 - [Security/threat model](security/V1_THREAT_MODEL.md) and [privileged maintenance boundary](security/wsl-maintenance.md)
 
