@@ -104,6 +104,33 @@ describe('truthful run workspace', () => {
     expect(screen.queryByText('Retained finding')).toBeNull();
   });
 
+  it('shows the run facts in the header without a Details button or tile boxes', async () => {
+    const data = snapshot('completed') as ReturnType<typeof snapshot> & {
+      run: { startedAt?: string; completedAt?: string };
+    };
+    data.run.startedAt = '2026-10-10T09:00:00Z';
+    data.run.completedAt = '2026-10-10T09:10:02Z';
+    workspace(data);
+    // The facts are visible straight away: nothing to press first.
+    expect(await screen.findByText('10m 02s')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Details/ })).toBeNull();
+    const details = document.querySelector('.run-details') as HTMLElement;
+    for (const label of [
+      'Project',
+      'Started',
+      'Duration',
+      'Agents',
+      'Findings',
+      'Evidence',
+      'Run ID',
+    ]) {
+      expect(within(details).getByText(label)).toBeTruthy();
+    }
+    expect(within(details).getByText(`${stacks.length} selected`)).toBeTruthy();
+    // No tile boxes in the header (they overflowed the layout).
+    expect(document.querySelector('header .rs-tile')).toBeNull();
+  });
+
   it('a status query error does not leave a cached connected indicator or claim no active runs', async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     clients.push(client);
@@ -174,12 +201,68 @@ describe('truthful run workspace', () => {
       data.run.configuration.agentStackIds = stacks.slice(0, count);
       data.agentRuns = [];
       render(<RunSummaryPanel snapshot={data} />);
-      expect(screen.getByText(`${count} selected`)).toBeTruthy();
+      expect(screen.getByLabelText(`Selected: ${count}`)).toBeTruthy();
       expect(
         within(screen.getByRole('region', { name: 'Results by agent' })).getAllByRole('button'),
       ).toHaveLength(count);
     },
   );
+  describe('summary tiles', () => {
+    function mixed() {
+      const data = snapshot();
+      data.run.configuration = {
+        agentStackIds: stacks,
+        executionSafeguards: { webAccess: true, toolDownloads: false },
+        profileUsage: {
+          requested: true,
+          usedAgentStackIds: [stacks[0] as string],
+          staleAgentStackIds: [stacks[1] as string],
+          missingAgentStackIds: [],
+        },
+      } as never;
+      data.agentRuns = [
+        { ...data.agentRuns[0]!, status: 'running' },
+        { ...data.agentRuns[1]!, status: 'completed' },
+        { ...data.agentRuns[2]!, status: 'failed' },
+      ];
+      return data;
+    }
+
+    it('shows mode, web access, downloads and profile as labelled tiles, not plain lines', () => {
+      render(<RunSummaryPanel snapshot={mixed()} />);
+      expect(screen.getByLabelText('Mode: FULL QA')).toBeTruthy();
+      expect(screen.getByLabelText('Web access: On')).toBeTruthy();
+      expect(screen.getByLabelText('Tool and SDK downloads: Off')).toBeTruthy();
+      const profile = screen.getByLabelText('Project profile: Used by 1 agent(s)');
+      expect(profile.textContent).toContain('1 without (out of date or not built)');
+      // Each tile carries an icon.
+      expect(screen.getByLabelText('Web access: On').querySelector('svg')).not.toBeNull();
+    });
+
+    it('counts agents by state and makes each count a button that focuses the first such agent', () => {
+      const focus = vi.fn();
+      render(<RunSummaryPanel snapshot={mixed()} onFocusAgent={focus} />);
+      expect(screen.getByLabelText('Selected: 3')).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Running: 1' }));
+      expect(focus).toHaveBeenLastCalledWith(stacks[0]);
+      fireEvent.click(screen.getByRole('button', { name: 'Completed: 1' }));
+      expect(focus).toHaveBeenLastCalledWith(stacks[1]);
+      fireEvent.click(screen.getByRole('button', { name: 'Failed: 1' }));
+      expect(focus).toHaveBeenLastCalledWith(stacks[2]);
+    });
+
+    it('does not offer a button for a count of zero or without a canvas to focus', () => {
+      const data = mixed();
+      data.agentRuns = data.agentRuns.map((agent) => ({ ...agent, status: 'completed' }));
+      render(<RunSummaryPanel snapshot={data} onFocusAgent={vi.fn()} />);
+      expect(screen.queryByRole('button', { name: 'Failed: 0' })).toBeNull();
+      expect(screen.getByLabelText('Failed: 0')).toBeTruthy();
+      cleanup();
+      render(<RunSummaryPanel snapshot={mixed()} />);
+      expect(screen.queryByRole('button', { name: 'Running: 1' })).toBeNull();
+    });
+  });
+
   it('terminal startup failure does not call unstarted agents waiting', () => {
     const data = snapshot('failed');
     data.agentRuns = [];

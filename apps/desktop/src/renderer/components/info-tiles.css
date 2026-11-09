@@ -1,0 +1,260 @@
+/* Icon tiles used by the run summary panel, the run header and the revision details. */
+
+.rs-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.rs-tile {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start; /* buttons centre their content by default */
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 12px;
+  text-align: left;
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease,
+    transform 140ms ease;
+}
+.rs-tile--wide {
+  grid-column: 1 / -1;
+}
+/* Only tiles that do something (a button) react to the pointer. */
+button.rs-tile {
+  cursor: pointer;
+}
+button.rs-tile:hover:not(:disabled),
+button.rs-tile:focus-visible {
+  border-color: var(--border-default);
+  background: var(--bg-panel);
+  transform: translateY(-1px);
+}
+.rs-tile:not(button):hover {
+  border-color: var(--border-default);
+}
+
+.rs-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  background: rgba(160, 190, 160, 0.08);
+  border: 1px solid var(--border-subtle);
+}
+.rs-tile--on .rs-icon,
+.rs-tile--success .rs-icon {
+  color: var(--success);
+  background: rgba(109, 155, 102, 0.12);
+  border-color: rgba(109, 155, 102, 0.35);
+}
+.rs-tile--busy .rs-icon {
+  color: var(--running);
+  background: rgba(212, 192, 11, 0.1);
+  border-color: rgba(212, 192, 11, 0.35);
+}
+.rs-tile--busy .rs-icon svg {
+  animation: rs-pulse 1.4s ease-in-out infinite;
+}
+.rs-tile--danger .rs-icon {
+  color: #d68785;
+  background: rgba(185, 100, 98, 0.12);
+  border-color: rgba(185, 100, 98, 0.4);
+}
+.rs-tile--warn .rs-icon {
+  color: var(--warning);
+  background: rgba(194, 167, 96, 0.12);
+  border-color: rgba(194, 167, 96, 0.4);
+}
+.rs-tile--zero .rs-value {
+  color: var(--text-tertiary);
+}
+@keyframes rs-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rs-tile--busy .rs-icon svg {
+    animation: none;
+  }
+  button.rs-tile:hover:not(:disabled),
+  button.rs-tile:focus-visible {
+    transform: none;
+  }
+}
+
+.rs-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.rs-label {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+.rs-value {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+.rs-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.rs-state--on {
+  color: var(--success);
+}
+.rs-state--off {
+  color: var(--text-tertiary);
+}
+.rs-hint--warn {
+  color: var(--warning);
+}
+
+/* Counts: the number leads, the word sits under it. */
+.rs-count .rs-value {
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The progress track that follows the count tiles needs air above it. */
+.rs-tiles + .result-observation {
+  margin-top: 10px;
+}
+
+/* Long text inside a tile: a path or a sentence rather than a headline value. */
+.rs-path {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.rs-note {
+  font-size: 12.5px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--text-secondary);
+}
+
+/* A row of small tiles (run header): they wrap and keep their natural width. */
+.rs-tiles--row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.rs-tile--compact {
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+}
+.rs-tile--compact .rs-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+}
+.rs-tile--compact .rs-value {
+  font-size: 13px;
+}
+.rs-tile--compact .rs-label {
+  font-size: 10.5px;
+}
+
+/* Revision details under the selector: date, time and name side by side, then the state. */
+.rs-tiles--revision {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+.rs-tiles--revision .rs-tile--wide {
+  grid-column: 1 / -1;
+}
+@media (max-width: 720px) {
+  .rs-tiles--revision {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/*
+ * The run overview panel can be dragged narrow. Rather than letting words break letter by letter,
+ * it adapts to its own width: on/off tiles keep only their coloured icon, and count tiles keep
+ * the icon and the number.
+ */
+.rs-panel {
+  container-type: inline-size;
+  container-name: rs;
+}
+@container rs (max-width: 330px) {
+  .rs-tile {
+    padding: 8px 10px;
+    gap: 8px;
+  }
+  .rs-tile--state {
+    justify-content: center;
+  }
+  .rs-tile--state .rs-text {
+    display: none;
+  }
+  /* With the words gone, colour carries on/off. */
+  .rs-tile--state.rs-tile--on {
+    border-color: rgba(109, 155, 102, 0.45);
+    background: rgba(109, 155, 102, 0.08);
+  }
+  .rs-count .rs-label {
+    display: none;
+  }
+  .rs-count {
+    align-items: center;
+  }
+}
+/* Very narrow: the boxes stay two per row (the on/off pair side by side), just smaller. */
+@container rs (max-width: 210px) {
+  .rs-tiles {
+    gap: 6px;
+  }
+  .rs-tile {
+    padding: 6px;
+    gap: 6px;
+  }
+  .rs-tile .rs-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+  }
+  .rs-tile .rs-label {
+    font-size: 10px;
+    letter-spacing: 0;
+  }
+  .rs-count .rs-value {
+    font-size: 17px;
+  }
+}
+/* Narrower than that, even the icon boxes shrink to fit. */
+@container rs (max-width: 140px) {
+  .rs-tile .rs-icon {
+    width: 20px;
+    height: 20px;
+  }
+  .rs-tile {
+    padding: 5px;
+    gap: 4px;
+  }
+}
