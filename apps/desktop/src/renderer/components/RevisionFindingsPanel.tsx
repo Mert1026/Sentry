@@ -144,11 +144,13 @@ export function RevisionFindingsPanel({
               }}
             >
               <InfoPopover title="Re-testing findings">
-                Select up to {RETEST_LIMIT} findings from an older revision and re-test them on the
-                current project revision. Choose the original reporting agent or all selected
-                agents. For each finding the new run answers only whether it is resolved in this
-                revision and, if it is not, why; it adds no new findings and does not change the
-                original one. Re-testing uses provider budget.
+                {'Select up to ' +
+                  RETEST_LIMIT +
+                  ' findings from an older revision and re-test them on the current project revision. ' +
+                  'Choose the original reporting agent or all selected agents. For each finding the ' +
+                  'new run answers only whether it is resolved in this revision and, if it is not, ' +
+                  'why; it adds no new findings and does not change the original one. Re-testing ' +
+                  'uses provider budget.'}
               </InfoPopover>
               <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <span>Re-test with</span>
@@ -169,7 +171,7 @@ export function RevisionFindingsPanel({
                 {retesting ? 'Starting…' : 'Re-test ' + picked.size + ' selected'}
               </button>
               {picked.size > RETEST_LIMIT ? (
-                <span className="metadata">Pick at most {RETEST_LIMIT}.</span>
+                <span className="metadata">{'Pick at most ' + RETEST_LIMIT + '.'}</span>
               ) : null}
             </div>
           ) : null}
@@ -187,8 +189,10 @@ export function RevisionFindingsPanel({
                     {name(agent.agentStackId)}
                   </span>
                   <span className="metadata">
-                    {agent.runs.length} {agent.runs.length === 1 ? 'run' : 'runs'}, {total}{' '}
-                    {total === 1 ? 'finding' : 'findings'}
+                    {agent.runs.length +
+                      (agent.runs.length === 1 ? ' run, ' : ' runs, ') +
+                      total +
+                      (total === 1 ? ' finding' : ' findings')}
                   </span>
                 </summary>
                 {agent.runs.map((run) => (
