@@ -1,5 +1,5 @@
 import React from 'react';
-import { InfoPopover } from './InfoPopover.js';
+import { InfoPopover, InfoSection } from './InfoPopover.js';
 import { StatusPill } from './ui/StatusPill.js';
 import type { ProjectProfileAgent } from '../../shared/ipc-contract.js';
 
@@ -45,13 +45,28 @@ export function ProjectProfilePanel({
       <div className="project-info-title">
         <h3 className="card-title">Project profile</h3>
         <InfoPopover title="Project profile">
-          Each agent can read this project and write its own orientation notes about its structure,
-          entry points, and build and test commands. A later QA run can give an agent its own notes
-          to reduce repeated reconnaissance. Profiles are tied to the project revision and become
-          out of date when it changes. The notes are unverified context, not findings or verdicts;
-          agents still inspect and test the real code. Building profiles uses provider budget: each
-          selected agent completes a short planning turn, so the total cost depends on the providers
-          and number of agents chosen.
+          <InfoSection title="What the profile is" open>
+            <p>
+              Each agent can read this project and write its own orientation notes about its
+              structure, entry points, and build and test commands.
+            </p>
+          </InfoSection>
+          <InfoSection title="How runs use it">
+            <p>
+              A later QA run can give an agent its own notes to reduce repeated reconnaissance. The
+              notes are unverified context, not findings or verdicts; agents still inspect and test
+              the real code.
+            </p>
+          </InfoSection>
+          <InfoSection title="When it goes out of date">
+            <p>Profiles are tied to the project revision and become out of date when it changes.</p>
+          </InfoSection>
+          <InfoSection title="What it costs">
+            <p>
+              Building profiles uses provider budget: each selected agent completes a short planning
+              turn, so the total cost depends on the providers and number of agents chosen.
+            </p>
+          </InfoSection>
         </InfoPopover>
       </div>
       {stacks.length === 0 ? (
