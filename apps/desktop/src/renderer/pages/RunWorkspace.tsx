@@ -150,7 +150,17 @@ export function RunWorkspace(): React.JSX.Element {
           createdAt: string;
           startedAt?: string;
           completedAt?: string | null;
-          configuration?: { agentStackIds?: string[] };
+          configuration?: {
+            agentStackIds?: string[];
+            retest?: {
+              items: Array<{
+                n: number;
+                findingId: string;
+                title: string;
+                assignedAgentStackIds: string[];
+              }>;
+            };
+          };
         };
         project?: { name?: string };
         revision?: { id?: string };
@@ -563,6 +573,16 @@ export function RunWorkspace(): React.JSX.Element {
                       evidence: data.evidence.filter(
                         (e) => e.agentRunId === selectedAgent.agentRunId,
                       ),
+                      ...(data.run.configuration?.retest === undefined
+                        ? {}
+                        : {
+                            retestItems: data.run.configuration.retest.items.filter((item) =>
+                              item.assignedAgentStackIds.includes(
+                                data.agentRuns.find((a) => a.id === selectedAgent.agentRunId)
+                                  ?.agentStackId ?? '',
+                              ),
+                            ),
+                          }),
                     }}
                   />
                 ) : selectedNode !== undefined ? (

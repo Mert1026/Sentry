@@ -314,3 +314,46 @@ describe('independent partial agent reports', () => {
     },
   );
 });
+
+describe('re-test tab', () => {
+  it('lists each picked finding with resolved, not resolved or undetermined and a summary', () => {
+    const message = (text: string) => ({
+      type: 'agent.message',
+      agentRunId: 'a',
+      timestamp: '2026-11-09T10:00:00.000Z',
+      message: text,
+    });
+    render(
+      <AgentInspector
+        data={{
+          view: makeAgentNodeView({ status: 'completed' }),
+          events: [
+            message('[passed] Retest #1: First — the guard now rejects it'),
+            message('[failed] Retest #2: Second — still crashes in parse()'),
+          ],
+          retestItems: [
+            { n: 1, findingId: 'f1', title: 'First' },
+            { n: 2, findingId: 'f2', title: 'Second' },
+            { n: 3, findingId: 'f3', title: 'Third' },
+          ],
+        }}
+      />,
+    );
+    expect(screen.getByRole('tab', { name: 'Re-test (3)' }).getAttribute('aria-selected')).toBe(
+      'true',
+    );
+    expect(screen.getByLabelText('Resolved')).toBeTruthy();
+    expect(screen.getByLabelText('Not resolved')).toBeTruthy();
+    expect(screen.getByLabelText('Could not determine')).toBeTruthy();
+    expect(screen.getByText('the guard now rejects it')).toBeTruthy();
+    expect(screen.getByText('still crashes in parse()')).toBeTruthy();
+    expect(
+      screen.getByText('1 resolved · 1 not resolved · 1 could not be determined'),
+    ).toBeTruthy();
+  });
+
+  it('adds no tab to an ordinary run', () => {
+    render(<AgentInspector data={{ view: makeAgentNodeView({ status: 'completed' }) }} />);
+    expect(screen.queryByRole('tab', { name: /Re-test/ })).toBeNull();
+  });
+});
