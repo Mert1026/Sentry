@@ -148,6 +148,10 @@ function translateCore(trimmed: string): string {
   const paidAgentCount = /^(\d+) agents? · uses real provider budget\.$/.exec(trimmed);
   if (paidAgentCount !== null)
     return `${paidAgentCount[1]} ${paidAgentCount[1] === '1' ? 'агент' : 'агента'} · изразходва реален бюджет на доставчика.`;
+  const usedBy = /^Used by (\d+) agent\(s\)$/.exec(trimmed);
+  if (usedBy !== null) return `Използван от ${usedBy[1]} ${usedBy[1] === '1' ? 'агент' : 'агента'}`;
+  const withoutProfile = /^(\d+) without \(out of date or not built\)$/.exec(trimmed);
+  if (withoutProfile !== null) return `${withoutProfile[1]} без профил (остарял или несъздаден)`;
   const profileUsed =
     /^Project profile: used by (\d+) agent\(s\)(?:, (\d+) without \(out of date or not built\))?$/.exec(
       trimmed,

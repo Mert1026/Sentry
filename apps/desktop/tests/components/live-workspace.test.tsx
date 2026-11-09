@@ -174,12 +174,68 @@ describe('truthful run workspace', () => {
       data.run.configuration.agentStackIds = stacks.slice(0, count);
       data.agentRuns = [];
       render(<RunSummaryPanel snapshot={data} />);
-      expect(screen.getByText(`${count} selected`)).toBeTruthy();
+      expect(screen.getByLabelText(`Selected: ${count}`)).toBeTruthy();
       expect(
         within(screen.getByRole('region', { name: 'Results by agent' })).getAllByRole('button'),
       ).toHaveLength(count);
     },
   );
+  describe('summary tiles', () => {
+    function mixed() {
+      const data = snapshot();
+      data.run.configuration = {
+        agentStackIds: stacks,
+        executionSafeguards: { webAccess: true, toolDownloads: false },
+        profileUsage: {
+          requested: true,
+          usedAgentStackIds: [stacks[0] as string],
+          staleAgentStackIds: [stacks[1] as string],
+          missingAgentStackIds: [],
+        },
+      } as never;
+      data.agentRuns = [
+        { ...data.agentRuns[0]!, status: 'running' },
+        { ...data.agentRuns[1]!, status: 'completed' },
+        { ...data.agentRuns[2]!, status: 'failed' },
+      ];
+      return data;
+    }
+
+    it('shows mode, web access, downloads and profile as labelled tiles, not plain lines', () => {
+      render(<RunSummaryPanel snapshot={mixed()} />);
+      expect(screen.getByLabelText('Mode: FULL QA')).toBeTruthy();
+      expect(screen.getByLabelText('Web access: On')).toBeTruthy();
+      expect(screen.getByLabelText('Tool and SDK downloads: Off')).toBeTruthy();
+      const profile = screen.getByLabelText('Project profile: Used by 1 agent(s)');
+      expect(profile.textContent).toContain('1 without (out of date or not built)');
+      // Each tile carries an icon.
+      expect(screen.getByLabelText('Web access: On').querySelector('svg')).not.toBeNull();
+    });
+
+    it('counts agents by state and makes each count a button that focuses the first such agent', () => {
+      const focus = vi.fn();
+      render(<RunSummaryPanel snapshot={mixed()} onFocusAgent={focus} />);
+      expect(screen.getByLabelText('Selected: 3')).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Running: 1' }));
+      expect(focus).toHaveBeenLastCalledWith(stacks[0]);
+      fireEvent.click(screen.getByRole('button', { name: 'Completed: 1' }));
+      expect(focus).toHaveBeenLastCalledWith(stacks[1]);
+      fireEvent.click(screen.getByRole('button', { name: 'Failed: 1' }));
+      expect(focus).toHaveBeenLastCalledWith(stacks[2]);
+    });
+
+    it('does not offer a button for a count of zero or without a canvas to focus', () => {
+      const data = mixed();
+      data.agentRuns = data.agentRuns.map((agent) => ({ ...agent, status: 'completed' }));
+      render(<RunSummaryPanel snapshot={data} onFocusAgent={vi.fn()} />);
+      expect(screen.queryByRole('button', { name: 'Failed: 0' })).toBeNull();
+      expect(screen.getByLabelText('Failed: 0')).toBeTruthy();
+      cleanup();
+      render(<RunSummaryPanel snapshot={mixed()} />);
+      expect(screen.queryByRole('button', { name: 'Running: 1' })).toBeNull();
+    });
+  });
+
   it('terminal startup failure does not call unstarted agents waiting', () => {
     const data = snapshot('failed');
     data.agentRuns = [];

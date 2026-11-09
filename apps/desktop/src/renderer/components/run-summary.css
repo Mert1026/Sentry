@@ -1,0 +1,141 @@
+/* Run summary side panel: icon tiles instead of plain metadata lines. */
+
+.rs-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.rs-tile {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start; /* buttons centre their content by default */
+  gap: 10px;
+  min-width: 0;
+  padding: 10px 12px;
+  text-align: left;
+  color: var(--text-primary);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  transition:
+    border-color 140ms ease,
+    background-color 140ms ease,
+    transform 140ms ease;
+}
+.rs-tile--wide {
+  grid-column: 1 / -1;
+}
+/* Only tiles that do something (a button) react to the pointer. */
+button.rs-tile {
+  cursor: pointer;
+}
+button.rs-tile:hover:not(:disabled),
+button.rs-tile:focus-visible {
+  border-color: var(--border-default);
+  background: var(--bg-panel);
+  transform: translateY(-1px);
+}
+.rs-tile:not(button):hover {
+  border-color: var(--border-default);
+}
+
+.rs-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  background: rgba(160, 190, 160, 0.08);
+  border: 1px solid var(--border-subtle);
+}
+.rs-tile--on .rs-icon,
+.rs-tile--success .rs-icon {
+  color: var(--success);
+  background: rgba(109, 155, 102, 0.12);
+  border-color: rgba(109, 155, 102, 0.35);
+}
+.rs-tile--busy .rs-icon {
+  color: var(--running);
+  background: rgba(212, 192, 11, 0.1);
+  border-color: rgba(212, 192, 11, 0.35);
+}
+.rs-tile--busy .rs-icon svg {
+  animation: rs-pulse 1.4s ease-in-out infinite;
+}
+.rs-tile--danger .rs-icon {
+  color: #d68785;
+  background: rgba(185, 100, 98, 0.12);
+  border-color: rgba(185, 100, 98, 0.4);
+}
+.rs-tile--warn .rs-icon {
+  color: var(--warning);
+  background: rgba(194, 167, 96, 0.12);
+  border-color: rgba(194, 167, 96, 0.4);
+}
+.rs-tile--zero .rs-value {
+  color: var(--text-tertiary);
+}
+@keyframes rs-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rs-tile--busy .rs-icon svg {
+    animation: none;
+  }
+  button.rs-tile:hover:not(:disabled),
+  button.rs-tile:focus-visible {
+    transform: none;
+  }
+}
+
+.rs-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.rs-label {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+.rs-value {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+.rs-hint {
+  font-size: 12px;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.rs-state--on {
+  color: var(--success);
+}
+.rs-state--off {
+  color: var(--text-tertiary);
+}
+.rs-hint--warn {
+  color: var(--warning);
+}
+
+/* Counts: the number leads, the word sits under it. */
+.rs-count .rs-value {
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The progress track that follows the count tiles needs air above it. */
+.rs-tiles + .result-observation {
+  margin-top: 10px;
+}

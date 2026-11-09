@@ -28,3 +28,17 @@ describe('Toolchains page labels in Bulgarian', () => {
     expect(translateText('Failed', 'en')).toBe('Failed');
   });
 });
+
+describe('run summary tile labels in Bulgarian', () => {
+  it('translates the tile labels and the profile values', () => {
+    expect(bg('Web access')).toBe('Достъп до интернет');
+    expect(bg('Tool and SDK downloads')).toBe('Изтегляне на инструменти и SDK');
+    expect(bg('Selected')).toBe('Избрани');
+    expect(bg('Running')).toBe('В изпълнение');
+    expect(bg('Used by 1 agent(s)')).toBe('Използван от 1 агент');
+    expect(bg('Used by 3 agent(s)')).toBe('Използван от 3 агента');
+    expect(bg('2 without (out of date or not built)')).toBe(
+      '2 без профил (остарял или несъздаден)',
+    );
+  });
+});
