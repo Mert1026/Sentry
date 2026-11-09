@@ -41,7 +41,40 @@ const STATUS_BG: Readonly<Record<string, string>> = {
   probing: 'проверка',
   connected: 'свързано',
   offline: 'офлайн',
+  queued: 'на опашка',
+  created: 'създадено',
+  preparing: 'подготовка',
+  snapshotting: 'създава се снимка',
+  collecting: 'събиране',
+  canceled: 'прекъснато',
+  cancelling: 'прекъсва се',
+  skipped: 'пропуснато',
+  warning: 'предупреждение',
+  error: 'грешка',
+  pending: 'в изчакване',
+  idle: 'неактивно',
+  inactive: 'неактивно',
+  active: 'активно',
+  unverified: 'непроверено',
+  inconclusive: 'неопределено',
+  passed: 'преминало',
+  fixed: 'поправено',
+  blocked: 'блокирано',
+  thinking: 'обмисляне',
+  stopped: 'спряно',
+  stopping: 'спира се',
+  installed: 'инсталиран',
+  missing: 'липсва',
+  built: 'създаден',
+  building: 'създава се',
+  not_built: 'не е създаден',
+  not_started: 'не е стартиран',
+  stale: 'остарял',
 };
+// "timed_out" and "timed out" are the same status.
+for (const key of Object.keys(STATUS_BG))
+  if (key.includes('_'))
+    (STATUS_BG as Record<string, string>)[key.replace(/_/g, ' ')] = STATUS_BG[key] as string;
 
 function translateDurationUnits(raw: string): string {
   return raw
@@ -111,7 +144,7 @@ function translateCore(trimmed: string): string {
   const assessment = /^(.+) assessment$/.exec(trimmed);
   if (assessment !== null) return `Оценка на ${assessment[1]}`;
 
-  const lowerStatus = STATUS_BG[trimmed.toLowerCase()];
+  const lowerStatus = STATUS_BG[trimmed.toLowerCase().replace(/_/g, ' ')];
   if (lowerStatus !== undefined) {
     return trimmed === trimmed.toUpperCase() && trimmed.length > 1
       ? lowerStatus.toUpperCase()
@@ -237,6 +270,15 @@ function translateCore(trimmed: string): string {
     return `${locationsEvidence[1]} ${locationsEvidence[1] === '1' ? 'място' : 'места'} · ${locationsEvidence[2]} доказателства`;
   const moreLocations = /^\(\+(\d+) more\)$/.exec(trimmed);
   if (moreLocations !== null) return `(+още ${moreLocations[1]})`;
+  const modeRunStatus = /^(full|targeted|simulation) run (.+)$/.exec(trimmed);
+  if (modeRunStatus !== null) {
+    const modes: Record<string, string> = {
+      full: 'Пълно',
+      targeted: 'Целево',
+      simulation: 'Симулация на',
+    };
+    return `${modes[modeRunStatus[1] ?? ''] ?? ''} изпълнение: ${translateCore(modeRunStatus[2] ?? '')}`;
+  }
   const readiness = /^(.+) readiness$/.exec(trimmed);
   if (readiness !== null) return `Готовност на ${readiness[1]}`;
   const installOne = /^Install (.+)\? About (\d+) MB\.$/.exec(trimmed);

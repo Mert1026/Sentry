@@ -41,3 +41,33 @@ describe('text built at run time is translated as a whole sentence', () => {
     expect(bg('Read more')).toBe('Read more');
   });
 });
+
+describe('status words', () => {
+  it('translates every status in raw, spaced and upper-case form', () => {
+    for (const raw of [
+      'queued',
+      'created',
+      'preparing',
+      'snapshotting',
+      'collecting',
+      'skipped',
+      'cancelling',
+      'pending',
+      'inconclusive',
+      'timed_out',
+      'agents_running',
+      'not_started',
+    ]) {
+      const spaced = raw.replace(/_/g, ' ');
+      for (const form of [raw, spaced, spaced.toUpperCase()]) expect(bg(form), form).not.toBe(form);
+    }
+    expect(bg('QUEUED')).toBe('НА ОПАШКА');
+    expect(bg('Timed out')).toBe('Изтекло време');
+    expect(bg('timed_out')).toBe('изтекло време');
+  });
+
+  it('translates the run label in History', () => {
+    expect(bg('full run completed')).toBe('Пълно изпълнение: завършено');
+    expect(bg('targeted run timed out')).toBe('Целево изпълнение: изтекло време');
+  });
+});
