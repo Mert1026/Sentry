@@ -18,7 +18,7 @@ export function PipelineNode({ data }: NodeProps): React.JSX.Element {
         nodeStateClass(status) +
         ((data['selected'] as boolean) ? ' selected' : '')
       }
-      aria-label={label + ' ' + status}
+      aria-label={t(label) + ' ' + t(status.replace(/_/g, ' '))}
     >
       <Handle type="target" position={Position.Top} />
       <div className="sys-kind">
