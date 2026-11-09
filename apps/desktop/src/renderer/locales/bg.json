@@ -764,5 +764,8 @@
   "Not resolved": "Не е решена",
   "Could not determine": "Не може да се определи",
   "Re-test": "Повторна проверка",
-  "The agent did not report a result for this finding.": "Агентът не докладва резултат за тази констатация."
+  "The agent did not report a result for this finding.": "Агентът не докладва резултат за тази констатация.",
+  "Passed": "Успешна",
+  "Not passed": "Неуспешна",
+  "Could not complete": "Не можа да се завърши"
 }

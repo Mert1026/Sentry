@@ -342,9 +342,9 @@ describe('re-test tab', () => {
     expect(screen.getByRole('tab', { name: 'Re-test (3)' }).getAttribute('aria-selected')).toBe(
       'true',
     );
-    expect(screen.getByLabelText('Resolved')).toBeTruthy();
-    expect(screen.getByLabelText('Not resolved')).toBeTruthy();
-    expect(screen.getByLabelText('Could not determine')).toBeTruthy();
+    expect(screen.getByText('Passed')).toBeTruthy();
+    expect(screen.getByText('Not passed')).toBeTruthy();
+    expect(screen.getByText('Could not complete')).toBeTruthy();
     expect(screen.getByText('the guard now rejects it')).toBeTruthy();
     expect(screen.getByText('still crashes in parse()')).toBeTruthy();
     expect(

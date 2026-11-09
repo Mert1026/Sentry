@@ -5,8 +5,6 @@ import {
   AlertTriangle,
   Brain,
   Bug,
-  Check,
-  CircleHelp,
   Cpu,
   Eye,
   FileText,
@@ -14,7 +12,6 @@ import {
   FlaskConical,
   MessageSquare,
   Terminal,
-  X,
 } from 'lucide-react';
 import type { AgentNodeView, TimelineItem } from '../lib/types.js';
 import { retestRows, type RetestItemInfo } from '../lib/retest-results.js';
@@ -216,25 +213,26 @@ function RetestTab({
       <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
         {rows.map((row) => (
           <li key={row.n} className="card" style={{ margin: '0 0 8px', padding: 10 }}>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-              {row.answer === 'resolved' ? (
-                <Check size={18} color="var(--status-success, #1a7f37)" aria-label="Resolved" />
-              ) : row.answer === 'not_resolved' ? (
-                <X size={18} color="var(--status-danger, #cf222e)" aria-label="Not resolved" />
-              ) : (
-                <CircleHelp
-                  size={18}
-                  color="var(--status-warning, #9a6700)"
-                  aria-label="Could not determine"
-                />
-              )}
-              <div>
-                <strong>{row.title}</strong>
-                <p className="metadata" style={{ margin: '4px 0 0' }}>
-                  {row.reason}
-                </p>
-              </div>
-            </div>
+            <StatusPill
+              status={
+                row.answer === 'resolved'
+                  ? 'completed'
+                  : row.answer === 'not_resolved'
+                    ? 'failed'
+                    : 'partial'
+              }
+              label={
+                row.answer === 'resolved'
+                  ? 'Passed'
+                  : row.answer === 'not_resolved'
+                    ? 'Not passed'
+                    : 'Could not complete'
+              }
+            />
+            <strong style={{ display: 'block', marginTop: 8 }}>{row.title}</strong>
+            <p className="metadata" style={{ margin: '4px 0 0' }}>
+              {row.reason}
+            </p>
           </li>
         ))}
       </ul>
