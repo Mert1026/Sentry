@@ -664,10 +664,11 @@ export function FindingCard({
       <div className="finding-title">{finding.title}</div>
       {preview !== undefined ? <div className="body-secondary">{preview}</div> : null}
       <div className="metadata">
-        {locationCount > 0
+        {(locationCount > 0
           ? locationCount + ' location' + (locationCount === 1 ? '' : 's') + ' · '
-          : ''}
-        {linkedCount} evidence
+          : '') +
+          linkedCount +
+          ' evidence'}
       </div>
       {finding.locations !== undefined && finding.locations.length > 0 ? (
         <div
