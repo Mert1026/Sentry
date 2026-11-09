@@ -748,5 +748,18 @@
   "Time": "Час",
   "Older revision": "По-стара ревизия",
   "Cancellation": "Прекъсване",
-  "Selected revision": "Избрана ревизия"
+  "Selected revision": "Избрана ревизия",
+  "Credential": "Ключ",
+  "Binary": "Изпълним файл",
+  "Saved": "Запазен",
+  "Missing": "Липсва",
+  "Available": "Наличен",
+  "Verified": "Потвърдена",
+  "Not tested": "Не е тествана",
+  "Note": "Бележка",
+  "Source: environment": "Източник: среда",
+  "Source: managed": "Източник: управляван",
+  "Source: managed, Sentry-managed installation": "Източник: управлявана инсталация на Sentry",
+  "Source: path": "Източник: PATH",
+  "Source: explicit": "Източник: изрично зададен"
 }
