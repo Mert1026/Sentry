@@ -461,6 +461,64 @@ describe('managed project lifecycle', () => {
     f.database.close();
   });
 
+  it('does not finish a deletion through a link and keeps the operation', async () => {
+    const f = await fixture((stage) => {
+      if (stage === 'after_delete_committed') throw new Error('injected process exit');
+    });
+    const added = await f.manager.addProject(f.source);
+    const paths = projectDataPaths(f.dataRoot, added.project.id);
+    await expect(f.manager.deleteProject(added.project.id)).rejects.toMatchObject({
+      code: 'PROJECT_DELETE_FAILED',
+    });
+    const tombstone = paths.root + '.deleting';
+    const outside = join(f.root, 'outside');
+    await mkdir(outside);
+    await writeFile(join(outside, 'precious.txt'), 'keep');
+    await rm(tombstone, { recursive: true, force: true });
+    try {
+      await symlink(outside, tombstone, 'dir');
+    } catch {
+      f.database.close();
+      return; // links need privileges on Windows; covered on Linux CI
+    }
+    f.lease.release();
+    const observer = new RuntimeInstanceLease(f.repository, { autoHeartbeat: false });
+    observer.start();
+    await new ProjectManager(f.dataRoot, f.repository, {
+      runtimeLease: observer,
+    }).recoverAbandonedOperations(observer);
+    expect(await readFile(join(outside, 'precious.txt'), 'utf8')).toBe('keep');
+    expect(f.repository.listRuntimeOperations()).toHaveLength(1);
+    observer.release();
+    f.database.close();
+  });
+
+  it('rejects an empty or relative source instead of importing the working directory', async () => {
+    const f = await fixture();
+    await expect(f.manager.addProject('')).rejects.toMatchObject({
+      code: 'PROJECT_SOURCE_NOT_FOUND',
+    });
+    await expect(f.manager.addProject('relative/path')).rejects.toMatchObject({
+      code: 'PROJECT_SOURCE_NOT_FOUND',
+    });
+    expect(f.repository.listProjects()).toHaveLength(0);
+    f.database.close();
+  });
+
+  it('keeps a regular file named like a generated folder but still skips the folder', async () => {
+    const f = await fixture();
+    await writeFile(join(f.source, 'build'), 'echo build');
+    await writeFile(join(f.source, 'coverage'), 'notes');
+    const added = await f.manager.addProject(f.source);
+    const paths = projectDataPaths(f.dataRoot, added.project.id);
+    expect(await readFile(join(paths.workingCopy, 'build'), 'utf8')).toContain('echo build');
+    expect(await readFile(join(paths.workingCopy, 'coverage'), 'utf8')).toBe('notes');
+    await expect(stat(join(paths.workingCopy, 'node_modules'))).rejects.toMatchObject({
+      code: 'ENOENT',
+    });
+    f.database.close();
+  });
+
   describe('overlapping updates', () => {
     it('keeps each update its own rollback backup', async () => {
       let releaseFirst!: () => void;

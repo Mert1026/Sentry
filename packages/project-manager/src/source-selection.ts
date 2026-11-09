@@ -16,14 +16,21 @@ const GENERATED_DIRECTORIES = new Set([
   '.nuxt',
 ]);
 
-export function excludeGeneratedSource(relativePath: string): boolean {
-  if (matchImportExclusion(relativePath) || relativePath.toLowerCase().endsWith('.tsbuildinfo'))
+export function excludeGeneratedSource(
+  relativePath: string,
+  entryType?: 'file' | 'directory' | 'symlink',
+): boolean {
+  // A regular file that only shares a name with a generated folder (a script called `build`)
+  // is source and is kept; symlinks and folders with those names are still left out.
+  if (
+    matchImportExclusion(relativePath, undefined, entryType) ||
+    relativePath.toLowerCase().endsWith('.tsbuildinfo')
+  )
     return true;
-  return relativePath
-    .replaceAll('\\', '/')
-    .split('/')
-    .some((segment) => {
-      const name = segment.toLowerCase();
-      return GENERATED_DIRECTORIES.has(name) || name.startsWith('.pytest-tmp-');
-    });
+  const segments = relativePath.replaceAll('\\', '/').split('/');
+  return segments.some((segment, index) => {
+    if (index === segments.length - 1 && entryType === 'file') return false;
+    const name = segment.toLowerCase();
+    return GENERATED_DIRECTORIES.has(name) || name.startsWith('.pytest-tmp-');
+  });
 }

@@ -2,7 +2,13 @@ import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { basename, dirname, resolve } from 'node:path';
 import type { AgentRunId, ProjectId, QARunId, SnapshotId } from '@qa/shared';
 import type { HarnessWorkspace } from '@qa/schemas';
-import { agentWorkspacePath, copyTree, resolveInside, type CopyProgress } from '@qa/persistence';
+import {
+  agentWorkspacePath,
+  assertNoSymlinkBelow,
+  copyTree,
+  resolveInside,
+  type CopyProgress,
+} from '@qa/persistence';
 
 export const BASELINE_HASHES_FILENAME = 'baseline-hashes.json' as const;
 
@@ -48,6 +54,8 @@ export class WorkspaceFactory {
     );
     const workspaceRoot = dirname(runtimePath);
     const sentryOwned = resolve(workspaceRoot, '.sentry-workspace');
+    // The removal below must never follow a link planted in the data folder.
+    await assertNoSymlinkBelow(this.dataRoot, workspaceRoot);
     await rm(workspaceRoot, { recursive: true, force: true });
     await copyTree(input.workingCopyPath, runtimePath, {
       preferReflink: true,
@@ -76,6 +84,9 @@ export class WorkspaceFactory {
       return { cleaned: false, warning: 'Workspace retained by configuration' };
     try {
       const safePath = resolveInside(this.dataRoot, workspace.runtimePath);
+      // An empty or root-level path resolves to the data folder itself; never delete that.
+      if (safePath === resolve(this.dataRoot)) throw new Error('refusing to remove the data root');
+      await assertNoSymlinkBelow(this.dataRoot, safePath);
       const cleanupPath =
         basename(safePath) === 'project' && basename(dirname(safePath)) === 'workspace'
           ? dirname(safePath)

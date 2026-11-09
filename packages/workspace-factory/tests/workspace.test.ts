@@ -19,6 +19,46 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((value) => rm(value, { recursive: true, force: true })));
 });
 
+describe('WorkspaceFactory containment', () => {
+  it('never removes the data root for an empty or root-level runtime path', async () => {
+    const dataRoot = await mkdtemp(join(tmpdir(), 'sentry-workspaces-'));
+    roots.push(dataRoot);
+    await writeFile(join(dataRoot, 'keep.txt'), 'x');
+    const factory = new WorkspaceFactory(dataRoot, false);
+    for (const runtimePath of ['', '.', dataRoot]) {
+      const result = await factory.cleanup({
+        runtimePath,
+        snapshotId: 'snap_x' as never,
+        writable: true,
+        isolated: true,
+      });
+      expect(result.cleaned).toBe(false);
+    }
+    expect(await readFile(join(dataRoot, 'keep.txt'), 'utf8')).toBe('x');
+  });
+
+  it('refuses to clean up through a link', async () => {
+    const dataRoot = await mkdtemp(join(tmpdir(), 'sentry-workspaces-'));
+    roots.push(dataRoot);
+    const outside = await mkdtemp(join(tmpdir(), 'sentry-outside-'));
+    roots.push(outside);
+    await writeFile(join(outside, 'precious.txt'), 'keep');
+    try {
+      await symlink(outside, join(dataRoot, 'link'), 'dir');
+    } catch {
+      return; // links need privileges on Windows; covered on Linux CI
+    }
+    const result = await new WorkspaceFactory(dataRoot, false).cleanup({
+      runtimePath: join(dataRoot, 'link', 'workspace', 'project'),
+      snapshotId: 'snap_x' as never,
+      writable: true,
+      isolated: true,
+    });
+    expect(result.cleaned).toBe(false);
+    expect(await readFile(join(outside, 'precious.txt'), 'utf8')).toBe('keep');
+  });
+});
+
 describe('WorkspaceFactory', () => {
   it('creates independently writable copies without mutable hardlinks', async () => {
     const dataRoot = await mkdtemp(join(tmpdir(), 'sentry-workspaces-'));
