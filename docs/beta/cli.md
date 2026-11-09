@@ -125,7 +125,7 @@ sentry cli toolchain install <pack-id> <version>
   (`--retest-with all` gives every finding to every chosen agent). A retest
   stores no findings of its own; `project findings` lists, per retest run, each
   earlier finding as `PASSED (resolved)`, `NOT PASSED (still there)` or `COULD
-  NOT COMPLETE`, with the agent's reason (`--json` carries `verdict`:
+NOT COMPLETE`, with the agent's reason (`--json` carries `verdict`:
   `no_longer_reproduces`, `still_reproduces`, `cannot_tell`).
 - `chatgpt` is opt-in (API key or signed-in ChatGPT account); omitting
   `--agents` still means OpenCode, DeepSeek and GLM.
