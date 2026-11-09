@@ -117,6 +117,8 @@ function translateCore(trimmed: string): string {
   const execLine = translateExecutionRuntimeLine(trimmed);
   if (execLine !== undefined) return execLine;
 
+  // A bare duration such as "10m 02s" or "1h 05m" (the run header shows the value on its own).
+  if (/^\d+[hm] \d{2}[ms]$/.test(trimmed)) return translateDurationUnits(trimmed);
   if (trimmed.startsWith('Started ')) {
     return 'Стартирано ' + trimmed.slice('Started '.length);
   }

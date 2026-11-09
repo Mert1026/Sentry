@@ -742,5 +742,11 @@
   "Running": "В изпълнение",
   "Show the first running agent on the canvas": "Покажи първия работещ агент на платното",
   "Show the first completed agent on the canvas": "Покажи първия завършил агент на платното",
-  "Failed, timed out or interrupted: show the first one on the canvas": "Неуспешни, изтекли или прекъснати: покажи първия на платното"
+  "Failed, timed out or interrupted: show the first one on the canvas": "Неуспешни, изтекли или прекъснати: покажи първия на платното",
+  "Duration": "Продължителност",
+  "Date": "Дата",
+  "Time": "Час",
+  "Older revision": "По-стара ревизия",
+  "Cancellation": "Прекъсване",
+  "Selected revision": "Избрана ревизия"
 }

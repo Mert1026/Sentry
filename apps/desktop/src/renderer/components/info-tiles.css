@@ -1,4 +1,4 @@
-/* Run summary side panel: icon tiles instead of plain metadata lines. */
+/* Icon tiles used by the run summary panel, the run header and the revision details. */
 
 .rs-tiles {
   display: grid;
@@ -138,4 +138,43 @@ button.rs-tile:focus-visible {
 /* The progress track that follows the count tiles needs air above it. */
 .rs-tiles + .result-observation {
   margin-top: 10px;
+}
+
+/* A row of small tiles (run header): they wrap and keep their natural width. */
+.rs-tiles--row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.rs-tile--compact {
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+}
+.rs-tile--compact .rs-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+}
+.rs-tile--compact .rs-value {
+  font-size: 13px;
+}
+.rs-tile--compact .rs-label {
+  font-size: 10.5px;
+}
+
+/* Revision details under the selector: date, time and name side by side, then the state. */
+.rs-tiles--revision {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+.rs-tiles--revision .rs-tile--wide {
+  grid-column: 1 / -1;
+}
+@media (max-width: 720px) {
+  .rs-tiles--revision {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }

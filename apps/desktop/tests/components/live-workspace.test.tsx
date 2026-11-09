@@ -104,6 +104,22 @@ describe('truthful run workspace', () => {
     expect(screen.queryByText('Retained finding')).toBeNull();
   });
 
+  it('shows start time, duration, agents, findings and evidence as labelled tiles in the header', async () => {
+    const data = snapshot('completed') as ReturnType<typeof snapshot> & {
+      run: { startedAt?: string; completedAt?: string };
+    };
+    data.run.startedAt = '2026-10-10T09:00:00Z';
+    data.run.completedAt = '2026-10-10T09:10:02Z';
+    workspace(data);
+    expect(await screen.findByLabelText(/^Started: /)).toBeTruthy();
+    expect(screen.getByLabelText('Duration: 10m 02s')).toBeTruthy();
+    expect(screen.getByLabelText(`Agents: ${stacks.length} selected`)).toBeTruthy();
+    expect(screen.getByLabelText('Findings: 1')).toBeTruthy();
+    expect(screen.getByLabelText('Evidence: 0')).toBeTruthy();
+    // Each tile carries an icon.
+    expect(screen.getByLabelText('Duration: 10m 02s').querySelector('svg')).not.toBeNull();
+  });
+
   it('a status query error does not leave a cached connected indicator or claim no active runs', async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     clients.push(client);

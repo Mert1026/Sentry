@@ -6,6 +6,8 @@ import { ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { RunCanvas } from '../components/RunCanvas.js';
 import { AgentInspector } from '../components/AgentInspector.js';
 import { RunSummaryPanel } from '../components/RunSummaryPanel.js';
+import { InfoTile } from '../components/InfoTile.js';
+import { Ban, Clock, FileSearch, FlaskConical, Timer, Users } from 'lucide-react';
 import { CopyId } from '../components/CopyId.js';
 import { StatusPill } from '../components/ui/StatusPill.js';
 import { CollapsibleSection } from '../components/ui/CollapsibleSection.js';
@@ -372,26 +374,47 @@ export function RunWorkspace(): React.JSX.Element {
             ) : null}
           </div>
         </div>
-        <div className="run-meta-row">
-          <span title={'Started ' + String(data.run.startedAt ?? data.run.createdAt)}>
-            {'Started ' + formatClock(data.run.startedAt ?? data.run.createdAt)}
-          </span>
-          <span>
-            {'Duration ' +
-              formatDuration(data.run.startedAt ?? data.run.createdAt, data.run.completedAt)}
-          </span>
-          <span>
-            {String(data.run.configuration?.agentStackIds?.length ?? data.agentRuns.length) +
-              ' selected agents'}
-          </span>
-          <span>
-            {String(data.findings.length) +
-              (data.findings.length === 1 ? ' finding' : ' findings') +
-              ' · ' +
-              String(data.evidence.length) +
-              ' evidence'}
-          </span>
-          {cancelState !== undefined ? <span>{'Cancellation: ' + cancelState}</span> : null}
+        <div className="rs-tiles--row run-meta-row" style={{ marginTop: 10 }}>
+          <InfoTile
+            icon={Clock}
+            label="Started"
+            value={formatClock(data.run.startedAt ?? data.run.createdAt)}
+            title={'Started ' + String(data.run.startedAt ?? data.run.createdAt)}
+            compact
+          />
+          <InfoTile
+            icon={Timer}
+            label="Duration"
+            value={formatDuration(data.run.startedAt ?? data.run.createdAt, data.run.completedAt)}
+            tone={data.run.completedAt == null ? 'busy' : undefined}
+            compact
+          />
+          <InfoTile
+            icon={Users}
+            label="Agents"
+            value={
+              String(data.run.configuration?.agentStackIds?.length ?? data.agentRuns.length) +
+              ' selected'
+            }
+            compact
+          />
+          <InfoTile
+            icon={FileSearch}
+            label="Findings"
+            value={String(data.findings.length)}
+            tone={data.findings.length > 0 ? 'warn' : 'zero'}
+            compact
+          />
+          <InfoTile
+            icon={FlaskConical}
+            label="Evidence"
+            value={String(data.evidence.length)}
+            tone={data.evidence.length > 0 ? 'success' : 'zero'}
+            compact
+          />
+          {cancelState !== undefined ? (
+            <InfoTile icon={Ban} label="Cancellation" value={cancelState} tone="danger" compact />
+          ) : null}
         </div>
         <CollapsibleSection title="Details">
           <dl className="kv" style={{ marginTop: 8 }}>
