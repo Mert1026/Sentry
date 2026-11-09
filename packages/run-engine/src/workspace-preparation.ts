@@ -54,6 +54,8 @@ export async function discoverOfflineCache(
 export async function removeBuildCaches(root: string, signal?: AbortSignal): Promise<number> {
   signal?.throwIfAborted();
   let removed = 0;
+  // The folder itself may be a link to somewhere else; only real folders are cleaned.
+  if ((await lstat(root)).isSymbolicLink()) return 0;
   for (const entry of await readdir(root, { withFileTypes: true })) {
     signal?.throwIfAborted();
     const path = join(root, entry.name);

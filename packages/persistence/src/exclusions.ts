@@ -52,6 +52,7 @@ const EXCLUDED_DIRECTORIES = lowercaseVariants(DIRECTORY_NAMES);
 export function matchImportExclusion(
   relativePath: string,
   exclusions: ImportExclusionSet = DEFAULT_IMPORT_EXCLUSIONS,
+  entryType?: 'file' | 'directory' | 'symlink',
 ): boolean {
   const normalized = relativePath.replaceAll('\\', '/');
   const segments = normalized.split('/').filter((part) => part.length > 0);
@@ -66,7 +67,12 @@ export function matchImportExclusion(
         );
   for (let index = 0; index < segments.length; index += 1) {
     const segment = segments[index] as string;
-    if (directorySet.has(segment) || directorySet.has(segment.toLowerCase())) return true;
+    // The folder-name rules are for folders. A regular file that merely shares a name (a script
+    // called `build`, a file called `coverage`) is project content and must not vanish silently.
+    const isLast = index === segments.length - 1;
+    const folderRuleApplies = !(isLast && entryType === 'file');
+    if (folderRuleApplies && (directorySet.has(segment) || directorySet.has(segment.toLowerCase())))
+      return true;
     if (index === segments.length - 1) {
       if ((FILE_NAMES as readonly string[]).includes(segment)) return true;
       const lower = segment.toLowerCase();

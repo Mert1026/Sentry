@@ -8,7 +8,7 @@ import {
   type ToolchainNeeds,
 } from '@qa/schemas';
 import type { AgentStackId, ProjectId } from '@qa/shared';
-import { projectDataPaths, resolveInside } from './paths.js';
+import { assertNoSymlinkBelow, projectDataPaths, resolveInside } from './paths.js';
 
 /**
  * One JSON file per project and agent stack, next to (never inside) the working
@@ -29,9 +29,9 @@ class AgentProjectJsonStore<T extends { projectId: ProjectId; agentStackId: Agen
   /** The stored value, or undefined when missing or unreadable (never throws on bad content). */
   async read(projectId: ProjectId, agentStackId: AgentStackId): Promise<T | undefined> {
     try {
-      const parsed = this.schema.safeParse(
-        JSON.parse(await readFile(this.fileFor(projectId, agentStackId), 'utf8')),
-      );
+      const file = this.fileFor(projectId, agentStackId);
+      await assertNoSymlinkBelow(this.dataRoot, file);
+      const parsed = this.schema.safeParse(JSON.parse(await readFile(file, 'utf8')));
       return parsed.success &&
         parsed.data.projectId === projectId &&
         parsed.data.agentStackId === agentStackId
@@ -45,14 +45,18 @@ class AgentProjectJsonStore<T extends { projectId: ProjectId; agentStackId: Agen
   async write(value: T): Promise<void> {
     const valid = this.schema.parse(value);
     const target = this.fileFor(valid.projectId, valid.agentStackId);
+    await assertNoSymlinkBelow(this.dataRoot, dirname(target));
     await mkdir(dirname(target), { recursive: true });
+    await assertNoSymlinkBelow(this.dataRoot, target);
     const temporary = target + '.tmp';
     await writeFile(temporary, JSON.stringify(valid), 'utf8');
     await rename(temporary, target);
   }
 
   async remove(projectId: ProjectId, agentStackId: AgentStackId): Promise<void> {
-    await rm(this.fileFor(projectId, agentStackId), { force: true });
+    const file = this.fileFor(projectId, agentStackId);
+    await assertNoSymlinkBelow(this.dataRoot, file);
+    await rm(file, { force: true });
   }
 }
 

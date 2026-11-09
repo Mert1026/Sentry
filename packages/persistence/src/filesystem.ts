@@ -27,7 +27,10 @@ export interface CopyProgress {
 export interface CopyTreeOptions {
   readonly concurrency?: number;
   readonly signal?: AbortSignal;
-  readonly exclude?: (relativePath: string) => boolean;
+  readonly exclude?: (
+    relativePath: string,
+    entryType?: 'file' | 'directory' | 'symlink',
+  ) => boolean;
   readonly preferReflink?: boolean;
   readonly onProgress?: (progress: CopyProgress) => void;
   readonly symlinkPolicy?: 'preserve' | 'inert-unsafe';
@@ -69,7 +72,10 @@ async function sortedNames(directory: string): Promise<string[]> {
 export interface WalkTreeOptions {
   readonly signal?: AbortSignal;
   /** Skip entries whose relative path matches; excluded directories are pruned (never descended). */
-  readonly exclude?: (relativePath: string) => boolean;
+  readonly exclude?: (
+    relativePath: string,
+    entryType?: 'file' | 'directory' | 'symlink',
+  ) => boolean;
 }
 
 /** Deterministic lstat traversal. Symlinks are yielded and never followed. */
@@ -131,7 +137,12 @@ export async function* walkTree(
       const absolutePath = join(directory, name);
       const stats = await lstat(absolutePath);
       const relativePath = relative(absoluteRoot, absolutePath).replaceAll('\\', '/');
-      if (exclude?.(relativePath) === true) continue;
+      const entryType = stats.isSymbolicLink()
+        ? 'symlink'
+        : stats.isDirectory()
+          ? 'directory'
+          : 'file';
+      if (exclude?.(relativePath, entryType) === true) continue;
       // Snapshot paths use forward slashes only. On POSIX a backslash is a legal file name
       // character, and turning it into a separator would rewrite the name (or, for `..\x`, climb
       // out of the destination), so such entries are refused instead of silently altered.
@@ -278,7 +289,12 @@ export interface ScanTreeResult extends TreeStats {
 export async function estimateTree(
   root: string,
   signal?: AbortSignal,
-  options: { readonly exclude?: (relativePath: string) => boolean } = {},
+  options: {
+    readonly exclude?: (
+      relativePath: string,
+      entryType?: 'file' | 'directory' | 'symlink',
+    ) => boolean;
+  } = {},
 ): Promise<TreeStats> {
   let fileCount = 0;
   let directoryCount = 0;
@@ -302,7 +318,10 @@ export async function scanTree(
   options: {
     readonly signal?: AbortSignal;
     readonly onEntry?: (entry: SnapshotFileEntry, canonicalLine: string) => void | Promise<void>;
-    readonly exclude?: (relativePath: string) => boolean;
+    readonly exclude?: (
+      relativePath: string,
+      entryType?: 'file' | 'directory' | 'symlink',
+    ) => boolean;
   } = {},
 ): Promise<ScanTreeResult> {
   const aggregate = createHash('sha256');

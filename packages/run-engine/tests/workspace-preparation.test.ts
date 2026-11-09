@@ -1,8 +1,12 @@
-import { chmod, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createWorkspacePreparer, discoverOfflineCache } from '../src/workspace-preparation.js';
+import {
+  createWorkspacePreparer,
+  discoverOfflineCache,
+  removeBuildCaches,
+} from '../src/workspace-preparation.js';
 import type { SandboxBackend, SandboxCommandInput } from '../src/sandbox.js';
 
 const roots: string[] = [];
@@ -172,5 +176,22 @@ describe('private workspace preparation', () => {
     expect(installs[0]!.cwd).not.toBe(installs[1]!.cwd);
     expect(commands.some((command) => command.executable.endsWith('/cp'))).toBe(false);
     expect(disposed).toBe(2);
+  });
+});
+
+describe('removeBuildCaches', () => {
+  it('does nothing when the workspace folder is itself a link', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'sentry-cache-link-'));
+    roots.push(root);
+    const outside = join(root, 'outside');
+    await mkdir(outside);
+    await writeFile(join(outside, 'tsconfig.tsbuildinfo'), '{}');
+    try {
+      await symlink(outside, join(root, 'workspace'), 'dir');
+    } catch {
+      return; // links need privileges on Windows; covered on Linux CI
+    }
+    expect(await removeBuildCaches(join(root, 'workspace'))).toBe(0);
+    await expect(stat(join(outside, 'tsconfig.tsbuildinfo'))).resolves.toBeDefined();
   });
 });
