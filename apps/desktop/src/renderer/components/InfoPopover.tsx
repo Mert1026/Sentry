@@ -62,3 +62,21 @@ export function InfoPopover({
     </>
   );
 }
+
+/** One titled box inside an information popover; collapsed by default unless `open`. */
+export function InfoSection({
+  title,
+  open = false,
+  children,
+}: {
+  title: string;
+  open?: boolean;
+  children: React.ReactNode;
+}): React.JSX.Element {
+  return (
+    <details className="info-section" open={open}>
+      <summary>{title}</summary>
+      <div className="info-section-body">{children}</div>
+    </details>
+  );
+}

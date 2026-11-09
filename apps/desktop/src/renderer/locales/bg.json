@@ -763,5 +763,13 @@
   "Source: managed": "Източник: управляван",
   "Source: managed, Sentry-managed installation": "Източник: управлявана инсталация на Sentry",
   "Source: path": "Източник: PATH",
-  "Source: explicit": "Източник: изрично зададен"
+  "Source: explicit": "Източник: изрично зададен",
+  "What the profile is": "Какво е профилът",
+  "How runs use it": "Как го използват изпълненията",
+  "When it goes out of date": "Кога остарява",
+  "What it costs": "Колко струва",
+  "Each agent can read this project and write its own orientation notes about its structure, entry points, and build and test commands.": "Всеки агент може да прочете проекта и да запише собствени бележки за структурата, началните точки и командите за компилиране и тестване.",
+  "A later QA run can give an agent its own notes to reduce repeated reconnaissance. The notes are unverified context, not findings or verdicts; agents still inspect and test the real code.": "Следващо QA изпълнение може да върне на агента неговите бележки, за да намали повторното проучване. Бележките са непроверен контекст, а не констатации или присъди; агентите продължават да проверяват и тестват реалния код.",
+  "Profiles are tied to the project revision and become out of date when it changes.": "Профилите са обвързани с ревизията на проекта и остаряват, когато тя се промени.",
+  "Building profiles uses provider budget: each selected agent completes a short planning turn, so the total cost depends on the providers and number of agents chosen.": "Създаването на профили изразходва бюджет при доставчика: всеки избран агент изпълнява кратък планиращ ход, така че общата цена зависи от доставчиците и броя агенти."
 }
