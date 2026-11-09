@@ -402,6 +402,19 @@ export function openAiAccountMode(
   return provider === 'openai' && (environment['SENTRY_OPENAI_AUTH'] ?? '').trim() === 'account';
 }
 
+/** Reasoning efforts Sentry offers; every OpenAI model OpenCode lists accepts these as variants. */
+export const OPENCODE_VARIANTS = ['low', 'medium', 'high'] as const;
+
+/** The reasoning-effort variant for this run, or undefined for the provider default. */
+export function openCodeVariant(
+  environment: NodeJS.ProcessEnv = process.env,
+): (typeof OPENCODE_VARIANTS)[number] | undefined {
+  const value = (environment['SENTRY_OPENCODE_VARIANT'] ?? '').trim().toLowerCase();
+  return (OPENCODE_VARIANTS as readonly string[]).includes(value)
+    ? (value as (typeof OPENCODE_VARIANTS)[number])
+    : undefined;
+}
+
 /** Placeholder passed to the localhost proxy in account mode (no real secret exists in the harness). */
 export const OPENAI_ACCOUNT_PROXY_KEY = 'chatgpt-account-session' as const;
 

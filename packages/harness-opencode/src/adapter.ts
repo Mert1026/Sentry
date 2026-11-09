@@ -87,6 +87,7 @@ import {
   assertSupportedOpenCodeProvider,
   credentialEnvForProvider,
   openAiAccountMode,
+  openCodeVariant,
   doctorOpenCode,
   markOpenCodeRuntimeVerified,
   openCodeCatalogMode,
@@ -1106,6 +1107,9 @@ export class OpenCodeHarnessAdapter implements HarnessAdapter {
           cwd: request.workspace.runtimePath,
           environment: turnBase,
           modelId: this.runtime.effectiveModelId,
+          ...(openCodeVariant(this.hostEnvironment) === undefined
+            ? {}
+            : { variant: openCodeVariant(this.hostEnvironment) as string }),
           shutdownTimeoutMs: this.shutdownTimeoutMs,
           launcher,
         });

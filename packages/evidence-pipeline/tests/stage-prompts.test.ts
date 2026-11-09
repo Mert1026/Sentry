@@ -226,3 +226,21 @@ describe('missing tools ladder', () => {
     expect(report).toContain('cannot make a check passed');
   });
 });
+
+describe('authorized defensive QA framing', () => {
+  it('tells every agent, up front, that the probing is the owner’s own defensive testing', () => {
+    expect(QA_SESSION_CONTRACT).toContain('AUTHORIZED DEFENSIVE QA');
+    expect(QA_SESSION_CONTRACT).toContain('the owner’s own code in a disposable copy');
+    expect(QA_SESSION_CONTRACT).toContain('synthetic fixtures');
+    expect(QA_SESSION_CONTRACT).toContain('you report defects, not exploits');
+    // It is only a framing: the safety rules it sits beside are unchanged.
+    expect(QA_SESSION_CONTRACT).toContain('never bypass sandboxing');
+    expect(QA_SESSION_CONTRACT).toContain('No commits, pushes or product fixes');
+  });
+
+  it('words the per-check negative tests as defensive fixtures inside the workspace', () => {
+    const text = buildQaCheckInvestigationPrompt({ plannedChecks: ['Check A'] }, 0, new Map());
+    expect(text).toContain('synthetic fixtures inside the workspace');
+    expect(text).toContain('defensive tests of the owner');
+  });
+});

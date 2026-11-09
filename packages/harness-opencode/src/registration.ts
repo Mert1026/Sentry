@@ -26,11 +26,15 @@ export function chatGptEnvironment(source: NodeJS.ProcessEnv = process.env): Nod
     get(target, key) {
       if (key === 'SENTRY_OPENCODE_PROVIDER') return 'openai';
       if (key === 'SENTRY_OPENCODE_MODEL') return target['SENTRY_CHATGPT_MODEL'];
+      // The ChatGPT agent's own reasoning-effort choice reaches the harness as its variant.
+      if (key === 'SENTRY_OPENCODE_VARIANT') return target['SENTRY_CHATGPT_REASONING'];
       return typeof key === 'string' ? target[key] : undefined;
     },
     has(target, key) {
       if (key === 'SENTRY_OPENCODE_PROVIDER') return true;
       if (key === 'SENTRY_OPENCODE_MODEL') return target['SENTRY_CHATGPT_MODEL'] !== undefined;
+      if (key === 'SENTRY_OPENCODE_VARIANT')
+        return target['SENTRY_CHATGPT_REASONING'] !== undefined;
       return typeof key === 'string' && key in target;
     },
   });

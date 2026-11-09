@@ -211,6 +211,8 @@ export type OpenCodeClientFactory = (input: {
   readonly cwd: string;
   readonly environment: NodeJS.ProcessEnv;
   readonly modelId: string;
+  /** Reasoning-effort variant (`--variant`); absent keeps the provider default. */
+  readonly variant?: string;
   readonly shutdownTimeoutMs: number;
   readonly launcher?: OpenCodeProcessLauncher;
 }) => Promise<OpenCodeClientView>;
@@ -276,6 +278,7 @@ class ProductionSession implements OpenCodeSessionView {
     private readonly environment: NodeJS.ProcessEnv,
     private readonly modelId: string,
     private readonly launcher: OpenCodeProcessLauncher,
+    private readonly variant?: string,
   ) {}
 
   private stopPromise: Promise<boolean> | undefined;
@@ -316,6 +319,7 @@ class ProductionSession implements OpenCodeSessionView {
         OPENCODE_PURE_FLAG,
         OPENCODE_MODEL_FLAG,
         this.modelId,
+        ...(this.variant === undefined ? [] : ['--variant', this.variant]),
         OPENCODE_JSON_FORMAT_FLAG,
         'json',
         ...(options.sessionId === undefined ? [] : [OPENCODE_SESSION_FLAG, options.sessionId]),
@@ -543,6 +547,7 @@ export const createProductionOpenCodeClient: OpenCodeClientFactory = async (inpu
         input.environment,
         input.modelId,
         launcher,
+        input.variant,
       );
       sessions.add(session);
       return session;

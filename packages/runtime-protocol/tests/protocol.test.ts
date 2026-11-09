@@ -107,6 +107,20 @@ describe('runtime protocol framing', () => {
     expect(openai.providers.openAiApiKey).toBe('sk-test-openai');
     expect(openai.openCodeProvider).toBe('openai');
     expect(
+      RuntimeConfigureParamsSchema.parse({
+        models: {},
+        providers: {},
+        reasoningEffort: { chatgpt: 'high' },
+      }).reasoningEffort?.chatgpt,
+    ).toBe('high');
+    expect(() =>
+      RuntimeConfigureParamsSchema.parse({
+        models: {},
+        providers: {},
+        reasoningEffort: { chatgpt: 'ludicrous' },
+      }),
+    ).toThrow();
+    expect(
       RuntimeConfigureParamsSchema.parse({ models: {}, providers: {}, openAiAuth: 'account' })
         .openAiAuth,
     ).toBe('account');
