@@ -18,9 +18,15 @@ interface BaseCommand<C extends CliCommand> {
   readonly command: C;
 }
 
-export type AgentName = 'opencode' | 'deepseek' | 'glm';
+export type AgentName = 'opencode' | 'deepseek' | 'glm' | 'chatgpt';
 
-export const AGENT_NAMES: readonly AgentName[] = ['opencode', 'deepseek', 'glm'];
+export const AGENT_NAMES: readonly AgentName[] = ['opencode', 'deepseek', 'glm', 'chatgpt'];
+/** Chosen when --agents is omitted. ChatGPT is opt-in: it needs an API key or a signed-in account. */
+export const DEFAULT_AGENT_NAMES: readonly AgentName[] = ['opencode', 'deepseek', 'glm'];
+
+function isAgentName(value: string): value is AgentName {
+  return (AGENT_NAMES as readonly string[]).includes(value);
+}
 
 export type ParsedCliCommand =
   | BaseCommand<'capabilities'>
@@ -49,6 +55,14 @@ export type ParsedCliCommand =
       readonly runTimeoutMs?: number;
       readonly webAccess?: boolean;
       readonly paths?: string;
+      readonly toolDownloads?: boolean;
+      readonly useProfile?: boolean;
+      readonly revisionId?: string;
+      /** Re-test findings from earlier runs on the current revision. */
+      readonly retest?: {
+        readonly findings: ReadonlyArray<{ readonly runId: string; readonly findingId: string }>;
+        readonly who: 'reporter' | 'all';
+      };
     })
   | (BaseCommand<'run.list'> & { readonly projectId: string })
   | (BaseCommand<'run.show'> & { readonly runId: string })
@@ -61,6 +75,15 @@ export type ParsedCliCommand =
   | (BaseCommand<'run.result'> & { readonly runId: string })
   | (BaseCommand<'run.cancel'> & { readonly runId: string })
   | (BaseCommand<'project.revisions'> & { readonly projectId: string })
+  | (BaseCommand<'project.findings'> & { readonly projectId: string })
+  | (BaseCommand<'project.profile'> & { readonly projectId: string })
+  | (BaseCommand<'project.profile-build'> & {
+      readonly projectId: string;
+      readonly agents?: readonly AgentName[];
+    })
+  | BaseCommand<'toolchain.status'>
+  | (BaseCommand<'toolchain.install'> & { readonly packId: string; readonly version: string })
+  | (BaseCommand<'toolchain.remove'> & { readonly packId: string; readonly version: string })
   | BaseCommand<'doctor.storage'>
   | (BaseCommand<'doctor.cleanup'> & { readonly apply: boolean })
   | BaseCommand<'doctor.config'>
@@ -119,6 +142,12 @@ export function commandHint(args: readonly string[]): CliCommand | 'unknown' {
     'project.update',
     'project.delete',
     'project.revisions',
+    'project.findings',
+    'project.profile',
+    'project.profile-build',
+    'toolchain.status',
+    'toolchain.install',
+    'toolchain.remove',
     'agent.list',
     'agent.doctor',
     'run.simulate',
@@ -154,9 +183,9 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
   }
   if (area === 'agent' && action === 'doctor') {
     assertFlags(tail, []);
-    const [agent] = assertPositionals(tail, 1, 'qa agent doctor opencode|deepseek|glm');
-    if (agent !== 'opencode' && agent !== 'deepseek' && agent !== 'glm')
-      fail('Unknown agent: ' + agent + ' (expected opencode, deepseek, or glm)', agent);
+    const [agent] = assertPositionals(tail, 1, 'qa agent doctor opencode|deepseek|glm|chatgpt');
+    if (agent === undefined || !isAgentName(agent))
+      fail('Unknown agent: ' + agent + ' (expected opencode, deepseek, glm, or chatgpt)', agent);
     return { command: 'agent.doctor', agent };
   }
   if (area === 'project' && action === 'add') {
@@ -226,29 +255,78 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
       '--timeout-ms',
       '--paths',
       '--web',
+      '--tools',
+      '--profile',
+      '--revision',
+      '--retest',
+      '--retest-with',
     ]);
     const [projectId] = positional(tail);
     if (projectId === undefined || positional(tail).length !== 1) {
       fail(
-        'Usage: qa run start <project-id> --mode full|targeted [--agents opencode,deepseek,glm] --wait [--paths a,b] [--instructions text]',
+        'Usage: qa run start <project-id> --mode full|targeted [--agents opencode,deepseek,glm,chatgpt] --wait [--paths a,b] [--instructions text] | --retest <run-id>:<finding-id>,...',
       );
     }
-    const mode = option(tail, '--mode');
+    const retestText = option(tail, '--retest');
+    const retestWith = option(tail, '--retest-with');
+    const isRetest = retestText !== undefined;
+    if (!isRetest && retestWith !== undefined)
+      fail('--retest-with only applies together with --retest', '--retest-with');
+    if (retestWith !== undefined && retestWith !== 'reporter' && retestWith !== 'all')
+      fail('--retest-with must be reporter or all', '--retest-with');
+    // A retest always runs full on the current revision; --mode may be omitted for it.
+    const mode = option(tail, '--mode') ?? (isRetest ? 'full' : undefined);
     const agentsText = option(tail, '--agents');
     if (mode !== 'full' && mode !== 'targeted') fail('--mode must be full or targeted', '--mode');
-    // Omitted --agents selects all stable real AgentStacks.
+    let retest:
+      | { findings: Array<{ runId: string; findingId: string }>; who: 'reporter' | 'all' }
+      | undefined;
+    if (isRetest) {
+      if (mode !== 'full') fail('--retest runs in full mode only', '--retest');
+      const findings = retestText
+        .split(',')
+        .map((value) => value.trim())
+        .filter((value) => value.length > 0)
+        .map((value) => {
+          const [runId, findingId, extra] = value.split(':');
+          if (!runId || !findingId || extra !== undefined)
+            fail('--retest entries look like <run-id>:<finding-id>', '--retest');
+          return { runId, findingId };
+        });
+      if (findings.length === 0)
+        fail('--retest needs at least one <run-id>:<finding-id>', '--retest');
+      if (findings.length > 12) fail('--retest takes at most 12 findings', '--retest');
+      if (new Set(findings.map((f) => f.runId + ':' + f.findingId)).size !== findings.length)
+        fail('--retest lists a duplicate finding', '--retest');
+      retest = { findings, who: retestWith === 'all' ? 'all' : 'reporter' };
+      if (option(tail, '--instructions') !== undefined || option(tail, '--paths') !== undefined)
+        fail('--retest takes no --instructions or --paths', '--retest');
+    }
+    // Omitted --agents selects the stable real AgentStacks. A retest with the default
+    // "reporter" choice leaves the agents to the findings (each goes to the agent that reported it).
     const agents: AgentName[] =
       agentsText === undefined
-        ? [...AGENT_NAMES]
+        ? isRetest && retest?.who === 'reporter'
+          ? []
+          : [...DEFAULT_AGENT_NAMES]
         : (agentsText
             .split(',')
             .map((value) => value.trim())
             .filter((value) => value.length > 0) as AgentName[]);
-    if (agents.length === 0) fail('--agents requires at least one agent stack', '--agents');
+    if (agentsText !== undefined && agents.length === 0)
+      fail('--agents requires at least one agent stack', '--agents');
     for (const name of agents) {
-      if (name !== 'opencode' && name !== 'deepseek' && name !== 'glm')
-        fail('Unknown agent: ' + name + ' (expected opencode, deepseek, or glm)', '--agents');
+      if (!isAgentName(name))
+        fail(
+          'Unknown agent: ' + name + ' (expected opencode, deepseek, glm, or chatgpt)',
+          '--agents',
+        );
     }
+    const revisionId = option(tail, '--revision');
+    if (revisionId !== undefined && !/^rev_[0-9A-HJKMNP-TV-Z]{26}$/.test(revisionId))
+      fail('--revision must be a revision id (rev_...)', '--revision');
+    if (isRetest && revisionId !== undefined)
+      fail('--retest always runs on the current revision', '--revision');
     if (new Set(agents).size !== agents.length)
       fail('--agents lists a duplicate agent', '--agents');
     // Async start is the default machine flow: the runtime owns the run and
@@ -289,6 +367,10 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
       ...(instructions === undefined ? {} : { instructions }),
       ...(runTimeoutMs === undefined ? {} : { runTimeoutMs }),
       ...(tail.includes('--web') ? { webAccess: true } : {}),
+      ...(tail.includes('--tools') ? { toolDownloads: true } : {}),
+      ...(tail.includes('--profile') ? { useProfile: true } : {}),
+      ...(revisionId === undefined ? {} : { revisionId }),
+      ...(retest === undefined ? {} : { retest }),
       ...(paths === undefined ? {} : { paths }),
     };
   }
@@ -306,6 +388,62 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
     assertFlags(tail, []);
     const [runId] = assertPositionals(tail, 1, 'qa run cancel <run-id>');
     return { command: 'run.cancel', runId: runId as string };
+  }
+  if (area === 'project' && action === 'findings') {
+    assertFlags(tail, []);
+    const [projectId] = assertPositionals(tail, 1, 'qa project findings <project-id>');
+    return { command: 'project.findings', projectId: projectId as string };
+  }
+  if (area === 'project' && action === 'profile') {
+    assertFlags(tail, []);
+    const [projectId] = assertPositionals(tail, 1, 'qa project profile <project-id>');
+    return { command: 'project.profile', projectId: projectId as string };
+  }
+  if (area === 'project' && action === 'profile-build') {
+    assertFlags(tail, ['--agents']);
+    const [projectId] = positional(tail);
+    if (projectId === undefined || positional(tail).length !== 1)
+      fail('Usage: qa project profile-build <project-id> [--agents opencode,deepseek,glm,chatgpt]');
+    const agentsText = option(tail, '--agents');
+    const agents =
+      agentsText === undefined
+        ? undefined
+        : agentsText
+            .split(',')
+            .map((value) => value.trim())
+            .filter((value) => value.length > 0);
+    if (agents !== undefined && agents.length === 0)
+      fail('--agents requires at least one agent stack', '--agents');
+    for (const name of agents ?? []) {
+      if (!isAgentName(name))
+        fail(
+          'Unknown agent: ' + name + ' (expected opencode, deepseek, glm, or chatgpt)',
+          '--agents',
+        );
+    }
+    return {
+      command: 'project.profile-build',
+      projectId,
+      ...(agents === undefined ? {} : { agents: agents as AgentName[] }),
+    };
+  }
+  if (area === 'toolchain' && action === 'status') {
+    assertFlags(tail, []);
+    assertPositionals(tail, 0, 'qa toolchain status');
+    return { command: 'toolchain.status' };
+  }
+  if (area === 'toolchain' && (action === 'install' || action === 'remove')) {
+    assertFlags(tail, []);
+    const [packId, version] = assertPositionals(
+      tail,
+      2,
+      'qa toolchain ' + action + ' <pack-id> <version>',
+    );
+    return {
+      command: action === 'install' ? 'toolchain.install' : 'toolchain.remove',
+      packId: packId as string,
+      version: version as string,
+    };
   }
   if (area === 'project' && action === 'revisions') {
     assertFlags(tail, []);

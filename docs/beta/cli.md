@@ -102,9 +102,37 @@ connection never cancels a run; cancel explicitly with `run cancel`.
 ```text
 capabilities [--json]
 project list/add/show/update/delete/revisions/doctor
-agent list | agent doctor opencode|deepseek|glm
+project findings | profile | profile-build
+agent list | agent doctor opencode|deepseek|glm|chatgpt
 run start/list/show/status/cancel/result/export
+toolchain status | install | remove
 ```
+
+### Re-testing earlier findings, profiles, toolchains
+
+```text
+sentry cli project findings proj_ID
+sentry cli run start proj_ID --retest run_ID:find_ID[,run_ID:find_ID...] [--retest-with reporter|all] [--agents ...] --wait
+sentry cli run start proj_ID --mode full --agents chatgpt --profile --tools
+sentry cli project profile proj_ID
+sentry cli project profile-build proj_ID [--agents opencode,glm]
+sentry cli toolchain status
+sentry cli toolchain install <pack-id> <version>
+```
+
+- `--retest` re-tests up to 12 findings from earlier runs on the **current**
+  revision. By default each finding goes to the agent that reported it
+  (`--retest-with all` gives every finding to every chosen agent). A retest
+  stores no findings of its own; `project findings` lists, per retest run, each
+  earlier finding as `PASSED (resolved)`, `NOT PASSED (still there)` or `COULD
+  NOT COMPLETE`, with the agent's reason (`--json` carries `verdict`:
+  `no_longer_reproduces`, `still_reproduces`, `cannot_tell`).
+- `chatgpt` is opt-in (API key or signed-in ChatGPT account); omitting
+  `--agents` still means OpenCode, DeepSeek and GLM.
+- `--profile` hands each agent its own project notes, `--tools` allows
+  toolchain downloads, `--revision <rev-id>` runs on a chosen revision.
+- Custom add-ons are not exposed through the CLI: they run arbitrary install
+  commands, so they stay in the Desktop UI.
 
 `project add` accepts normal Windows paths (`C:\Projects\SampleApp`); the
 Desktop service translates them to WSL paths. `project delete` keeps the
