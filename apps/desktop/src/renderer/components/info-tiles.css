@@ -225,12 +225,36 @@ button.rs-tile:focus-visible {
     align-items: center;
   }
 }
+/* Very narrow: the boxes stay two per row (the on/off pair side by side), just smaller. */
 @container rs (max-width: 210px) {
   .rs-tiles {
-    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+  .rs-tile {
+    padding: 6px;
+    gap: 6px;
+  }
+  .rs-tile .rs-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
   }
   .rs-tile .rs-label {
     font-size: 10px;
     letter-spacing: 0;
+  }
+  .rs-count .rs-value {
+    font-size: 17px;
+  }
+}
+/* Narrower than that, even the icon boxes shrink to fit. */
+@container rs (max-width: 140px) {
+  .rs-tile .rs-icon {
+    width: 20px;
+    height: 20px;
+  }
+  .rs-tile {
+    padding: 5px;
+    gap: 4px;
   }
 }
