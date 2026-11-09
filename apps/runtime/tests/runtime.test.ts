@@ -155,6 +155,68 @@ describe('runtime host identity', () => {
     }
   });
 
+  it('reports the real execution path of EVERY agent, not a value baked in per agent', async () => {
+    const dataRoot = await tempDataRoot();
+    const host = new SentryRuntimeHost(dataRoot, () => undefined);
+    const saved = {
+      deepseek: process.env['SENTRY_DEEPSEEK_BINARY'],
+      claude: process.env['SENTRY_CLAUDE_BINARY'],
+      glm: process.env['SENTRY_GLM_BINARY'],
+    };
+    const restore = (name: string, value: string | undefined): void => {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    };
+    try {
+      await host.recover();
+      const ask = async () =>
+        (
+          (await host.dispatch('runtime.environment', {})) as {
+            agentStacks: Array<{ id: string; executionPath?: string; executableSource?: string }>;
+          }
+        ).agentStacks;
+      const byId = (stacks: Awaited<ReturnType<typeof ask>>, id: string) =>
+        stacks.find((stack) => stack.id === id);
+      delete process.env['SENTRY_DEEPSEEK_BINARY'];
+      delete process.env['SENTRY_CLAUDE_BINARY'];
+      delete process.env['SENTRY_GLM_BINARY'];
+      // No override: DeepSeek and GLM each point at their own managed install under the data root.
+      let stacks = await ask();
+      const deepseek = byId(stacks, 'stack_deepseek_main');
+      const glm = byId(stacks, 'stack_glm_main');
+      expect(deepseek?.executionPath?.replace(/\\/g, '/')).toBe(
+        dataRoot.replace(/\\/g, '/') + '/tools/deepseek/bin/dsh',
+      );
+      expect(deepseek?.executableSource).toBe('managed');
+      expect(glm?.executionPath?.replace(/\\/g, '/')).toBe(
+        dataRoot.replace(/\\/g, '/') + '/tools/claude-code/node_modules/.bin/claude',
+      );
+      expect(glm?.executableSource).toBe('managed');
+      // The ChatGPT and OpenCode agents report one too.
+      expect(byId(stacks, 'stack_opencode_main')?.executionPath).toBeTruthy();
+      expect(byId(stacks, 'stack_chatgpt_main')?.executionPath).toBeTruthy();
+      // An override changes what is shown, and the source says it came from the environment.
+      process.env['SENTRY_DEEPSEEK_BINARY'] = '/custom/bin/dsh';
+      process.env['SENTRY_CLAUDE_BINARY'] = '/custom/bin/claude';
+      stacks = await ask();
+      expect(byId(stacks, 'stack_deepseek_main')).toMatchObject({
+        executionPath: '/custom/bin/dsh',
+        executableSource: 'environment',
+      });
+      expect(byId(stacks, 'stack_glm_main')).toMatchObject({
+        executionPath: '/custom/bin/claude',
+        executableSource: 'environment',
+      });
+      // A wrapper that is not the managed one is never described as "managed".
+      expect(JSON.stringify(byId(stacks, 'stack_deepseek_main'))).not.toContain('Managed wrapper');
+    } finally {
+      restore('SENTRY_DEEPSEEK_BINARY', saved.deepseek);
+      restore('SENTRY_CLAUDE_BINARY', saved.claude);
+      restore('SENTRY_GLM_BINARY', saved.glm);
+      host.close();
+    }
+  }, 60_000);
+
   it('rejects unknown methods with UNKNOWN_METHOD', async () => {
     const host = new SentryRuntimeHost(await tempDataRoot(), () => undefined);
     try {

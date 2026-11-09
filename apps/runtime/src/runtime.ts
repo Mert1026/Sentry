@@ -310,6 +310,37 @@ export function deepseekManagedWrapperPath(dataRoot: string): string {
   return join(dataRoot, 'tools', 'deepseek', 'bin', 'dsh');
 }
 
+/** Sentry-managed Claude Code executable (the GLM agent's harness) inside the Linux data root. */
+export function claudeManagedExecutablePath(dataRoot: string): string {
+  return join(dataRoot, 'tools', 'claude-code', 'node_modules', '.bin', 'claude');
+}
+
+/**
+ * The executable an agent will actually launch, and where that choice came from: an explicit
+ * override from the environment wins, otherwise the Sentry-managed install. Used for every agent
+ * so the Environment page reports the real path instead of a value baked in per agent.
+ */
+export function resolveAgentExecutable(input: {
+  readonly override: string | undefined;
+  readonly managed: string;
+}): {
+  readonly path: string;
+  readonly source: 'environment' | 'managed';
+  readonly present: boolean;
+} {
+  const override = input.override?.trim();
+  const path = override !== undefined && override.length > 0 ? override : input.managed;
+  let present = false;
+  try {
+    accessSync(path, constants.X_OK);
+    present = true;
+  } catch {
+    present = false;
+  }
+  const fromEnvironment = override !== undefined && override.length > 0;
+  return { path, source: fromEnvironment ? 'environment' : 'managed', present };
+}
+
 /**
  * GLM-specific environment extras: when the fail-closed sandbox cannot be
  * established, readiness is downgraded (never upgraded) with a specific
@@ -1272,16 +1303,36 @@ export class SentryRuntimeHost {
               ...(opencodeNote.length === 0 ? {} : { note: opencodeNote }),
             }
           : s.id === 'stack_deepseek_main'
-            ? {
-                ...stackStatus(s.id, deepseek as never),
-                executionPath: deepseekManagedWrapperPath(this.dataRoot),
-                wrapperNote:
-                  'Managed wrapper available; production SDK runtime resolves separately at startup.',
-              }
-            : {
-                ...stackStatus(s.id, glm as never),
-                ...glmSandboxStatus(sandboxDeps),
-              };
+            ? (() => {
+                const resolved = resolveAgentExecutable({
+                  override: process.env['SENTRY_DEEPSEEK_BINARY'],
+                  managed: deepseekManagedWrapperPath(this.dataRoot),
+                });
+                return {
+                  ...stackStatus(s.id, deepseek as never),
+                  executionPath: resolved.path,
+                  executableSource: resolved.source,
+                  // Only claim a managed wrapper when it is the one in use and it exists.
+                  ...(resolved.source === 'managed' && resolved.present
+                    ? {
+                        wrapperNote:
+                          'Managed wrapper available; production SDK runtime resolves separately at startup.',
+                      }
+                    : {}),
+                };
+              })()
+            : (() => {
+                const resolved = resolveAgentExecutable({
+                  override: process.env['SENTRY_CLAUDE_BINARY'] ?? process.env['SENTRY_GLM_BINARY'],
+                  managed: claudeManagedExecutablePath(this.dataRoot),
+                });
+                return {
+                  ...stackStatus(s.id, glm as never),
+                  executionPath: resolved.path,
+                  executableSource: resolved.source,
+                  ...glmSandboxStatus(sandboxDeps),
+                };
+              })();
       return {
         id: s.id,
         displayName: s.displayName,
@@ -1493,8 +1544,10 @@ export class SentryRuntimeHost {
       );
     }
     if (wants('stack_deepseek_main')) {
-      const wrapperPath =
-        env['SENTRY_DEEPSEEK_BINARY']?.trim() || deepseekManagedWrapperPath(this.dataRoot);
+      const wrapperPath = resolveAgentExecutable({
+        override: env['SENTRY_DEEPSEEK_BINARY'],
+        managed: deepseekManagedWrapperPath(this.dataRoot),
+      }).path;
       const probed = SentryRuntimeHost.probeLocalExecutable(wrapperPath);
       const dshPackage = SentryRuntimeHost.resolveDshPackage();
       const verdict = evaluateDeepseekGate({
