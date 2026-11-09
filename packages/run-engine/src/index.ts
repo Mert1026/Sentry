@@ -1022,8 +1022,11 @@ export class RunCoordinator {
             if (event.type === 'investigation.plan.created') this.repository.savePlan(event.plan);
             else if (event.type === 'investigation.hypothesis.discovered')
               this.repository.saveHypothesis(event.hypothesis);
-            else if (event.type === 'finding.submitted') this.repository.saveFinding(event.finding);
-            else if (event.type === 'evidence.submitted') {
+            else if (event.type === 'finding.submitted') {
+              // A retest answers "is it fixed, and if not why"; it never adds findings of its own.
+              if (input.run.configuration.retest === undefined)
+                this.repository.saveFinding(event.finding);
+            } else if (event.type === 'evidence.submitted') {
               this.assertEvidenceArtifactsExist(event.evidence, input.run.id);
               this.repository.saveEvidence(event.evidence);
             }
@@ -1733,7 +1736,8 @@ export class RunCoordinator {
     }
     if (checkpoint === undefined) return;
     for (const evidence of checkpoint.evidence) this.repository.saveEvidence(evidence);
-    for (const finding of checkpoint.findings) this.repository.saveFinding(finding);
+    if (this.repository.getRun(qaRunId)?.configuration.retest === undefined)
+      for (const finding of checkpoint.findings) this.repository.saveFinding(finding);
   }
 
   async recover(): Promise<void> {
