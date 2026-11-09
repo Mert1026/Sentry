@@ -594,7 +594,11 @@ export type CapabilitiesResult = z.infer<typeof CapabilitiesResultSchema>;
 
 /** Findings of every revision, with each retest run's verdict per earlier finding. */
 export const ProjectFindingsResultSchema = z
-  .object({ projectId: z.string().min(1).max(200), revisions: z.array(z.unknown()) })
+  .object({
+    projectId: z.string().min(1).max(200),
+    currentRevisionId: z.string().min(1).max(100).optional(),
+    revisions: z.array(z.unknown()),
+  })
   .strict();
 /** Per-agent project profile state (none / fresh / stale) and notes. */
 export const ProjectProfileResultSchema = z

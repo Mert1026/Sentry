@@ -679,7 +679,8 @@ describe('cli frontend over the desktop broker', () => {
 
   it('serves findings by revision, profiles and toolchains through the broker', async () => {
     const broker = await startFakeBroker((command) => {
-      if (command === 'projects:findings-by-revision') return [{ revisionId: 'rev_x', agents: [] }];
+      if (command === 'projects:findings-by-revision')
+        return { projectId: PROJECT_ID, revisions: [{ revisionId: 'rev_x', agents: [] }] };
       if (command === 'projects:profile') return { agents: [] };
       if (command === 'projects:build-profile') return { started: true };
       if (command === 'toolchains:status') return { packs: [] };
@@ -761,5 +762,25 @@ describe('cli frontend over the desktop broker', () => {
     expect(text).toContain('guard rejects it');
     expect(text).toContain('NOT PASSED (still there)');
     expect(text).toContain('COULD NOT COMPLETE');
+  });
+
+  it('reports a retest of an unknown finding as an invalid argument with the engine message', async () => {
+    const broker = await startFakeBroker((command) => {
+      if (command === 'runs:start')
+        throw Object.assign(new Error('Finding find_x was not found'), { code: 'INVALID_TARGET' });
+      throw new Error('unexpected ' + command);
+    });
+    try {
+      const failure = await executeFrontendCommand(
+        parseCommand(['run', 'start', PROJECT_ID, '--retest', 'run_a:find_x']),
+        { createClient: () => clientFor(broker) },
+      ).catch((cause: unknown) => frontendErrorEnvelope('run.start', cause));
+      expect(failure).toMatchObject({
+        ok: false,
+        error: { code: 'INVALID_ARGUMENT', message: 'Finding find_x was not found' },
+      });
+    } finally {
+      await broker.close();
+    }
   });
 });

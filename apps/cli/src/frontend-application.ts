@@ -92,6 +92,9 @@ export function frontendErrorEnvelope(
 }
 
 function brokerError(code: string, message: string): { code: string; message: string } {
+  // The engine says INVALID_TARGET for a retest naming a finding that does not exist; to a CLI
+  // caller that is a bad argument, and the message says which one.
+  if (code === 'INVALID_TARGET') return { code: 'INVALID_ARGUMENT', message: bounded(message) };
   if (CliErrorCodeSchema.safeParse(code).success) {
     return { code, message: bounded(message) };
   }
@@ -389,12 +392,15 @@ export async function executeFrontendCommand(
       });
     }
     if (input.command === 'project.findings') {
-      const revisions = (await broker.request('projects:findings-by-revision', {
+      const found = (await broker.request('projects:findings-by-revision', {
         projectId: input.projectId,
-      })) as unknown;
+      })) as { currentRevisionId?: string; revisions?: unknown[] } | undefined;
       return success(input.command, {
         projectId: input.projectId,
-        revisions: Array.isArray(revisions) ? revisions : [],
+        ...(found?.currentRevisionId === undefined
+          ? {}
+          : { currentRevisionId: found.currentRevisionId }),
+        revisions: Array.isArray(found?.revisions) ? found.revisions : [],
       });
     }
     if (input.command === 'project.profile') {
