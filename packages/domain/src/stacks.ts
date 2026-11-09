@@ -64,8 +64,29 @@ export const OPENCODE_QA_STACK = AgentStackDefinitionSchema.parse({
   policy: { id: 'qa-standard', version: 1 },
 });
 
+// ChatGPT is the OpenAI provider run through the same OpenCode harness as its
+// own agent: provider fixed to `openai`, model from SENTRY_CHATGPT_MODEL, and
+// authentication by API key or the person's ChatGPT account.
+export const CHATGPT_QA_STACK = AgentStackDefinitionSchema.parse({
+  schemaVersion: 1,
+  id: 'stack_chatgpt_main',
+  displayName: 'ChatGPT QA Agent',
+  enabled: true,
+  model: { provider: 'openai', modelId: 'unconfigured', displayName: 'OpenAI model' },
+  harness: { adapterId: 'opencode', expectedProtocolVersion: 1 },
+  execution: {},
+  policy: { id: 'qa-standard', version: 1 },
+});
+
+/** The original three-agent set (simulation and fixtures keep this exact shape). */
 export const INITIAL_AGENT_STACKS: readonly AgentStackDefinition[] = [
   OPENCODE_QA_STACK,
   DEEPSEEK_QA_STACK,
   GLM_QA_STACK,
+];
+
+/** Every runnable agent stack the product offers (the three originals plus ChatGPT). */
+export const AGENT_STACKS: readonly AgentStackDefinition[] = [
+  ...INITIAL_AGENT_STACKS,
+  CHATGPT_QA_STACK,
 ];

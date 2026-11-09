@@ -418,7 +418,7 @@ describe('investigateChecks second pass', () => {
                     ? 'second pass: '
                     : 'first pass: ') +
               name +
-              (options.leadsOnFirstPass && !deepen && !second && !lead && name === 'Check A'
+              (options.leadsOnFirstPass && !deepen && !second && !lead && name.endsWith('Check A')
                 ? '\nLeads: symlink import fails; cleanup removes the root'
                 : ''),
           };
@@ -534,6 +534,46 @@ describe('investigateChecks second pass', () => {
     expect(context).toContain('hazard-sweep');
   });
 
+  it('never follows leads, deepens or sweeps files in a retest, which only answers its own checks', async () => {
+    const hazards = [{ file: 'packages/wipe/src/index.ts', hazards: ['deletes files'], score: 4 }];
+    const retest = scenario({
+      checks: ['Retest #1: Check A', 'Retest #2: Check B', 'Retest #3: Check C'],
+      undecided: [],
+      clockPerTurnMin: 2,
+      leadsOnFirstPass: true,
+      hazards,
+    });
+    const { events } = await drain(investigateChecks(retest.hooks));
+    // One turn per finding and nothing after them, although time, leads and risky files remain.
+    expect(retest.prompts).toHaveLength(3);
+    const seen = codes(events);
+    for (const code of ['QA_DEEPEN_PASS', 'QA_HAZARD_SWEEP', 'QA_HAZARD_SWEEP_TURN'])
+      expect(seen).not.toContain(code);
+    // The very same situation with ordinary checks does all three.
+    const ordinary = scenario({
+      checks: ['Check A', 'Check B', 'Check C'],
+      undecided: [],
+      clockPerTurnMin: 2,
+      leadsOnFirstPass: true,
+      hazards,
+    });
+    const normal = codes((await drain(investigateChecks(ordinary.hooks))).events);
+    expect(normal).toContain('QA_DEEPEN_PASS');
+    expect(normal).toContain('QA_HAZARD_SWEEP');
+    expect(ordinary.prompts.length).toBeGreaterThan(3);
+  });
+
+  it('still gives an undecided retest check its second pass', async () => {
+    const retest = scenario({
+      checks: ['Retest #1: Check A', 'Retest #2: Check B'],
+      undecided: ['Retest #2: Check B'],
+      clockPerTurnMin: 2,
+    });
+    const { events } = await drain(investigateChecks(retest.hooks));
+    expect(codes(events)).toContain('QA_SECOND_PASS');
+    expect(retest.prompts.filter((p) => p.includes('SECOND PASS'))).toHaveLength(1);
+  });
+
   it('skips the sweep when the adapter provides no hazard source', async () => {
     const none = scenario({ checks: ['Check A', 'Check B'], undecided: [], clockPerTurnMin: 2 });
     expect(codes((await drain(investigateChecks(none.hooks))).events)).not.toContain(
@@ -612,6 +652,136 @@ describe('investigateChecks second pass', () => {
     );
     expect(prompts.filter((p) => p.includes('SECOND PASS')).length).toBeLessThanOrEqual(3);
     expect(value.checkConclusions).toHaveLength(5);
+  });
+});
+
+describe('investigateChecks reporting after an extension turn that died', () => {
+  const MIN = 60_000;
+
+  it('starts the report in a fresh context even though no extension turn finished', async () => {
+    const start = Date.now();
+    const clock = { t: start };
+    let dead = false;
+    let reportContexts = 0;
+    const { hooks } = harness(() => ({ text: 'unused' }), {
+      plan: { plannedChecks: ['Check A'] },
+      depth: { deadlineAt: start + 172 * MIN },
+      now: () => clock.t,
+      hazardFiles: async () => [
+        {
+          file: 'packages/risky/src/index.ts',
+          hazards: ['deletes files or directories'],
+          score: 5,
+        },
+      ],
+      stop: async () => {
+        dead = true;
+      },
+      freshSession: async () => {
+        dead = false;
+      },
+      startReportContext: async () => {
+        reportContexts += 1;
+        dead = false;
+      },
+      streamTurn: (text: string) =>
+        (async function* () {
+          clock.t += MIN;
+          if (dead) throw new Error('OpenCode session was aborted.');
+          if (text.includes('DEEPENING PASS') || text.includes('HAZARD SWEEP')) {
+            // The extension turn dies and its error is swallowed: extra work only.
+            dead = true;
+            yield* [];
+            throw new Error('OpenCode session was aborted.');
+          }
+          addOp(hooks.operations as Ops, 'bash', 'node probe.mjs', 0);
+          yield eventOf({ type: 'tool.completed' });
+          return { text: 'first pass ok' };
+        })(),
+    });
+    const { value } = await drain(investigateChecks(hooks));
+    expect(value.checkConclusions[0]).toBe('first pass ok');
+    // Before: the report was handed the dead session and the whole run failed at the last step.
+    expect(reportContexts).toBeGreaterThanOrEqual(1);
+    expect(dead).toBe(false);
+  }, 30_000);
+
+  it('also starts a fresh report context when the last main turn was stopped', async () => {
+    let dead = false;
+    let reportContexts = 0;
+    const { hooks } = harness(() => ({ text: 'unused' }), {
+      plan: { plannedChecks: ['Check A'] },
+      stop: async () => {
+        dead = true;
+      },
+      startReportContext: async () => {
+        reportContexts += 1;
+        dead = false;
+      },
+      streamTurn: () =>
+        (async function* () {
+          if (dead) throw new Error('OpenCode session was aborted.');
+          // The same command fails again and again until the watchdog stops the turn.
+          for (let i = 0; i < 6; i += 1) {
+            await new Promise((resolve) => setTimeout(resolve, 200));
+            addOp(hooks.operations as Ops, 'bash', 'vitest run a.test.ts', 1);
+            yield eventOf({ type: 'tool.completed' });
+          }
+          return { text: 'unreached' };
+        })(),
+    });
+    await drain(investigateChecks(hooks));
+    expect(reportContexts).toBeGreaterThanOrEqual(1);
+  }, 30_000);
+});
+
+describe('investigateChecks when the provider declines a check', () => {
+  it('reports that check inconclusive and carries on with the rest in a fresh session', async () => {
+    let fresh = 0;
+    const prompts: string[] = [];
+    const { hooks } = harness(() => ({ text: 'unused' }), {
+      plan: { plannedChecks: ['Check A', 'Check B', 'Check C'] },
+      freshSession: async () => {
+        fresh += 1;
+      },
+      isProviderRefusal: (cause: unknown) =>
+        cause instanceof Error && /flagged for possible cybersecurity risk/.test(cause.message),
+      streamTurn: (text: string) =>
+        (async function* () {
+          prompts.push(text);
+          const alias = /CHECK (check_\d)/.exec(text)?.[1] ?? '';
+          const name = 'Check ' + 'ABC'[Number(alias.replace('check_', '')) - 1];
+          if (name === 'Check B') {
+            yield* [];
+            throw new Error('This content was flagged for possible cybersecurity risk.');
+          }
+          addOp(hooks.operations as Ops, 'bash', 'node probe-' + prompts.length + '.mjs', 0);
+          yield eventOf({ type: 'tool.completed' });
+          return { text: 'ok ' + name };
+        })(),
+    });
+    const { events, value } = await drain(investigateChecks(hooks));
+    expect(codes(events)).toContain('QA_PROVIDER_REFUSED');
+    // The refused check is inconclusive; the checks before and after it are decided as usual.
+    expect(value.blockedChecks).toContain('Check B');
+    expect(value.checkConclusions[0]).toBe('ok Check A');
+    expect(value.checkConclusions[2]).toBe('ok Check C');
+    // The next check did not run inside the declined session.
+    expect(fresh).toBeGreaterThanOrEqual(1);
+  }, 30_000);
+
+  it('still fails the agent for a provider error that is not a safety refusal', async () => {
+    const { hooks } = harness(() => ({ text: 'unused' }), {
+      plan: { plannedChecks: ['Check A'] },
+      isProviderRefusal: (cause: unknown) =>
+        cause instanceof Error && /flagged for possible cybersecurity risk/.test(cause.message),
+      streamTurn: () =>
+        (async function* (): AsyncGenerator<HarnessEvent, InvestigationTurn> {
+          yield* [];
+          throw new Error('invalid api key');
+        })(),
+    });
+    await expect(drain(investigateChecks(hooks))).rejects.toThrow('invalid api key');
   });
 });
 

@@ -16,7 +16,7 @@ import { createHash } from 'node:crypto';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { SnapshotFileEntrySchema, type SnapshotFileEntry } from '@qa/schemas';
-import { isPathInside } from './paths.js';
+import { assertNoSymlinkBelow, isPathInside } from './paths.js';
 
 export interface CopyProgress {
   readonly filesProcessed: number;
@@ -27,7 +27,10 @@ export interface CopyProgress {
 export interface CopyTreeOptions {
   readonly concurrency?: number;
   readonly signal?: AbortSignal;
-  readonly exclude?: (relativePath: string) => boolean;
+  readonly exclude?: (
+    relativePath: string,
+    entryType?: 'file' | 'directory' | 'symlink',
+  ) => boolean;
   readonly preferReflink?: boolean;
   readonly onProgress?: (progress: CopyProgress) => void;
   readonly symlinkPolicy?: 'preserve' | 'inert-unsafe';
@@ -69,7 +72,10 @@ async function sortedNames(directory: string): Promise<string[]> {
 export interface WalkTreeOptions {
   readonly signal?: AbortSignal;
   /** Skip entries whose relative path matches; excluded directories are pruned (never descended). */
-  readonly exclude?: (relativePath: string) => boolean;
+  readonly exclude?: (
+    relativePath: string,
+    entryType?: 'file' | 'directory' | 'symlink',
+  ) => boolean;
 }
 
 /** Deterministic lstat traversal. Symlinks are yielded and never followed. */
@@ -131,7 +137,20 @@ export async function* walkTree(
       const absolutePath = join(directory, name);
       const stats = await lstat(absolutePath);
       const relativePath = relative(absoluteRoot, absolutePath).replaceAll('\\', '/');
-      if (exclude?.(relativePath) === true) continue;
+      const entryType = stats.isSymbolicLink()
+        ? 'symlink'
+        : stats.isDirectory()
+          ? 'directory'
+          : 'file';
+      if (exclude?.(relativePath, entryType) === true) continue;
+      // Snapshot paths use forward slashes only. On POSIX a backslash is a legal file name
+      // character, and turning it into a separator would rewrite the name (or, for `..\x`, climb
+      // out of the destination), so such entries are refused instead of silently altered.
+      if (name.includes('\\')) {
+        throw new Error(
+          'UNSUPPORTED_FILESYSTEM_ENTRY: file name contains a backslash: ' + relativePath,
+        );
+      }
       if (stats.isSymbolicLink()) {
         yield {
           absolutePath,
@@ -270,7 +289,12 @@ export interface ScanTreeResult extends TreeStats {
 export async function estimateTree(
   root: string,
   signal?: AbortSignal,
-  options: { readonly exclude?: (relativePath: string) => boolean } = {},
+  options: {
+    readonly exclude?: (
+      relativePath: string,
+      entryType?: 'file' | 'directory' | 'symlink',
+    ) => boolean;
+  } = {},
 ): Promise<TreeStats> {
   let fileCount = 0;
   let directoryCount = 0;
@@ -294,7 +318,10 @@ export async function scanTree(
   options: {
     readonly signal?: AbortSignal;
     readonly onEntry?: (entry: SnapshotFileEntry, canonicalLine: string) => void | Promise<void>;
-    readonly exclude?: (relativePath: string) => boolean;
+    readonly exclude?: (
+      relativePath: string,
+      entryType?: 'file' | 'directory' | 'symlink',
+    ) => boolean;
   } = {},
 ): Promise<ScanTreeResult> {
   const aggregate = createHash('sha256');
@@ -379,6 +406,8 @@ export async function copyTree(
     })) {
       throwIfAborted(options.signal);
       const destination = destinationForRelative(destinationRoot, entry.relativePath);
+      // A link already present in the destination must not redirect writes outside it.
+      await assertNoSymlinkBelow(destinationRoot, destination, { includeLeaf: false });
       if (entry.type === 'directory') {
         await mkdir(destination, { recursive: true });
         directoryCount += 1;
@@ -394,6 +423,13 @@ export async function copyTree(
         );
         symlinkCount += 1;
         continue;
+      }
+      // A symbolic link already sitting where this file goes must be replaced, never written
+      // through: createWriteStream follows it and would overwrite whatever it points at.
+      try {
+        if ((await lstat(destination)).isSymbolicLink()) await rm(destination, { force: true });
+      } catch (cause) {
+        if ((cause as NodeJS.ErrnoException).code !== 'ENOENT') throw cause;
       }
       await schedule(async () => {
         await copyRegularFile(

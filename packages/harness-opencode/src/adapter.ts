@@ -45,6 +45,7 @@ import {
   groundCoverage,
   resolveReportChecks,
   reportableDepthPlan,
+  applyRetestPlan,
   depthPolicy,
   boundCorrectionMessage,
   buildPlanningCorrectionIntro,
@@ -85,6 +86,8 @@ import type {
 import {
   assertSupportedOpenCodeProvider,
   credentialEnvForProvider,
+  openAiAccountMode,
+  openCodeVariant,
   doctorOpenCode,
   markOpenCodeRuntimeVerified,
   openCodeCatalogMode,
@@ -102,7 +105,7 @@ import {
   buildOpenCodeProviderConfig,
   buildOpenCodeToolEnvironment,
 } from './environment.js';
-import { OpenCodeHarnessError } from './errors.js';
+import { OpenCodeHarnessError, isProviderSafetyRefusal } from './errors.js';
 import { redactDiagnostic, redactStructured, redactText, secretValues } from './redaction.js';
 import {
   cleanupOpenCodeRunScope,
@@ -155,6 +158,12 @@ export interface OpenCodeHarnessAdapterOptions {
    * contract tests to capture real-binary routes without provider credit.
    */
   readonly proxyUpstreamBaseUrl?: string;
+  /**
+   * OpenAI account mode: starts (or reuses) the runtime-owned loopback bridge
+   * backed by the person's ChatGPT sign-in and returns its base URL. Only
+   * called when SENTRY_OPENAI_AUTH=account and the provider is `openai`.
+   */
+  readonly openAiAccountBridge?: () => Promise<string>;
   readonly providerNpm?: string;
   readonly providerModels?: Readonly<Record<string, Record<string, unknown>>>;
   readonly environment?: NodeJS.ProcessEnv;
@@ -264,6 +273,8 @@ interface CollectedTurn {
   readonly events: readonly HarnessEvent[];
   readonly usage?: AgentUsage | undefined;
   readonly steps: number;
+  /** Largest single-step prompt in the turn: the session's real occupancy (see ParsedOpenCodeTurn). */
+  readonly contextTokens?: number | undefined;
 }
 
 /** Owned per-AgentRun execution state (Sentry IDs and OpenCode IDs tracked separately). */
@@ -897,6 +908,7 @@ export class OpenCodeHarnessAdapter implements HarnessAdapter {
         events: collected,
         usage: result.usage,
         steps: result.steps,
+        contextTokens: result.peakContextTokens,
       };
     } catch (error) {
       throw withUpstreamEvidence(error);
@@ -1006,7 +1018,7 @@ export class OpenCodeHarnessAdapter implements HarnessAdapter {
         throw new OpenCodeHarnessError(
           'OPENCODE_CREDENTIAL_MISSING',
           'OpenCode credential is missing. Set ' +
-            credentialEnvForProvider(this.runtime.provider) +
+            credentialEnvForProvider(this.runtime.provider, this.hostEnvironment) +
             ' for provider ' +
             this.runtime.provider +
             '.',
@@ -1036,9 +1048,24 @@ export class OpenCodeHarnessAdapter implements HarnessAdapter {
       // Localhost auth proxy: the real key lives only in its closure.
       // OpenCode receives the proxy endpoint plus a dummy key. Upstream
       // follows the configured provider (OpenRouter vs OpenCode Zen).
+      let accountBridgeUrl: string | undefined;
+      if (
+        openAiAccountMode(this.runtime.provider, this.hostEnvironment) &&
+        this.options.openAiAccountBridge !== undefined
+      ) {
+        try {
+          accountBridgeUrl = await this.options.openAiAccountBridge();
+        } catch (cause) {
+          throw new OpenCodeHarnessError(
+            'OPENCODE_CREDENTIAL_MISSING',
+            'OpenAI account bridge unavailable: ' +
+              (cause instanceof Error ? cause.message : 'unknown error'),
+          );
+        }
+      }
       const upstreamBaseUrl = openCodeUpstreamBaseUrl(
         this.runtime.provider,
-        this.options.proxyUpstreamBaseUrl ?? this.options.providerBaseUrl,
+        this.options.proxyUpstreamBaseUrl ?? this.options.providerBaseUrl ?? accountBridgeUrl,
       );
       const proxy = await startOpenCodeAuthProxy({
         apiKey,
@@ -1080,6 +1107,9 @@ export class OpenCodeHarnessAdapter implements HarnessAdapter {
           cwd: request.workspace.runtimePath,
           environment: turnBase,
           modelId: this.runtime.effectiveModelId,
+          ...(openCodeVariant(this.hostEnvironment) === undefined
+            ? {}
+            : { variant: openCodeVariant(this.hostEnvironment) as string }),
           shutdownTimeoutMs: this.shutdownTimeoutMs,
           launcher,
         });
@@ -1142,7 +1172,7 @@ export class OpenCodeHarnessAdapter implements HarnessAdapter {
           'planning',
         );
         for (const emitted of planning.events) yield emitted;
-        contextBudget.observeTurn(planning.usage);
+        contextBudget.observeTurn(planning.usage, planning.contextTokens);
         planningSteps += planning.steps;
         planningUsage = sumUsage(planningUsage, planning.usage ?? {});
         if (planning.text.trim().length === 0) {
@@ -1150,12 +1180,15 @@ export class OpenCodeHarnessAdapter implements HarnessAdapter {
           planRejection = describePlanRejection(undefined, true);
         } else {
           try {
-            planResult = reportableDepthPlan(
-              SentryInvestigationPlanV1Schema.parse(
-                parseWholeJson(planning.text, 'planning', pipeline),
+            planResult = applyRetestPlan(
+              reportableDepthPlan(
+                SentryInvestigationPlanV1Schema.parse(
+                  parseWholeJson(planning.text, 'planning', pipeline),
+                ),
+                depthPolicy(request.task.context) !== undefined,
+                maxPlannedChecks(request.task.context),
               ),
-              depthPolicy(request.task.context) !== undefined,
-              maxPlannedChecks(request.task.context),
+              request.task.context,
             );
             break;
           } catch (cause) {
@@ -1250,6 +1283,8 @@ export class OpenCodeHarnessAdapter implements HarnessAdapter {
           cause instanceof OpenCodeHarnessError &&
           cause.code === 'OPENCODE_CANCEL_FAILED' &&
           this.observedOperations.size > 0,
+        // The provider's own safety filter declined a check: skip that check, keep the rest.
+        isProviderRefusal: isProviderSafetyRefusal,
       });
       conclusionBlock = renderCheckConclusions(planResult, investigation.checkConclusions);
       const { blockedChecks, unprovenChecks, redRetryChecks, checkConclusions } = investigation;
@@ -1627,6 +1662,14 @@ export class OpenCodeHarnessAdapter implements HarnessAdapter {
       }
     } catch (cause) {
       if (cause instanceof OpenCodeHarnessError && cause.code === 'OPENCODE_CANCEL_FAILED') {
+        // Every cancel-style failure ends with the same generic message; keep what actually
+        // happened (session ended, run cancelled before report recovery, aborted turn) so a run
+        // that fails with it can be explained afterwards.
+        yield event(request.agentRunId, {
+          type: 'warning',
+          code: 'OPENCODE_CANCEL_CAUSE',
+          message: redactDiagnostic(cause, this.secrets).slice(0, 400),
+        });
         yield event(request.agentRunId, {
           type: 'run.failed',
           failure: {

@@ -1,4 +1,4 @@
-import { QA_SESSION_CONTRACT } from '@qa/evidence-pipeline';
+import { QA_SESSION_CONTRACT, retestContextEntry } from '@qa/evidence-pipeline';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -204,6 +204,159 @@ describe('DeepSeek QA prompt parity', () => {
         vi.useRealTimers();
         await adapter.dispose().catch(() => {});
       }
+    },
+  );
+  it('puts the installed toolchains on the worker PATH with their variables', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'sentry-ds-toolchains-'));
+    roots.push(root);
+    const input = await request(root);
+    const seen: NodeJS.ProcessEnv[] = [];
+    const asked: string[] = [];
+    let turns = 0;
+    const adapter = new DeepSeekHarnessAdapter({
+      executable: 'dsh-test',
+      modelId: 'deepseek-v4-flash',
+      environment: { PATH: '/usr/bin' },
+      toolchains: async (workspace) => {
+        asked.push(workspace);
+        return {
+          binds: ['/data/toolchains'],
+          path: ['/data/toolchains/go/1.24/go/bin'],
+          env: { GOROOT: '/data/toolchains/go/1.24/go' },
+        };
+      },
+      clientFactory: async (spec) => {
+        seen.push(spec.environment);
+        return {
+          start: async () => undefined,
+          startSession: async () => ({
+            runText: async () => {
+              turns += 1;
+              return {
+                sessionId: 's1',
+                finalResponse:
+                  turns === 1
+                    ? validPlan()
+                    : turns === 2
+                      ? 'Investigation complete.'
+                      : validReport(false),
+                events: turns === 2 ? PROBE_EVENTS : [],
+                notifications: [],
+              };
+            },
+          }),
+          close: async () => undefined,
+        };
+      },
+    });
+    for await (const event of adapter.run(input)) void event;
+    await adapter.dispose();
+    expect(asked).toEqual([root]);
+    expect(seen[0]?.['PATH']).toBe('/data/toolchains/go/1.24/go/bin:/usr/bin');
+    expect(seen[0]?.['GOROOT']).toBe('/data/toolchains/go/1.24/go');
+  });
+  it('replaces the agent’s own plan with the host’s retest checks', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'sentry-ds-retest-'));
+    roots.push(root);
+    const base = await request(root);
+    const input = HarnessRunRequestSchema.parse({
+      ...base,
+      task: {
+        ...base.task,
+        context: {
+          retest: retestContextEntry([
+            {
+              n: 1,
+              findingId: 'fnd_1',
+              title: 'Admin check missing',
+              severity: 'high',
+              confidence: 'confirmed',
+              category: 'authorization',
+              locations: ['src/Admin.cs:42'],
+              description: 'A plain user reaches admin actions.',
+              reproductionSteps: ['POST /Admin/Ban as a User'],
+              reportedOnRevision: 'aaa...111',
+            },
+          ]),
+        },
+      },
+    });
+    const prompts: string[] = [];
+    const events = [];
+    const adapter = new DeepSeekHarnessAdapter({
+      executable: 'dsh-test',
+      modelId: 'deepseek-v4-flash',
+      environment: {},
+      clientFactory: async () => ({
+        start: async () => undefined,
+        startSession: async () => ({
+          runText: async (text: string) => {
+            prompts.push(text);
+            return {
+              sessionId: 's1',
+              // The agent plans something else entirely.
+              finalResponse: prompts.length === 1 ? validPlan() : 'Investigation complete.',
+              events: [],
+              notifications: [],
+            };
+          },
+        }),
+        close: async () => undefined,
+      }),
+    });
+    for await (const event of adapter.run(input)) events.push(event);
+    await adapter.dispose();
+    expect(prompts[0]).toContain('RETEST — you are not planning a QA run');
+    const plan = events.find((e) => e.type === 'investigation.plan.created');
+    expect(plan?.type === 'investigation.plan.created' ? plan.plan.plannedChecks : []).toEqual([
+      'Retest #1: Admin check missing; at src/Admin.cs:42; reproduce: POST /Admin/Ban as a User',
+    ]);
+    expect(prompts[1]).toContain('INVESTIGATE CHECK');
+    expect(prompts[1]).toContain('Retest #1: Admin check missing');
+    expect(prompts[1]).toContain('RETEST RULES');
+    expect(prompts[1]).not.toContain('Inspect README');
+  });
+  it.each([true, false])(
+    'tells the agent about SDK download hosts only when toolDownloads=%s',
+    async (toolDownloads) => {
+      const root = await mkdtemp(join(tmpdir(), 'sentry-ds-downloads-'));
+      roots.push(root);
+      const base = await request(root);
+      const input = HarnessRunRequestSchema.parse({
+        ...base,
+        executionSafeguards: { runTimeoutMs: 30_000, ...(toolDownloads ? { toolDownloads } : {}) },
+      });
+      const prompts: string[] = [];
+      const adapter = new DeepSeekHarnessAdapter({
+        executable: 'dsh-test',
+        modelId: 'deepseek-v4-flash',
+        environment: {},
+        clientFactory: async () => ({
+          start: async () => undefined,
+          startSession: async () => ({
+            runText: async (text: string) => {
+              prompts.push(text);
+              return {
+                sessionId: 's1',
+                finalResponse:
+                  prompts.length === 1
+                    ? validPlan()
+                    : prompts.length === 2
+                      ? 'Investigation complete.'
+                      : validReport(false),
+                events: prompts.length === 2 ? PROBE_EVENTS : [],
+                notifications: [],
+              };
+            },
+          }),
+          close: async () => undefined,
+        }),
+      });
+      for await (const event of adapter.run(input)) void event;
+      await adapter.dispose();
+      const investigation = prompts[1] ?? '';
+      expect(investigation.includes('official download hosts')).toBe(toolDownloads);
+      expect(investigation).toContain('Shell network access reaches');
     },
   );
   it.each([false, true, 'low-budget'])(

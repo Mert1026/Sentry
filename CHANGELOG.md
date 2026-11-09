@@ -19,12 +19,45 @@
 - Toolchain packs (Settings → Toolchains): host-side installs of Python (uv), .NET,
   Rust, Go and Java, mounted read-only into OpenCode tool shells. Each run picks the
   project's pinned version (global.json, target framework, go.mod, .python-version,
-  rust-toolchain, pom) and falls back to the newest installed version.
+  rust-toolchain, pom, .nvmrc, .ruby-version, composer.json, .tool-versions) and falls
+  back to the pack default. The library now also has newer versions of those five, plus
+  Node.js, Bun, Deno, Ruby, PHP, Swift, Dart, Elixir, Kotlin, Scala (sbt), a C / C++
+  toolchain (gcc, make, cmake, ninja), Zig, Gradle, utilities, PostgreSQL, MySQL, Redis
+  and SQLite. Most install with micromamba from conda-forge, with no root.
+- Retest: in "Findings by revision", tick findings of an older revision and re-test them on the
+  current one. Each finding becomes one fixed check, given to the agent that reported it (or to all
+  chosen agents). A finding is only "No longer reproduces" when the agent re-ran it and saw
+  different behaviour; a probe that does not build, or cannot run, is "Cannot tell". The verdicts
+  sit in the retest run and never change the original finding. A retest always runs on the
+  current revision, and does no lead follow-ups, deepening or hazard sweep.
+- Toolchains library grows from 23 to 59 packs in six groups (languages, package managers,
+  build tools, QA and security tools, infrastructure, databases and services): pnpm, Yarn,
+  Poetry, PDM, pipx; Bazelisk, just, Task, Meson, protoc, Buf, Autotools; Ruff, ShellCheck,
+  actionlint, Trivy, OSV-Scanner, yamllint, Biome, SQLFluff, Checkov; OpenTofu, Terraform,
+  kustomize, Ansible; MongoDB, DuckDB, RabbitMQ, NATS; R, Julia, Lua, Perl, PowerShell, OCaml,
+  Clojure. The page has search and an "installed only" filter.
+- Toolchain installs now end by running what they installed; the first lines it printed are
+  kept as the installed version and shown on the page. The Node pack no longer claims Corepack,
+  pnpm or Yarn, which its check never proved; pnpm and Yarn are separate packs.
+- The project page shows what the project's own files ask for (including the `packageManager`
+  line of package.json and Poetry's lockfile), what is installed and what a run would use, and
+  flags a mismatch instead of silently falling back.
+- Custom add-ons (Settings → Toolchains): install a program with your own shell command. It runs
+  on the host, not in an agent sandbox, into its own folder under `toolchains/custom/`. Its program
+  folders go on PATH after every listed toolchain, so an add-on never replaces a listed tool.
+- "Findings by revision" on the project page: pick a revision and see what each agent reported in
+  each run on it, as raw lists. A new revision starts a fresh list; older ones stay to browse.
+  Nothing is merged or matched, and agents never see the lists.
+- "Toolchains the agents need" on the project page: every agent reads the project once and
+  names the Toolchains library entries it would need (runtime versions, compilers, build tools,
+  databases). The answers sit next to what is installed, with Install buttons. Advice only:
+  nothing installs until pressed and runs do not change.
 - Per-run "Allow tool and SDK downloads" option widens the shell allowlist to
   official vendor hosts. Package registries stay allowed in every run.
 - OpenCode tool shells hide Windows drives, `/mnt` and the WSL interop socket, set
   `XDG_RUNTIME_DIR` to the private tmp, and stop .NET build servers from holding the
   shell's output pipe open until the tool timeout.
+- Claude Code and DeepSeek runs now get the installed toolchains on PATH (with the project's pinned versions) and the same tool and SDK download guidance as OpenCode. DeepSeek's sandbox has no network policy, so its host list is guidance, not enforced.
 - Compatibility: see [docs/beta/compatibility.md](docs/beta/compatibility.md).
 
 ## [1.0.2] - 2026-10-16

@@ -99,6 +99,34 @@ describe('runtime protocol framing', () => {
         openCodeProvider: 'opencode-go',
       }).openCodeProvider,
     ).toBe('opencode-go');
+    const openai = RuntimeConfigureParamsSchema.parse({
+      models: {},
+      providers: { openAiApiKey: 'sk-test-openai' },
+      openCodeProvider: 'openai',
+    });
+    expect(openai.providers.openAiApiKey).toBe('sk-test-openai');
+    expect(openai.openCodeProvider).toBe('openai');
+    expect(
+      RuntimeConfigureParamsSchema.parse({
+        models: {},
+        providers: {},
+        reasoningEffort: { chatgpt: 'high' },
+      }).reasoningEffort?.chatgpt,
+    ).toBe('high');
+    expect(() =>
+      RuntimeConfigureParamsSchema.parse({
+        models: {},
+        providers: {},
+        reasoningEffort: { chatgpt: 'ludicrous' },
+      }),
+    ).toThrow();
+    expect(
+      RuntimeConfigureParamsSchema.parse({ models: {}, providers: {}, openAiAuth: 'account' })
+        .openAiAuth,
+    ).toBe('account');
+    expect(() =>
+      RuntimeConfigureParamsSchema.parse({ models: {}, providers: {}, openAiAuth: 'other' }),
+    ).toThrow();
     expect(RUNTIME_PROTOCOL_VERSION).toBe(1);
   });
 

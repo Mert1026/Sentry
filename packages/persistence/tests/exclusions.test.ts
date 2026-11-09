@@ -2,6 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_IMPORT_EXCLUSIONS, matchImportExclusion } from '../src/exclusions.js';
 
 describe('import exclusion matcher', () => {
+  it('keeps a regular file that only shares a folder name, but not folders or links', () => {
+    expect(matchImportExclusion('build', DEFAULT_IMPORT_EXCLUSIONS, 'file')).toBe(false);
+    expect(matchImportExclusion('src/coverage', DEFAULT_IMPORT_EXCLUSIONS, 'file')).toBe(false);
+    expect(matchImportExclusion('build', DEFAULT_IMPORT_EXCLUSIONS, 'directory')).toBe(true);
+    expect(matchImportExclusion('build', DEFAULT_IMPORT_EXCLUSIONS, 'symlink')).toBe(true);
+    // Anything below a folder with that name is still excluded.
+    expect(matchImportExclusion('build/out.js', DEFAULT_IMPORT_EXCLUSIONS, 'file')).toBe(true);
+    expect(matchImportExclusion('build')).toBe(true);
+  });
+
   it('excludes well-known directories at any depth', () => {
     for (const name of DEFAULT_IMPORT_EXCLUSIONS.directories) {
       expect(matchImportExclusion(name)).toBe(true);

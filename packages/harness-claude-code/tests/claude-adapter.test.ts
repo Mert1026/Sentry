@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { tmpdir as systemTmpdir } from 'node:os';
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 import { HarnessRunRequestSchema, type HarnessEvent } from '@qa/schemas';
+import { retestContextEntry } from '@qa/evidence-pipeline';
 import {
   createAgentRunId,
   createProjectContextSnapshotId,
@@ -220,6 +221,105 @@ function threeStage(
 }
 
 describe('ClaudeCodeHarnessAdapter', () => {
+  it('replaces the agent’s own plan with the host’s retest checks', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'sentry-claude-retest-'));
+    roots.push(root);
+    const base = await request(root);
+    const input = HarnessRunRequestSchema.parse({
+      ...base,
+      task: {
+        ...base.task,
+        context: {
+          retest: retestContextEntry([
+            {
+              n: 1,
+              findingId: 'fnd_1',
+              title: 'Admin check missing',
+              severity: 'high',
+              confidence: 'confirmed',
+              category: 'authorization',
+              locations: ['src/Admin.cs:42'],
+              description: 'A plain user reaches admin actions.',
+              reproductionSteps: [],
+              reportedOnRevision: 'aaa...111',
+            },
+          ]),
+        },
+      },
+    });
+    const prompts: string[] = [];
+    let calls = 0;
+    const adapter = new ClaudeCodeHarnessAdapter({
+      executable: 'claude-test',
+      modelId: 'glm-5.3-flash',
+      environment: {},
+      windowsUsersRoot: hermeticUsersRoot(),
+      clientFactory: async () => ({
+        sessionId: 'session-retest',
+        startSession: async () => ({
+          runText: async (text: string) => {
+            prompts.push(text);
+            calls += 1;
+            return calls === 1 ? planTurn() : investigationTurn();
+          },
+        }),
+        close: async () => undefined,
+      }),
+    });
+    const events = await collect(adapter, input);
+    await adapter.dispose();
+    const plan = events.find((e) => e.type === 'investigation.plan.created');
+    expect(plan?.type === 'investigation.plan.created' ? plan.plan.plannedChecks : []).toEqual([
+      'Retest #1: Admin check missing; at src/Admin.cs:42',
+    ]);
+    expect(prompts[0]).toContain('RETEST — you are not planning a QA run');
+    expect(prompts[1]).toContain('Retest #1: Admin check missing');
+    expect(prompts[1]).toContain('RETEST RULES');
+  });
+
+  it('puts the installed toolchains on the worker PATH with their variables', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'sentry-claude-toolchains-'));
+    roots.push(root);
+    const input = await request(root);
+    let seenEnvironment: NodeJS.ProcessEnv | undefined;
+    const asked: string[] = [];
+    let calls = 0;
+    const adapter = new ClaudeCodeHarnessAdapter({
+      executable: 'claude-test',
+      modelId: 'glm-5.3-flash',
+      environment: { PATH: '/usr/bin' },
+      windowsUsersRoot: hermeticUsersRoot(),
+      toolchains: async (workspace) => {
+        asked.push(workspace);
+        return {
+          binds: ['/data/toolchains'],
+          path: ['/data/toolchains/dotnet/8.0/dotnet'],
+          env: { DOTNET_ROOT: '/data/toolchains/dotnet/8.0/dotnet' },
+        };
+      },
+      clientFactory: async (spec) => {
+        seenEnvironment ??= spec.environment;
+        return {
+          sessionId: 'session-toolchains',
+          startSession: async () => ({
+            runText: async () => {
+              calls += 1;
+              if (calls === 1) return planTurn();
+              if (calls === 2) return investigationTurn();
+              return reportTurn(validReportV2());
+            },
+          }),
+          close: async () => undefined,
+        };
+      },
+    });
+    await collect(adapter, input);
+    await adapter.dispose();
+    expect(asked).toEqual([input.workspace.runtimePath]);
+    expect(seenEnvironment?.['PATH']).toBe('/data/toolchains/dotnet/8.0/dotnet:/usr/bin');
+    expect(seenEnvironment?.['DOTNET_ROOT']).toBe('/data/toolchains/dotnet/8.0/dotnet');
+  });
+
   it('recovers a context-exceeded report in a fresh compacted session', async () => {
     const root = await mkdtemp(join(tmpdir(), 'sentry-claude-context-'));
     roots.push(root);

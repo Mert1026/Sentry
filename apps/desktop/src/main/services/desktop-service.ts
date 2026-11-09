@@ -40,6 +40,23 @@ const StartRunOptions = z
     webAccess: z.boolean().optional(),
     toolDownloads: z.boolean().optional(),
     useProfile: z.boolean().optional(),
+    retest: z
+      .object({
+        findings: z
+          .array(
+            z
+              .object({
+                runId: z.string().min(1).max(100),
+                findingId: z.string().min(1).max(100),
+              })
+              .strict(),
+          )
+          .min(1)
+          .max(12),
+        who: z.enum(['reporter', 'all']),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -136,6 +153,22 @@ export class DesktopApplicationService {
     return this.call('projects.suggestTargets', { projectId: id });
   }
 
+  openAiAccountStatus(): Promise<unknown> {
+    return this.call('openai.accountStatus', {});
+  }
+
+  openAiAccountLogin(): Promise<unknown> {
+    return this.call('openai.accountLogin', {});
+  }
+
+  openAiAccountCancelLogin(): Promise<unknown> {
+    return this.call('openai.accountCancelLogin', {});
+  }
+
+  openAiAccountLogout(): Promise<unknown> {
+    return this.call('openai.accountLogout', {});
+  }
+
   toolchainStatus(): Promise<unknown> {
     return this.call('toolchains.status', {});
   }
@@ -148,6 +181,22 @@ export class DesktopApplicationService {
     return this.call('toolchains.remove', { packId, version });
   }
 
+  customAddonStatus(): Promise<unknown> {
+    return this.call('toolchains.customStatus', {});
+  }
+
+  customAddonInstall(input: {
+    name: string;
+    command: string;
+    pathEntries?: string[];
+  }): Promise<unknown> {
+    return this.call('toolchains.customInstall', input);
+  }
+
+  customAddonRemove(name: string): Promise<unknown> {
+    return this.call('toolchains.customRemove', { name });
+  }
+
   profileStatus(projectId: string): Promise<unknown> {
     const id = ProjectIdInput.parse(projectId);
     return this.call('projects.profile', { projectId: id });
@@ -156,6 +205,29 @@ export class DesktopApplicationService {
   buildProfiles(projectId: string, agentStackIds?: string[]): Promise<unknown> {
     const id = ProjectIdInput.parse(projectId);
     return this.call('projects.buildProfile', {
+      projectId: id,
+      ...(agentStackIds === undefined ? {} : { agentStackIds }),
+    });
+  }
+
+  toolchainNeedsStatus(projectId: string): Promise<unknown> {
+    const id = ProjectIdInput.parse(projectId);
+    return this.call('projects.toolchainNeeds', { projectId: id });
+  }
+
+  toolchainSelection(projectId: string): Promise<unknown> {
+    const id = ProjectIdInput.parse(projectId);
+    return this.call('projects.toolchainSelection', { projectId: id });
+  }
+
+  findingsByRevision(projectId: string): Promise<unknown> {
+    const id = ProjectIdInput.parse(projectId);
+    return this.call('projects.findingsByRevision', { projectId: id });
+  }
+
+  assessToolchains(projectId: string, agentStackIds?: string[]): Promise<unknown> {
+    const id = ProjectIdInput.parse(projectId);
+    return this.call('projects.assessToolchains', {
       projectId: id,
       ...(agentStackIds === undefined ? {} : { agentStackIds }),
     });
@@ -214,6 +286,7 @@ export class DesktopApplicationService {
         ...(parsed.webAccess === true ? { webAccess: true } : {}),
         ...(parsed.toolDownloads === true ? { toolDownloads: true } : {}),
         ...(parsed.useProfile === true ? { useProfile: true } : {}),
+        ...(parsed.retest === undefined ? {} : { retest: parsed.retest }),
       })) as DesktopOperation;
     } catch (error) {
       // A client-side timeout does NOT mean the runtime didn't start the run:
@@ -361,9 +434,11 @@ export class DesktopApplicationService {
     const opencode = get('SENTRY_OPENCODE_MODEL');
     const deepseek = get('SENTRY_DEEPSEEK_MODEL');
     const glm = get('SENTRY_GLM_MODEL');
+    const chatgpt = get('SENTRY_CHATGPT_MODEL');
     if (opencode !== undefined) models['opencode'] = opencode;
     if (deepseek !== undefined) models['deepseek'] = deepseek;
     if (glm !== undefined) models['glm'] = glm;
+    if (chatgpt !== undefined) models['chatgpt'] = chatgpt;
     const providers: Record<string, string> = {};
     const openRouterKey = get('OPENROUTER_API_KEY');
     const openCodeKey = get('OPENCODE_API_KEY');
@@ -372,6 +447,8 @@ export class DesktopApplicationService {
     const glmEndpoint = get('ANTHROPIC_BASE_URL');
     if (openRouterKey !== undefined) providers['openRouterApiKey'] = openRouterKey;
     if (openCodeKey !== undefined) providers['openCodeApiKey'] = openCodeKey;
+    const openAiKey = get('OPENAI_API_KEY');
+    if (openAiKey !== undefined) providers['openAiApiKey'] = openAiKey;
     if (deepseekKey !== undefined) providers['deepseekApiKey'] = deepseekKey;
     if (glmToken !== undefined) providers['anthropicAuthToken'] = glmToken;
     if (glmEndpoint !== undefined) providers['anthropicBaseUrl'] = glmEndpoint;
@@ -386,10 +463,24 @@ export class DesktopApplicationService {
     const provider =
       openCodeProvider === 'openrouter' ||
       openCodeProvider === 'opencode' ||
-      openCodeProvider === 'opencode-go'
+      openCodeProvider === 'opencode-go' ||
+      openCodeProvider === 'openai'
         ? { openCodeProvider }
         : {};
-    return this.call('runtime.configure', { models, providers, binaries, ...provider });
+    const openAiAuth =
+      get('SENTRY_OPENAI_AUTH')?.trim().toLowerCase() === 'account' ? 'account' : 'key';
+    return this.call('runtime.configure', {
+      models,
+      providers,
+      binaries,
+      ...provider,
+      openAiAuth,
+      reasoningEffort: {
+        chatgpt: ['low', 'medium', 'high'].includes(get('SENTRY_CHATGPT_REASONING') ?? '')
+          ? (get('SENTRY_CHATGPT_REASONING') as 'low' | 'medium' | 'high')
+          : 'default',
+      },
+    });
   }
 
   productionReadiness(input?: { agentStackIds?: string[] }): Promise<unknown> {

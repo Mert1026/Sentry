@@ -3,6 +3,7 @@ import { Handle, Position, type NodeProps } from '@xyflow/react';
 import type { AgentNodeView } from '../../lib/types.js';
 import { StatusIcon, nodeStateClass } from '../StatusGlyph.js';
 import { dotClassForStatus } from '../ui/StatusPill.js';
+import { useI18n } from '../../lib/i18n.js';
 import { formatCount, formatElapsed, stageStateLabel } from '../../lib/agent-telemetry.js';
 
 const ACCENTS: Record<string, string> = {
@@ -10,6 +11,7 @@ const ACCENTS: Record<string, string> = {
   stack_opencode_main: 'var(--opencode, var(--muse))',
   stack_deepseek_main: 'var(--deepseek)',
   stack_glm_main: 'var(--glm)',
+  stack_chatgpt_main: 'var(--chatgpt)',
 };
 
 function stageTone(state: string): string {
@@ -28,6 +30,7 @@ function stageTone(state: string): string {
 }
 
 export function AgentCanvasNode({ data }: NodeProps): React.JSX.Element {
+  const { t } = useI18n();
   const payload = data['payload'] as { view?: AgentNodeView; agentStackId?: string } | undefined;
   const view = payload?.view;
   const accent = ACCENTS[payload?.agentStackId ?? ''] ?? 'var(--accent)';
@@ -65,7 +68,7 @@ export function AgentCanvasNode({ data }: NodeProps): React.JSX.Element {
         ((data['selected'] as boolean) ? ' selected' : '')
       }
       style={{ borderTop: '2px solid ' + accent }}
-      aria-label={view.displayName + ' ' + view.status}
+      aria-label={view.displayName + ' ' + t(view.status.replace(/_/g, ' '))}
     >
       <Handle type="target" position={Position.Top} />
       <div className="node-title">

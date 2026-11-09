@@ -69,6 +69,64 @@ const bothKeys = (providerHint: string, modelHint = 'kimi-k3'): Status[] => [
   },
 ];
 
+describe('ChatGPT reasoning effort', () => {
+  const rows = (effort?: string): Status[] => [
+    statusRow('SENTRY_CHATGPT_MODEL', 'gpt-6.1-sol'),
+    ...(effort === undefined ? [] : [statusRow('SENTRY_CHATGPT_REASONING', effort)]),
+  ];
+
+  it('offers Default, Low, Medium and High and shows the saved choice', async () => {
+    const s = mount(vi.fn().mockResolvedValue(rows('high')));
+    const card = () => within(screen.getByRole('region', { name: 'ChatGPT provider settings' }));
+    const select = (await waitFor(() =>
+      card().getByLabelText('Value for SENTRY_CHATGPT_REASONING'),
+    )) as HTMLSelectElement;
+    await waitFor(() => expect(select.value).toBe('high'));
+    expect(Array.from(select.querySelectorAll('option')).map((option) => option.value)).toEqual([
+      '',
+      'low',
+      'medium',
+      'high',
+    ]);
+    expect(s.client).toBeDefined();
+  });
+
+  it('saves a chosen effort and removes the setting for Default', async () => {
+    const save = vi.fn().mockResolvedValue({});
+    const clearKey = vi.fn().mockResolvedValue({});
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: Infinity }, mutations: { retry: false } },
+    });
+    clients.push(client);
+    Object.defineProperty(window, 'sentry', {
+      configurable: true,
+      value: {
+        providers: {
+          status: vi.fn().mockResolvedValue(rows('low')),
+          save,
+          clearKey,
+          forgetAll: vi.fn(),
+        },
+      },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <Providers />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    const select = (await screen.findByLabelText(
+      'Value for SENTRY_CHATGPT_REASONING',
+    )) as HTMLSelectElement;
+    await waitFor(() => expect(select.value).toBe('low'));
+    fireEvent.change(select, { target: { value: 'high' } });
+    await waitFor(() => expect(save).toHaveBeenCalledWith('SENTRY_CHATGPT_REASONING', 'high'));
+    fireEvent.change(select, { target: { value: '' } });
+    await waitFor(() => expect(clearKey).toHaveBeenCalledWith('SENTRY_CHATGPT_REASONING'));
+  });
+});
+
 describe('Providers model controls', () => {
   it('shows a Go subscription dropdown and switches to a manual input for pay-as-you-go modes', async () => {
     const query = vi.fn().mockResolvedValue(bothKeys('opencode-go'));

@@ -12,7 +12,7 @@ afterEach(() => cleanup());
  * The advanced harness-binary section must exist with saveable fields:
  * without it the backend binary-override channel is unreachable from
  * Settings, and users cannot fix an unresolvable provider executable.
- * It lives collapsed under "Advanced runtime binaries"; the card itself
+ * It lives in the "Advanced runtime binaries" info box; the card itself
  * still renders every Linux-path executable field.
  */
 describe('Providers harness binary section', () => {
@@ -61,7 +61,8 @@ describe('Providers harness binary section', () => {
     expect(html).toContain('GLM');
     expect(html).toContain('OpenCode API key (Zen &amp; Go)');
     expect(html).toContain('OpenRouter API key (Pay-as-you-go)');
-    expect(html).toContain('<summary class="metadata">Explanation</summary>');
+    expect(html).toContain('aria-label="About OpenCode API key (Zen &amp; Go)"');
+    expect(html).toContain('aria-label="About OpenRouter API key (Pay-as-you-go)"');
     expect(html).toContain('API key');
     expect(html).toContain('Model');
     expect(html).toContain('Advanced runtime binaries');
@@ -69,6 +70,13 @@ describe('Providers harness binary section', () => {
     // Credential fields keep accessible labels so every value stays saveable.
     expect(html).toContain('Value for OPENCODE_API_KEY');
     expect(html).toContain('Value for OPENROUTER_API_KEY');
+    expect(html).toContain('OpenAI API key');
+    expect(html).toContain('Value for OPENAI_API_KEY');
+    expect(html).toContain('Value for SENTRY_CHATGPT_MODEL');
+    // The ChatGPT model is a dropdown of OpenAI models, like the other agents.
+    expect(html).toContain('<option value="gpt-6.1-sol">gpt-6.1-sol</option>');
+    expect(html).toContain('gpt-5.5-pro (higher-effort Pro model (slower, costs more))');
+    expect(html).toContain('ChatGPT');
     expect(html).toContain('Value for DEEPSEEK_API_KEY');
     expect(html).toContain('Value for ANTHROPIC_AUTH_TOKEN');
   });

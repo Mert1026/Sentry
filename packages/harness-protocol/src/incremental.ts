@@ -11,6 +11,8 @@ const TERMINAL_TYPES = new Set<HarnessEvent['type']>([
 export class IncrementalHarnessEventValidator {
   private readonly seenOperations = new Set<string>();
   private readonly openOperations = new Map<string, string>();
+  /** Evidence this AgentRun has submitted so far: findings may cite only these. */
+  private readonly submittedEvidence = new Set<string>();
   private started = false;
   private terminal = false;
   private eventIndex = 0;
@@ -58,12 +60,18 @@ export class IncrementalHarnessEventValidator {
     if (event.type === 'report.checkpoint') {
       for (const finding of event.findings)
         this.assertOwned(finding.qaRunId, finding.agentRunId, index, 'Checkpoint finding');
-      for (const evidence of event.evidence)
+      for (const evidence of event.evidence) {
         this.assertOwned(evidence.qaRunId, evidence.agentRunId, index, 'Checkpoint evidence');
+        this.submittedEvidence.add(evidence.id);
+      }
+      for (const finding of event.findings)
+        this.assertCitesOwnEvidence(finding.evidenceIds, index, 'Checkpoint finding');
     } else if (event.type === 'finding.submitted') {
       this.assertOwned(event.finding.qaRunId, event.finding.agentRunId, index, 'Finding');
+      this.assertCitesOwnEvidence(event.finding.evidenceIds, index, 'Finding');
     } else if (event.type === 'evidence.submitted') {
       this.assertOwned(event.evidence.qaRunId, event.evidence.agentRunId, index, 'Evidence');
+      this.submittedEvidence.add(event.evidence.id);
     } else if (event.type === 'investigation.plan.created') {
       this.assertOwned(event.plan.qaRunId, event.plan.agentRunId, index, 'Investigation plan');
     } else if (event.type === 'investigation.hypothesis.discovered') {
@@ -111,6 +119,22 @@ export class IncrementalHarnessEventValidator {
       throw new HarnessProtocolError('AGENT_RUN_MISMATCH', label + ' belongs to another AgentRun', {
         eventIndex,
       });
+    }
+  }
+
+  /** A finding's evidence must have been submitted by this same AgentRun, never another agent's. */
+  private assertCitesOwnEvidence(
+    evidenceIds: readonly string[],
+    eventIndex: number,
+    label: string,
+  ): void {
+    for (const id of evidenceIds) {
+      if (!this.submittedEvidence.has(id)) {
+        this.fail(
+          label + ' cites evidence ' + id + ' that this AgentRun did not submit',
+          eventIndex,
+        );
+      }
     }
   }
 

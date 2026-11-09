@@ -1,12 +1,14 @@
 import React from 'react';
+import { InfoPopover } from '../components/InfoPopover.js';
+import { LoadingOverlay } from '../components/BlockingOverlay.js';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Check, X } from 'lucide-react';
+import { Bot, Cpu, Info, KeyRound, PackageCheck, ShieldCheck, Terminal } from 'lucide-react';
 import { sentryApi } from '../lib/sentry-api.js';
 import { runtimeConnectionState, useRuntimeStatus } from '../lib/use-runtime-status.js';
 import { PageHeader, PageSection } from '../components/ui/PageHeader.js';
 import { StatusPill } from '../components/ui/StatusPill.js';
-import { CollapsibleSection } from '../components/ui/CollapsibleSection.js';
+import { InfoTile } from '../components/InfoTile.js';
 
 interface RuntimeStatus {
   connected: boolean;
@@ -38,19 +40,6 @@ interface AgentStackHealth {
   executableSource?: string;
   wrapperNote?: string;
   note?: string;
-}
-
-function HealthRow({ ok, label }: { ok: boolean; label: string }): React.JSX.Element {
-  return (
-    <div className="metadata" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-      {ok ? (
-        <Check size={13} aria-label="yes" color="var(--success)" />
-      ) : (
-        <X size={13} aria-label="no" color="var(--text-tertiary)" />
-      )}
-      {label}
-    </div>
-  );
 }
 
 export function Environment(): React.JSX.Element {
@@ -86,7 +75,7 @@ export function Environment(): React.JSX.Element {
   const hello = data?.runtime ?? status?.hello;
   const connection = runtimeConnectionState(runtime);
   const connected = connection === 'connected';
-  if (environment.isLoading) return <div className="skeleton">Loading environment…</div>;
+  if (environment.isLoading) return <LoadingOverlay>Loading environment…</LoadingOverlay>;
   if (environment.isError || data === undefined)
     return (
       <div className="page">
@@ -131,6 +120,30 @@ export function Environment(): React.JSX.Element {
             <span className="metadata">
               WSL distribution: {status?.distro ?? hello?.distro ?? '—'}
             </span>
+            <span className="info-row-spacer" />
+            <InfoPopover title="Advanced details">
+              <dl className="kv" style={{ marginTop: 8 }}>
+                {hello !== undefined ? (
+                  <>
+                    <dt>Node host path</dt>
+                    <dd className="mono truncate" title={hello.processExecPath}>
+                      {hello.processExecPath}
+                    </dd>
+                    <dt>Data root</dt>
+                    <dd className="mono truncate" title={hello.dataRoot}>
+                      {hello.dataRoot}
+                    </dd>
+                    <dt>Protocol version</dt>
+                    <dd className="mono">v{hello.protocolVersion}</dd>
+                  </>
+                ) : (
+                  <>
+                    <dt>Status</dt>
+                    <dd className="metadata">Runtime details not recorded.</dd>
+                  </>
+                )}
+              </dl>
+            </InfoPopover>
           </div>
           {hello !== undefined ? (
             <dl className="kv" style={{ marginTop: 10 }}>
@@ -146,29 +159,6 @@ export function Environment(): React.JSX.Element {
               </dd>
             </dl>
           ) : null}
-          <CollapsibleSection title="Advanced details">
-            <dl className="kv" style={{ marginTop: 8 }}>
-              {hello !== undefined ? (
-                <>
-                  <dt>Node host path</dt>
-                  <dd className="mono truncate" title={hello.processExecPath}>
-                    {hello.processExecPath}
-                  </dd>
-                  <dt>Data root</dt>
-                  <dd className="mono truncate" title={hello.dataRoot}>
-                    {hello.dataRoot}
-                  </dd>
-                  <dt>Protocol version</dt>
-                  <dd className="mono">v{hello.protocolVersion}</dd>
-                </>
-              ) : (
-                <>
-                  <dt>Status</dt>
-                  <dd className="metadata">Runtime details not recorded.</dd>
-                </>
-              )}
-            </dl>
-          </CollapsibleSection>
         </div>
       </PageSection>
       <PageSection title="Local CLI">
@@ -187,17 +177,19 @@ export function Environment(): React.JSX.Element {
             {(cliStatus?.connectedClients ?? []).length === 0 && cliStatus?.started === true ? (
               <span className="metadata">No external clients</span>
             ) : null}
+            <span className="info-row-spacer" />
+            {cliStatus?.error === undefined ? (
+              <InfoPopover title="Local CLI">
+                External automation can drive this same Sentry instance with `sentry cli ...` while
+                the Desktop stays open.
+              </InfoPopover>
+            ) : null}
           </div>
           {cliStatus?.error !== undefined ? (
             <p className="metadata" style={{ marginBottom: 0 }}>
               {cliStatus.error}
             </p>
-          ) : (
-            <p className="metadata" style={{ marginBottom: 0 }}>
-              External automation can drive this same Sentry instance with `sentry cli ...` while
-              the Desktop stays open.
-            </p>
-          )}
+          ) : null}
         </div>
       </PageSection>
       <PageSection title="Agent health">
@@ -205,51 +197,71 @@ export function Environment(): React.JSX.Element {
           {(data.agentStacks ?? []).map((stack) => (
             <div className="card" key={stack.id}>
               <div className="agent-row">
+                <Bot size={18} aria-hidden="true" style={{ color: 'var(--text-secondary)' }} />
                 <span className="grow card-title">{stack.displayName}</span>
+                <InfoPopover title={stack.displayName + ' readiness'}>
+                  A saved credential does not imply the provider works until a non-billable doctor
+                  verifies it inside the WSL runtime.
+                </InfoPopover>
+              </div>
+              <div style={{ marginTop: 8 }}>
                 <StatusPill status={stack.readiness ?? 'unknown'} />
               </div>
-              <div
-                className="mono metadata truncate"
-                style={{ margin: '4px 0 8px' }}
-                title={stack.modelId}
-              >
-                {stack.modelId}
+              <div className="rs-tiles" style={{ marginTop: 10 }}>
+                <InfoTile
+                  icon={Cpu}
+                  label="Model"
+                  value={stack.modelId}
+                  title={stack.modelId}
+                  wide
+                  compact
+                />
+                <InfoTile
+                  icon={KeyRound}
+                  label="Credential"
+                  value={stack.configured === true ? 'Saved' : 'Missing'}
+                  tone={stack.configured === true ? 'on' : 'warn'}
+                  compact
+                />
+                <InfoTile
+                  icon={PackageCheck}
+                  label="Binary"
+                  value={stack.binaryAvailable === true ? 'Available' : 'Missing'}
+                  tone={stack.binaryAvailable === true ? 'on' : 'warn'}
+                  compact
+                />
+                <InfoTile
+                  icon={ShieldCheck}
+                  label="Runtime"
+                  value={stack.runtimeVerified === true ? 'Verified' : 'Not tested'}
+                  tone={stack.runtimeVerified === true ? 'success' : undefined}
+                  wide
+                  compact
+                />
+                {stack.executionPath !== undefined && stack.executionPath !== '' ? (
+                  <InfoTile
+                    icon={Terminal}
+                    label="Execution runtime"
+                    hint={
+                      stack.executableSource !== undefined && stack.executableSource !== ''
+                        ? 'Source: ' + stack.executableSource
+                        : undefined
+                    }
+                    title={stack.executionPath}
+                    wide
+                    compact
+                  >
+                    <span className="mono rs-path">{stack.executionPath}</span>
+                  </InfoTile>
+                ) : null}
+                {[stack.wrapperNote, stack.note]
+                  .filter((text): text is string => text !== undefined && text !== '')
+                  .map((text) => (
+                    <InfoTile key={text} icon={Info} label="Note" wide compact>
+                      <span className="rs-note">{text}</span>
+                    </InfoTile>
+                  ))}
               </div>
-              <HealthRow
-                ok={stack.configured === true}
-                label={'Credential ' + (stack.configured === true ? 'saved' : 'missing')}
-              />
-              <HealthRow
-                ok={stack.binaryAvailable === true}
-                label={'Binary ' + (stack.binaryAvailable === true ? 'available' : 'missing')}
-              />
-              <HealthRow
-                ok={stack.runtimeVerified === true}
-                label={'Runtime ' + (stack.runtimeVerified === true ? 'verified' : 'not tested')}
-              />
-              {stack.executionPath !== undefined && stack.executionPath !== '' ? (
-                <div className="mono metadata truncate" title={stack.executionPath}>
-                  {'Execution runtime: ' +
-                    stack.executionPath +
-                    (stack.executableSource !== undefined && stack.executableSource !== ''
-                      ? ' (source: ' + stack.executableSource + ')'
-                      : '')}
-                </div>
-              ) : null}
-              {stack.wrapperNote !== undefined && stack.wrapperNote !== '' ? (
-                <p className="metadata" style={{ marginBottom: 0 }}>
-                  {stack.wrapperNote}
-                </p>
-              ) : null}
-              {stack.note !== undefined && stack.note !== '' ? (
-                <p className="metadata" style={{ marginBottom: 0 }}>
-                  {stack.note}
-                </p>
-              ) : null}
-              <p className="metadata" style={{ marginBottom: 0 }}>
-                A saved credential does not imply the provider works until a non-billable doctor
-                verifies it inside the WSL runtime.
-              </p>
             </div>
           ))}
         </div>

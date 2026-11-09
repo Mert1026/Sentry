@@ -1,4 +1,5 @@
 import React from 'react';
+import { LoadingOverlay } from '../components/BlockingOverlay.js';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronsLeft, ChevronsRight } from 'lucide-react';
@@ -7,7 +8,6 @@ import { AgentInspector } from '../components/AgentInspector.js';
 import { RunSummaryPanel } from '../components/RunSummaryPanel.js';
 import { CopyId } from '../components/CopyId.js';
 import { StatusPill } from '../components/ui/StatusPill.js';
-import { CollapsibleSection } from '../components/ui/CollapsibleSection.js';
 import { ToastStack, type ToastItem } from '../components/ui/Toast.js';
 import { EdgeInspector, NodeStatusHeader } from '../components/PipelineInspectors.js';
 import { AGENT_DISPLAY_NAMES } from '../lib/agent-telemetry.js';
@@ -150,7 +150,17 @@ export function RunWorkspace(): React.JSX.Element {
           createdAt: string;
           startedAt?: string;
           completedAt?: string | null;
-          configuration?: { agentStackIds?: string[] };
+          configuration?: {
+            agentStackIds?: string[];
+            retest?: {
+              items: Array<{
+                n: number;
+                findingId: string;
+                title: string;
+                assignedAgentStackIds: string[];
+              }>;
+            };
+          };
         };
         project?: { name?: string };
         revision?: { id?: string };
@@ -274,7 +284,7 @@ export function RunWorkspace(): React.JSX.Element {
     window.addEventListener('pointerup', onUp);
   }, []);
 
-  if (snapshot.isLoading) return <div className="skeleton">Loading run…</div>;
+  if (snapshot.isLoading) return <LoadingOverlay>Loading run…</LoadingOverlay>;
   if (data === undefined) {
     return (
       <div className="error-box" role="alert">
@@ -371,59 +381,73 @@ export function RunWorkspace(): React.JSX.Element {
             ) : null}
           </div>
         </div>
-        <div className="run-meta-row">
-          <span title={'Started ' + String(data.run.startedAt ?? data.run.createdAt)}>
-            {'Started ' + formatClock(data.run.startedAt ?? data.run.createdAt)}
-          </span>
-          <span>
-            {'Duration ' +
-              formatDuration(data.run.startedAt ?? data.run.createdAt, data.run.completedAt)}
-          </span>
-          <span>
-            {String(data.run.configuration?.agentStackIds?.length ?? data.agentRuns.length) +
-              ' selected agents'}
-          </span>
-          <span>
-            {String(data.findings.length) +
-              (data.findings.length === 1 ? ' finding' : ' findings') +
-              ' · ' +
-              String(data.evidence.length) +
-              ' evidence'}
-          </span>
-          {cancelState !== undefined ? <span>{'Cancellation: ' + cancelState}</span> : null}
-        </div>
-        <CollapsibleSection title="Details">
-          <dl className="kv" style={{ marginTop: 8 }}>
+        <dl className="run-details">
+          <div className="run-detail">
             <dt>Project</dt>
             <dd>
               <Link to={'/projects/' + data.run.projectId}>{resolvedProjectName}</Link>
             </dd>
+          </div>
+          <div className="run-detail">
+            <dt>Started</dt>
+            <dd className="mono" title={String(data.run.startedAt ?? data.run.createdAt)}>
+              {formatClock(data.run.startedAt ?? data.run.createdAt)}
+            </dd>
+          </div>
+          <div className="run-detail">
+            <dt>Duration</dt>
+            <dd className="mono">
+              {formatDuration(data.run.startedAt ?? data.run.createdAt, data.run.completedAt)}
+            </dd>
+          </div>
+          <div className="run-detail">
+            <dt>Agents</dt>
+            <dd>
+              {String(data.run.configuration?.agentStackIds?.length ?? data.agentRuns.length) +
+                ' selected'}
+            </dd>
+          </div>
+          <div className="run-detail">
+            <dt>Findings</dt>
+            <dd>{String(data.findings.length)}</dd>
+          </div>
+          <div className="run-detail">
+            <dt>Evidence</dt>
+            <dd>{String(data.evidence.length)}</dd>
+          </div>
+          {cancelState !== undefined ? (
+            <div className="run-detail">
+              <dt>Cancellation</dt>
+              <dd>{cancelState}</dd>
+            </div>
+          ) : null}
+          <div className="run-detail">
             <dt>Run ID</dt>
             <dd>
               <CopyId id={data.run.id} short={22} />
             </dd>
+          </div>
+          <div className="run-detail">
             <dt>Snapshot</dt>
             <dd>
               <CopyId id={data.run.snapshotId} short={22} />
             </dd>
-            {data.run.projectRevisionId !== undefined ? (
-              <>
-                <dt>Revision</dt>
-                <dd>
-                  <CopyId id={data.run.projectRevisionId} short={22} />
-                </dd>
-              </>
-            ) : null}
-            <dt>Started</dt>
-            <dd className="mono">{String(data.run.startedAt ?? data.run.createdAt)}</dd>
-            {data.run.completedAt != null ? (
-              <>
-                <dt>Completed</dt>
-                <dd className="mono">{String(data.run.completedAt)}</dd>
-              </>
-            ) : null}
-          </dl>
-        </CollapsibleSection>
+          </div>
+          {data.run.projectRevisionId !== undefined ? (
+            <div className="run-detail">
+              <dt>Revision</dt>
+              <dd>
+                <CopyId id={data.run.projectRevisionId} short={22} />
+              </dd>
+            </div>
+          ) : null}
+          {data.run.completedAt != null ? (
+            <div className="run-detail">
+              <dt>Completed</dt>
+              <dd className="mono">{String(data.run.completedAt)}</dd>
+            </div>
+          ) : null}
+        </dl>
       </header>
       {['failed', 'partial', 'cancelled'].includes(data.run.status) ? (
         <div className="inline-notice tone-warning" role="status">
@@ -448,7 +472,7 @@ export function RunWorkspace(): React.JSX.Element {
       ) : null}
       {!terminal ? <div className="inline-notice">Export unlocks at terminal status.</div> : null}
       {graph === undefined ? (
-        <div className="skeleton">Building execution graph…</div>
+        <LoadingOverlay>Building execution graph…</LoadingOverlay>
       ) : (
         <div className="workspace" role="region" aria-label="Run workspace">
           {collapseLeft ? (
@@ -549,6 +573,16 @@ export function RunWorkspace(): React.JSX.Element {
                       evidence: data.evidence.filter(
                         (e) => e.agentRunId === selectedAgent.agentRunId,
                       ),
+                      ...(data.run.configuration?.retest === undefined
+                        ? {}
+                        : {
+                            retestItems: data.run.configuration.retest.items.filter((item) =>
+                              item.assignedAgentStackIds.includes(
+                                data.agentRuns.find((a) => a.id === selectedAgent.agentRunId)
+                                  ?.agentStackId ?? '',
+                              ),
+                            ),
+                          }),
                     }}
                   />
                 ) : selectedNode !== undefined ? (
@@ -602,7 +636,7 @@ function SelectedNodeInspector({
         <CopyId id={nodeId} short={22} />
       </div>
       {developerMode ? (
-        <pre className="mono" style={{ whiteSpace: 'pre-wrap', fontSize: 11 }}>
+        <pre className="mono" style={{ whiteSpace: 'pre-wrap', fontSize: 13 }}>
           {JSON.stringify(payload, null, 2).slice(0, 4000)}
         </pre>
       ) : (

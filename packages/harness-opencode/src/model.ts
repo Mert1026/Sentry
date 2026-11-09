@@ -43,6 +43,7 @@ export const KNOWN_OPENCODE_PROVIDERS: ReadonlySet<string> = new Set([
   'openrouter',
   'opencode',
   'opencode-go',
+  'openai',
 ]);
 
 function inferProviderFromModelPrefix(model: string | undefined): string | undefined {

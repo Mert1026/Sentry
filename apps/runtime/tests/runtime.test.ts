@@ -155,6 +155,68 @@ describe('runtime host identity', () => {
     }
   });
 
+  it('reports the real execution path of EVERY agent, not a value baked in per agent', async () => {
+    const dataRoot = await tempDataRoot();
+    const host = new SentryRuntimeHost(dataRoot, () => undefined);
+    const saved = {
+      deepseek: process.env['SENTRY_DEEPSEEK_BINARY'],
+      claude: process.env['SENTRY_CLAUDE_BINARY'],
+      glm: process.env['SENTRY_GLM_BINARY'],
+    };
+    const restore = (name: string, value: string | undefined): void => {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    };
+    try {
+      await host.recover();
+      const ask = async () =>
+        (
+          (await host.dispatch('runtime.environment', {})) as {
+            agentStacks: Array<{ id: string; executionPath?: string; executableSource?: string }>;
+          }
+        ).agentStacks;
+      const byId = (stacks: Awaited<ReturnType<typeof ask>>, id: string) =>
+        stacks.find((stack) => stack.id === id);
+      delete process.env['SENTRY_DEEPSEEK_BINARY'];
+      delete process.env['SENTRY_CLAUDE_BINARY'];
+      delete process.env['SENTRY_GLM_BINARY'];
+      // No override: DeepSeek and GLM each point at their own managed install under the data root.
+      let stacks = await ask();
+      const deepseek = byId(stacks, 'stack_deepseek_main');
+      const glm = byId(stacks, 'stack_glm_main');
+      expect(deepseek?.executionPath?.replace(/\\/g, '/')).toBe(
+        dataRoot.replace(/\\/g, '/') + '/tools/deepseek/bin/dsh',
+      );
+      expect(deepseek?.executableSource).toBe('managed');
+      expect(glm?.executionPath?.replace(/\\/g, '/')).toBe(
+        dataRoot.replace(/\\/g, '/') + '/tools/claude-code/node_modules/.bin/claude',
+      );
+      expect(glm?.executableSource).toBe('managed');
+      // The ChatGPT and OpenCode agents report one too.
+      expect(byId(stacks, 'stack_opencode_main')?.executionPath).toBeTruthy();
+      expect(byId(stacks, 'stack_chatgpt_main')?.executionPath).toBeTruthy();
+      // An override changes what is shown, and the source says it came from the environment.
+      process.env['SENTRY_DEEPSEEK_BINARY'] = '/custom/bin/dsh';
+      process.env['SENTRY_CLAUDE_BINARY'] = '/custom/bin/claude';
+      stacks = await ask();
+      expect(byId(stacks, 'stack_deepseek_main')).toMatchObject({
+        executionPath: '/custom/bin/dsh',
+        executableSource: 'environment',
+      });
+      expect(byId(stacks, 'stack_glm_main')).toMatchObject({
+        executionPath: '/custom/bin/claude',
+        executableSource: 'environment',
+      });
+      // A wrapper that is not the managed one is never described as "managed".
+      expect(JSON.stringify(byId(stacks, 'stack_deepseek_main'))).not.toContain('Managed wrapper');
+    } finally {
+      restore('SENTRY_DEEPSEEK_BINARY', saved.deepseek);
+      restore('SENTRY_CLAUDE_BINARY', saved.claude);
+      restore('SENTRY_GLM_BINARY', saved.glm);
+      host.close();
+    }
+  }, 60_000);
+
   it('rejects unknown methods with UNKNOWN_METHOD', async () => {
     const host = new SentryRuntimeHost(await tempDataRoot(), () => undefined);
     try {
@@ -303,6 +365,84 @@ describe('project profile methods', () => {
         code: 'PROJECT_NOT_FOUND',
       });
       expect(() => host.buildProfiles(unknown)).toThrow(/Project not found/);
+    } finally {
+      host.close();
+    }
+  });
+});
+
+describe('toolchain needs methods', () => {
+  it('reject unknown projects, and the new calls are part of the protocol', async () => {
+    const host = new SentryRuntimeHost(await tempDataRoot(), () => undefined);
+    try {
+      await host.recover();
+      const unknown = 'proj_01ARZ3NDEKTSV4RRFFQ69G5FAV';
+      await expect(host.toolchainNeedsStatus(unknown)).rejects.toMatchObject({
+        code: 'PROJECT_NOT_FOUND',
+      });
+      expect(() => host.assessToolchains(unknown)).toThrow(/Project not found/);
+      await expect(
+        host.dispatch('projects.toolchainNeeds', { projectId: unknown }),
+      ).rejects.toMatchObject({ code: 'PROJECT_NOT_FOUND' });
+    } finally {
+      host.close();
+    }
+  });
+});
+
+describe('findings by revision', () => {
+  it('rejects unknown projects through the method and the protocol', async () => {
+    const host = new SentryRuntimeHost(await tempDataRoot(), () => undefined);
+    try {
+      await host.recover();
+      const unknown = 'proj_01ARZ3NDEKTSV4RRFFQ69G5FAV';
+      expect(() => host.findingsByRevision(unknown)).toThrow(/Project not found/);
+      await expect(
+        host.dispatch('projects.findingsByRevision', { projectId: unknown }),
+      ).rejects.toMatchObject({ code: 'PROJECT_NOT_FOUND' });
+    } finally {
+      host.close();
+    }
+  });
+});
+
+describe('retest runs', () => {
+  it('refuses a malformed retest before anything starts', async () => {
+    const host = new SentryRuntimeHost(await tempDataRoot(), () => undefined);
+    try {
+      await host.recover();
+      const projectId = 'proj_01ARZ3NDEKTSV4RRFFQ69G5FAV';
+      const start = (retest: unknown) =>
+        host.dispatch('runs.start', { projectId, mode: 'full', retest });
+      await expect(start({ findings: [], who: 'reporter' })).rejects.toThrow();
+      await expect(
+        start({ findings: [{ runId: 'run_1', findingId: 'fnd_1' }], who: 'nobody' }),
+      ).rejects.toThrow();
+      await expect(
+        start({
+          findings: Array.from({ length: 13 }, () => ({ runId: 'run_1', findingId: 'fnd_1' })),
+          who: 'reporter',
+        }),
+      ).rejects.toThrow();
+    } finally {
+      host.close();
+    }
+  });
+});
+
+describe('custom add-on calls', () => {
+  it('list nothing at first and refuse bad input through the protocol', async () => {
+    const host = new SentryRuntimeHost(await tempDataRoot(), () => undefined);
+    try {
+      await host.recover();
+      expect(await host.dispatch('toolchains.customStatus', {})).toEqual([]);
+      await expect(
+        host.dispatch('toolchains.customInstall', { name: 'node', command: 'true' }),
+      ).rejects.toThrow(/listed toolchain/);
+      await expect(
+        host.dispatch('toolchains.customInstall', { name: 'ok', command: 'true', extra: 1 }),
+      ).rejects.toThrow();
+      await expect(host.dispatch('toolchains.customRemove', { name: '../x' })).rejects.toThrow();
     } finally {
       host.close();
     }

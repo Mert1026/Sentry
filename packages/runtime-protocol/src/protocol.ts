@@ -110,9 +110,20 @@ export const RUNTIME_METHODS = [
   'projects.suggestTargets',
   'projects.profile',
   'projects.buildProfile',
+  'projects.toolchainNeeds',
+  'projects.assessToolchains',
+  'projects.findingsByRevision',
+  'projects.toolchainSelection',
   'toolchains.status',
   'toolchains.install',
   'toolchains.remove',
+  'toolchains.customStatus',
+  'toolchains.customInstall',
+  'toolchains.customRemove',
+  'openai.accountStatus',
+  'openai.accountLogin',
+  'openai.accountCancelLogin',
+  'openai.accountLogout',
   'runs.list',
   'runs.get',
   'runs.status',
@@ -132,6 +143,7 @@ export const RUNTIME_NOTIFICATIONS = [
   'run.snapshot',
   'activeRuns.updated',
   'profile.updated',
+  'toolchainNeeds.updated',
   'runtime.status',
 ] as const;
 export type RuntimeNotification = (typeof RUNTIME_NOTIFICATIONS)[number];
@@ -186,6 +198,7 @@ export const RuntimeConfigureParamsSchema = z
         opencode: z.string().min(1).max(300).optional(),
         deepseek: z.string().min(1).max(300).optional(),
         glm: z.string().min(1).max(300).optional(),
+        chatgpt: z.string().min(1).max(300).optional(),
       })
       .strict()
       .default({}),
@@ -193,6 +206,7 @@ export const RuntimeConfigureParamsSchema = z
       .object({
         openRouterApiKey: z.string().min(1).max(5000).optional(),
         openCodeApiKey: z.string().min(1).max(5000).optional(),
+        openAiApiKey: z.string().min(1).max(5000).optional(),
         deepseekApiKey: z.string().min(1).max(5000).optional(),
         anthropicAuthToken: z.string().min(1).max(5000).optional(),
         anthropicBaseUrl: z.string().min(1).max(2000).optional(),
@@ -201,7 +215,15 @@ export const RuntimeConfigureParamsSchema = z
       .default({}),
     // OpenCode upstream provider selection (openrouter|opencode). Ephemeral
     // like everything else here; additive, so the version stays 1.
-    openCodeProvider: z.enum(['openrouter', 'opencode', 'opencode-go']).optional(),
+    openCodeProvider: z.enum(['openrouter', 'opencode', 'opencode-go', 'openai']).optional(),
+    // How provider `openai` authenticates: an API key (default) or the
+    // person's ChatGPT account through the runtime's loopback bridge.
+    openAiAuth: z.enum(['key', 'account']).optional(),
+    // Reasoning effort per agent (provider default when 'default'). Full-state like openAiAuth.
+    reasoningEffort: z
+      .object({ chatgpt: z.enum(['default', 'low', 'medium', 'high']).optional() })
+      .strict()
+      .optional(),
     // Harness executable overrides (non-secret absolute paths inside the
     // runtime environment, e.g. a user-local opencode install). Ephemeral
     // like everything else here; additive, so the version stays 1.

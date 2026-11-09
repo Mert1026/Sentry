@@ -54,6 +54,8 @@ export async function discoverOfflineCache(
 export async function removeBuildCaches(root: string, signal?: AbortSignal): Promise<number> {
   signal?.throwIfAborted();
   let removed = 0;
+  // The folder itself may be a link to somewhere else; only real folders are cleaned.
+  if ((await lstat(root)).isSymbolicLink()) return 0;
   for (const entry of await readdir(root, { withFileTypes: true })) {
     signal?.throwIfAborted();
     const path = join(root, entry.name);
@@ -86,7 +88,9 @@ export function createWorkspacePreparer(
         await readFile(join(workspaceRoot, 'package.json'), 'utf8'),
       ) as typeof manifest;
     } catch {
-      return limited('No readable Node package manifest; source review only.');
+      return limited(
+        'Not a Node project (no readable package.json); nothing to prepare. The agent installs and runs its own tools.',
+      );
     }
     const version =
       manifest !== null &&

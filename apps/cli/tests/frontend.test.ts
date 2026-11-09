@@ -8,7 +8,7 @@ import { executeFrontendCommand, frontendErrorEnvelope } from '../src/frontend-a
 import { SentryDesktopClient } from '../src/desktop-client.js';
 import { runCli } from '../src/index.js';
 import { errorExitCode } from '../src/errors.js';
-import { successExitCode } from '../src/output.js';
+import { formatFindingsByRevision, successExitCode } from '../src/output.js';
 
 const RUN_ID = 'run_01K7777777777777777777A8W3';
 const PROJECT_ID = 'proj_01K7777777777777777777A8W1';
@@ -608,5 +608,179 @@ describe('cli frontend over the desktop broker', () => {
         },
       }),
     ).toBe(6);
+  });
+
+  it('starts a retest on the current revision, leaving each agent to the finding it reported', async () => {
+    const broker = await startFakeBroker((command) => {
+      if (command === 'runs:start') return { operationId: 'dop_test', runId: RUN_ID };
+      throw new Error('unexpected ' + command);
+    });
+    try {
+      const started = await executeFrontendCommand(
+        parseCommand([
+          'run',
+          'start',
+          PROJECT_ID,
+          '--retest',
+          'run_01K7777777777777777777A8W9:find_01K7777777777777777777A8WA',
+        ]),
+        { createClient: () => clientFor(broker) },
+      );
+      expect(started).toMatchObject({ command: 'run.start', ok: true, data: { runId: RUN_ID } });
+      const payload = broker.seen.find((call) => call.command === 'runs:start')?.payload;
+      expect(payload).toMatchObject({
+        mode: 'full',
+        retest: {
+          who: 'reporter',
+          findings: [
+            {
+              runId: 'run_01K7777777777777777777A8W9',
+              findingId: 'find_01K7777777777777777777A8WA',
+            },
+          ],
+        },
+      });
+      expect(payload).not.toHaveProperty('agentStackIds');
+      expect(payload).not.toHaveProperty('revisionId');
+    } finally {
+      await broker.close();
+    }
+  });
+
+  it('passes ChatGPT, profile and tool options through run start', async () => {
+    const broker = await startFakeBroker((command) => {
+      if (command === 'runs:start') return { operationId: 'dop_test', runId: RUN_ID };
+      throw new Error('unexpected ' + command);
+    });
+    try {
+      await executeFrontendCommand(
+        parseCommand([
+          'run',
+          'start',
+          PROJECT_ID,
+          '--mode',
+          'full',
+          '--agents',
+          'chatgpt',
+          '--profile',
+          '--tools',
+        ]),
+        { createClient: () => clientFor(broker) },
+      );
+      expect(broker.seen[0]?.payload).toMatchObject({
+        agentStackIds: ['stack_chatgpt_main'],
+        useProfile: true,
+        toolDownloads: true,
+      });
+    } finally {
+      await broker.close();
+    }
+  });
+
+  it('serves findings by revision, profiles and toolchains through the broker', async () => {
+    const broker = await startFakeBroker((command) => {
+      if (command === 'projects:findings-by-revision')
+        return { projectId: PROJECT_ID, revisions: [{ revisionId: 'rev_x', agents: [] }] };
+      if (command === 'projects:profile') return { agents: [] };
+      if (command === 'projects:build-profile') return { started: true };
+      if (command === 'toolchains:status') return { packs: [] };
+      if (command === 'toolchains:install' || command === 'toolchains:remove') return { ok: true };
+      throw new Error('unexpected ' + command);
+    });
+    try {
+      const run = (args: string[]) =>
+        executeFrontendCommand(parseCommand(args), { createClient: () => clientFor(broker) });
+      expect(await run(['project', 'findings', PROJECT_ID])).toMatchObject({
+        command: 'project.findings',
+        data: { projectId: PROJECT_ID, revisions: [{ revisionId: 'rev_x' }] },
+      });
+      expect(await run(['project', 'profile', PROJECT_ID])).toMatchObject({
+        command: 'project.profile',
+      });
+      await run(['project', 'profile-build', PROJECT_ID, '--agents', 'glm,chatgpt']);
+      expect(broker.seen.find((c) => c.command === 'projects:build-profile')?.payload).toEqual({
+        projectId: PROJECT_ID,
+        agentStackIds: ['stack_glm_main', 'stack_chatgpt_main'],
+      });
+      expect(await run(['toolchain', 'status'])).toMatchObject({ command: 'toolchain.status' });
+      await run(['toolchain', 'install', 'node', '22']);
+      await run(['toolchain', 'remove', 'node', '22']);
+      expect(
+        broker.seen.filter((c) => c.command.startsWith('toolchains:')).map((c) => c.payload),
+      ).toEqual([{}, { packId: 'node', version: '22' }, { packId: 'node', version: '22' }]);
+    } finally {
+      await broker.close();
+    }
+  });
+
+  it('rejects malformed re-test and agent arguments', () => {
+    expect(() => parseCommand(['run', 'start', PROJECT_ID, '--retest', 'nonsense'])).toThrow(
+      /<run-id>:<finding-id>/,
+    );
+    expect(() =>
+      parseCommand(['run', 'start', PROJECT_ID, '--retest-with', 'all', '--mode', 'full']),
+    ).toThrow(/together with --retest/);
+    expect(() =>
+      parseCommand(['run', 'start', PROJECT_ID, '--mode', 'full', '--agents', 'gpt']),
+    ).toThrow(/Unknown agent/);
+    expect(() =>
+      parseCommand(['run', 'start', PROJECT_ID, '--retest', 'a:b', '--paths', 'src']),
+    ).toThrow(/no --instructions or --paths/);
+    expect(parseCommand(['agent', 'doctor', 'chatgpt'])).toEqual({
+      command: 'agent.doctor',
+      agent: 'chatgpt',
+    });
+  });
+
+  it('prints each re-tested finding with PASSED / NOT PASSED / COULD NOT COMPLETE and the reason', () => {
+    const text = formatFindingsByRevision([
+      {
+        revisionId: 'rev_x',
+        agents: [
+          {
+            agentStackId: 'stack_opencode_main',
+            runs: [
+              {
+                runId: 'run_1',
+                retest: [
+                  {
+                    n: 1,
+                    title: 'One',
+                    verdict: 'no_longer_reproduces',
+                    details: 'guard rejects it',
+                  },
+                  { n: 2, title: 'Two', verdict: 'still_reproduces' },
+                  { n: 3, title: 'Three', verdict: 'cannot_tell' },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+    expect(text).toContain('PASSED (resolved)');
+    expect(text).toContain('guard rejects it');
+    expect(text).toContain('NOT PASSED (still there)');
+    expect(text).toContain('COULD NOT COMPLETE');
+  });
+
+  it('reports a retest of an unknown finding as an invalid argument with the engine message', async () => {
+    const broker = await startFakeBroker((command) => {
+      if (command === 'runs:start')
+        throw Object.assign(new Error('Finding find_x was not found'), { code: 'INVALID_TARGET' });
+      throw new Error('unexpected ' + command);
+    });
+    try {
+      const failure = await executeFrontendCommand(
+        parseCommand(['run', 'start', PROJECT_ID, '--retest', 'run_a:find_x']),
+        { createClient: () => clientFor(broker) },
+      ).catch((cause: unknown) => frontendErrorEnvelope('run.start', cause));
+      expect(failure).toMatchObject({
+        ok: false,
+        error: { code: 'INVALID_ARGUMENT', message: 'Finding find_x was not found' },
+      });
+    } finally {
+      await broker.close();
+    }
   });
 });

@@ -30,6 +30,15 @@ export const DesktopChannelSchemas: Record<string, z.ZodTypeAny> = {
       agentStackIds: z.array(z.string().min(1).max(200)).min(1).max(10).optional(),
     })
     .strict(),
+  'projects:toolchain-needs': z.object({ projectId: z.string().min(1).max(200) }).strict(),
+  'projects:toolchain-selection': z.object({ projectId: z.string().min(1).max(200) }).strict(),
+  'projects:findings-by-revision': z.object({ projectId: z.string().min(1).max(200) }).strict(),
+  'projects:assess-toolchains': z
+    .object({
+      projectId: z.string().min(1).max(200),
+      agentStackIds: z.array(z.string().min(1).max(200)).min(1).max(10).optional(),
+    })
+    .strict(),
   'runs:list': z.object({ projectId: z.string().min(1).max(200) }).strict(),
   'runs:get': z.object({ runId: z.string().min(1).max(100) }).strict(),
   'runs:status': z.object({ runId: z.string().min(1).max(100) }).strict(),
@@ -48,6 +57,23 @@ export const DesktopChannelSchemas: Record<string, z.ZodTypeAny> = {
       webAccess: z.boolean().optional(),
       toolDownloads: z.boolean().optional(),
       useProfile: z.boolean().optional(),
+      retest: z
+        .object({
+          findings: z
+            .array(
+              z
+                .object({
+                  runId: z.string().min(1).max(100),
+                  findingId: z.string().min(1).max(100),
+                })
+                .strict(),
+            )
+            .min(1)
+            .max(12),
+          who: z.enum(['reporter', 'all']),
+        })
+        .strict()
+        .optional(),
     })
     .strict(),
   'runs:start-production': z
@@ -65,6 +91,23 @@ export const DesktopChannelSchemas: Record<string, z.ZodTypeAny> = {
       webAccess: z.boolean().optional(),
       toolDownloads: z.boolean().optional(),
       useProfile: z.boolean().optional(),
+      retest: z
+        .object({
+          findings: z
+            .array(
+              z
+                .object({
+                  runId: z.string().min(1).max(100),
+                  findingId: z.string().min(1).max(100),
+                })
+                .strict(),
+            )
+            .min(1)
+            .max(12),
+          who: z.enum(['reporter', 'all']),
+        })
+        .strict()
+        .optional(),
     })
     .strict(),
   'runs:cancel': z.object({ runId: z.string().min(1).max(100) }).strict(),
@@ -93,6 +136,19 @@ export const DesktopChannelSchemas: Record<string, z.ZodTypeAny> = {
     .strict(),
   'system:info': z.object({}).strict(),
   'toolchains:status': z.object({}).strict(),
+  'toolchains:custom-status': z.object({}).strict(),
+  'toolchains:custom-install': z
+    .object({
+      name: z.string().min(1).max(60),
+      command: z.string().min(1).max(5000),
+      pathEntries: z.array(z.string().min(1).max(120)).max(10).optional(),
+    })
+    .strict(),
+  'toolchains:custom-remove': z.object({ name: z.string().min(1).max(60) }).strict(),
+  'openai:account-status': z.object({}).strict(),
+  'openai:account-login': z.object({}).strict(),
+  'openai:account-cancel-login': z.object({}).strict(),
+  'openai:account-logout': z.object({}).strict(),
   'toolchains:install': z
     .object({ packId: z.string().min(1).max(40), version: z.string().min(1).max(40) })
     .strict(),
@@ -252,6 +308,17 @@ export async function dispatchDesktopCommand(
         parsed['projectId'] as string,
         parsed['agentStackIds'] as string[] | undefined,
       );
+    case 'projects:toolchain-needs':
+      return service.toolchainNeedsStatus(parsed['projectId'] as string);
+    case 'projects:toolchain-selection':
+      return service.toolchainSelection(parsed['projectId'] as string);
+    case 'projects:findings-by-revision':
+      return service.findingsByRevision(parsed['projectId'] as string);
+    case 'projects:assess-toolchains':
+      return service.assessToolchains(
+        parsed['projectId'] as string,
+        parsed['agentStackIds'] as string[] | undefined,
+      );
     case 'runs:list':
       return service.listRuns(parsed['projectId'] as string);
     case 'runs:get':
@@ -281,6 +348,7 @@ export async function dispatchDesktopCommand(
         webAccess: parsed['webAccess'],
         toolDownloads: parsed['toolDownloads'],
         useProfile: parsed['useProfile'],
+        retest: parsed['retest'],
         revisionId: parsed['revisionId'],
       });
       if (operation.runId !== undefined)
@@ -330,6 +398,26 @@ export async function dispatchDesktopCommand(
           ? undefined
           : { agentStackIds: parsed['agentStackIds'] as string[] },
       );
+    case 'toolchains:custom-status':
+      return service.customAddonStatus();
+    case 'toolchains:custom-install':
+      return service.customAddonInstall({
+        name: parsed['name'] as string,
+        command: parsed['command'] as string,
+        ...(parsed['pathEntries'] === undefined
+          ? {}
+          : { pathEntries: parsed['pathEntries'] as string[] }),
+      });
+    case 'toolchains:custom-remove':
+      return service.customAddonRemove(parsed['name'] as string);
+    case 'openai:account-status':
+      return service.openAiAccountStatus();
+    case 'openai:account-login':
+      return service.openAiAccountLogin();
+    case 'openai:account-cancel-login':
+      return service.openAiAccountCancelLogin();
+    case 'openai:account-logout':
+      return service.openAiAccountLogout();
     case 'toolchains:status':
       return service.toolchainStatus();
     case 'toolchains:install':

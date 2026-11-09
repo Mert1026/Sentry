@@ -130,7 +130,13 @@ describe('Providers distinguishes missing, storage and query failures', () => {
     mount(query);
     const openCodeCard = within(screen.getByRole('region', { name: 'OpenCode provider settings' }));
     await waitFor(() => expect(openCodeCard.getByText(/Provider selection needed:/)).toBeTruthy());
-    expect(openCodeCard.getAllByText('Explanation')).toHaveLength(2);
+    expect(
+      openCodeCard.getByRole('button', { name: 'About OpenCode API key (Zen & Go)' }),
+    ).toBeTruthy();
+    expect(
+      openCodeCard.getByRole('button', { name: 'About OpenRouter API key (Pay-as-you-go)' }),
+    ).toBeTruthy();
+    expect(openCodeCard.queryAllByText('Explanation')).toHaveLength(0);
     expect(openCodeCard.queryAllByText('Advanced')).toHaveLength(0);
   });
 });

@@ -1,4 +1,5 @@
 import React from 'react';
+import { InfoPopover } from '../components/InfoPopover.js';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { sentryApi } from '../lib/sentry-api.js';
@@ -135,22 +136,26 @@ export function ApplicationSettingsContent(): React.JSX.Element {
             flexWrap: 'wrap',
           }}
         >
-          <div style={{ flex: '1 1 260px', minWidth: 0 }}>
-            <div className="card-title">{t('Appearance & Theme')}</div>
-            <div className="body-secondary" style={{ marginTop: 4 }}>
-              {t('Choose the visual palette for the Sentry desktop interface.')}
+          <div style={{ flex: '1 1 160px', minWidth: 0 }}>
+            <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {t('Appearance & Theme')}
             </div>
           </div>
-          <SegmentedControl
-            label={t('Appearance & Theme')}
-            value={prefs.theme}
-            onChange={(value) => prefs.setTheme(value as ThemeMode)}
-            options={[
-              { value: 'dark', label: t('Forest Dark') },
-              { value: 'midnight', label: t('Midnight Slate') },
-              { value: 'light', label: t('Daylight Light') },
-            ]}
-          />
+          <div className="info-aligned-row" style={{ marginLeft: 'auto' }}>
+            <SegmentedControl
+              label={t('Appearance & Theme')}
+              value={prefs.theme}
+              onChange={(value) => prefs.setTheme(value as ThemeMode)}
+              options={[
+                { value: 'dark', label: t('Forest Dark') },
+                { value: 'midnight', label: t('Midnight Slate') },
+                { value: 'light', label: t('Daylight Light') },
+              ]}
+            />
+            <InfoPopover title={t('Appearance & Theme')}>
+              {t('Choose the visual palette for the Sentry desktop interface.')}
+            </InfoPopover>
+          </div>
         </div>
       </div>
 
@@ -164,23 +169,27 @@ export function ApplicationSettingsContent(): React.JSX.Element {
             flexWrap: 'wrap',
           }}
         >
-          <div style={{ flex: '1 1 260px', minWidth: 0 }}>
-            <div className="card-title">{t('Language')}</div>
-            <div className="body-secondary" style={{ marginTop: 4 }}>
+          <div style={{ flex: '1 1 160px', minWidth: 0 }}>
+            <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {t('Language')}
+            </div>
+          </div>
+          <div className="info-aligned-row" style={{ marginLeft: 'auto' }}>
+            <SegmentedControl
+              label={t('Language')}
+              value={prefs.language}
+              onChange={(value) => prefs.setLanguage(value as AppLanguage)}
+              options={[
+                { value: 'en', label: t('English') },
+                { value: 'bg', label: t('Bulgarian (Български)') },
+              ]}
+            />
+            <InfoPopover title={t('Language')}>
               {t(
                 'Select the interface language for menus, labels, and settings. Agent messages remain in their original output language.',
               )}
-            </div>
+            </InfoPopover>
           </div>
-          <SegmentedControl
-            label={t('Language')}
-            value={prefs.language}
-            onChange={(value) => prefs.setLanguage(value as AppLanguage)}
-            options={[
-              { value: 'en', label: t('English') },
-              { value: 'bg', label: t('Bulgarian (Български)') },
-            ]}
-          />
         </div>
       </div>
 
@@ -192,16 +201,12 @@ export function ApplicationSettingsContent(): React.JSX.Element {
               style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}
             >
               <span>{t('Local CLI Broker')}</span>
+
               <StatusPill
                 status={cliActive ? 'connected' : 'offline'}
                 label={cliActive ? t('CLI started') : t('CLI stopped')}
                 pulse={cliActive}
               />
-            </div>
-            <div className="body-secondary" style={{ marginTop: 4 }}>
-              {t(
-                'Allow external terminals and scripts to run `sentry cli ...` commands through this desktop session.',
-              )}
             </div>
           </div>
           <SwitchButton
@@ -210,6 +215,11 @@ export function ApplicationSettingsContent(): React.JSX.Element {
             disabled={toggleCli.isPending}
             onToggle={() => toggleCli.mutate(!cliActive)}
           />
+          <InfoPopover title={t('Local CLI Broker')}>
+            {t(
+              'Allow external terminals and scripts to run `sentry cli ...` commands through this desktop session.',
+            )}
+          </InfoPopover>
         </div>
         {cliError !== undefined ? (
           <p className="error-box" style={{ marginTop: 8, marginBottom: 0 }} role="alert">
@@ -221,27 +231,28 @@ export function ApplicationSettingsContent(): React.JSX.Element {
       <div className="card">
         <div style={ROW_STYLE}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div className="card-title">{t('Workspace Motion & Animations')}</div>
-            <div className="body-secondary" style={{ marginTop: 4 }}>
-              {t('Reduce pulsing indicators, animated graph edges, and smooth camera transitions.')}
+            <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {t('Workspace Motion & Animations')}
             </div>
           </div>
           <SwitchButton
-            checked={prefs.reducedMotion}
+            checked={!prefs.reducedMotion}
             label="Workspace Motion & Animations"
             onToggle={() => prefs.setReducedMotion(!prefs.reducedMotion)}
           />
+          <InfoPopover title={t('Workspace Motion & Animations')}>
+            {t(
+              'Reduce section entrance animations, pulsing indicators, animated graph edges, and smooth camera transitions.',
+            )}
+          </InfoPopover>
         </div>
       </div>
 
       <div className="card">
         <div style={ROW_STYLE}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div className="card-title">{t('Confirm Before Paid QA Runs')}</div>
-            <div className="body-secondary" style={{ marginTop: 4 }}>
-              {t(
-                'Require a confirmation dialog before starting Full or Targeted QA runs that consume provider credits.',
-              )}
+            <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {t('Confirm Before Paid QA Runs')}
             </div>
           </div>
           <SwitchButton
@@ -249,17 +260,19 @@ export function ApplicationSettingsContent(): React.JSX.Element {
             label="Confirm Before Paid QA Runs"
             onToggle={() => prefs.setConfirmPaidRuns(!prefs.confirmPaidRuns)}
           />
+          <InfoPopover title={t('Confirm Before Paid QA Runs')}>
+            {t(
+              'Require a confirmation dialog before starting Full or Targeted QA runs that consume provider credits.',
+            )}
+          </InfoPopover>
         </div>
       </div>
 
       <div className="card">
         <div style={ROW_STYLE}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div className="card-title">{t('Developer mode')}</div>
-            <div className="body-secondary" style={{ marginTop: 4 }}>
-              {t(
-                'Unlocks low-level inspection tools for debugging QA runs, harness events, and pipeline state without changing how agents execute.',
-              )}
+            <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {t('Developer mode')}
             </div>
           </div>
           <SwitchButton
@@ -267,40 +280,42 @@ export function ApplicationSettingsContent(): React.JSX.Element {
             label="Developer mode"
             onToggle={() => setDeveloperMode((v) => !v)}
           />
-        </div>
-        <div
-          className="body-secondary"
-          style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}
-        >
-          <p style={{ margin: 0 }}>
-            <strong>{t('What it is for:')}</strong>{' '}
-            {t(
-              'Standard view keeps the Run Workspace focused on human-readable findings, evidence, and agent progress. Enabling Developer mode adds technical telemetry in the Run Workspace inspector for troubleshooting agent behavior, verifying tool execution, or inspecting raw protocol records:',
-            )}
-          </p>
-          <ul style={{ margin: '0 0 0 18px', padding: 0 }}>
-            <li>
-              <strong>{t('Agent Diagnostics tab:')}</strong>{' '}
+          <InfoPopover title={t('Developer mode')}>
+            <p>
               {t(
-                'Adds a Diagnostics tab to each agent inspector with the agent run ID, stack ID, status, full agent view JSON, and the raw event stream.',
+                'Unlocks low-level inspection tools for debugging QA runs, harness events, and pipeline state without changing how agents execute.',
               )}
-            </li>
-            <li>
-              <strong>{t('Raw Activity event payloads:')}</strong>{' '}
+            </p>
+            <p>
+              <strong>{t('What it is for:')}</strong>{' '}
               {t(
-                'Expands individual activity items in the Activity tab to reveal the underlying JSON event envelope.',
+                'Standard view keeps the Run Workspace focused on human-readable findings, evidence, and agent progress. Enabling Developer mode adds technical telemetry in the Run Workspace inspector for troubleshooting agent behavior, verifying tool execution, or inspecting raw protocol records:',
               )}
-            </li>
-            <li>
-              <strong>{t('Pipeline node payloads:')}</strong>{' '}
-              {t('Displays the raw JSON state when selecting non-agent nodes on the run graph.')}
-            </li>
-          </ul>
-          <p className="metadata" style={{ margin: 0 }}>
-            {t(
-              'Safe to toggle at any time — takes effect immediately, never modifies QA execution or findings, and provider API keys remain redacted inside the host process.',
-            )}
-          </p>
+            </p>
+            <ul>
+              <li>
+                <strong>{t('Agent Diagnostics tab:')}</strong>{' '}
+                {t(
+                  'Adds a Diagnostics tab to each agent inspector with the agent run ID, stack ID, status, full agent view JSON, and the raw event stream.',
+                )}
+              </li>
+              <li>
+                <strong>{t('Raw Activity event payloads:')}</strong>{' '}
+                {t(
+                  'Expands individual activity items in the Activity tab to reveal the underlying JSON event envelope.',
+                )}
+              </li>
+              <li>
+                <strong>{t('Pipeline node payloads:')}</strong>{' '}
+                {t('Displays the raw JSON state when selecting non-agent nodes on the run graph.')}
+              </li>
+            </ul>
+            <p className="metadata">
+              {t(
+                'Safe to toggle at any time — takes effect immediately, never modifies QA execution or findings, and provider API keys remain redacted inside the host process.',
+              )}
+            </p>
+          </InfoPopover>
         </div>
         {developerMode ? (
           <p className="mono metadata" style={{ marginTop: 8, marginBottom: 0 }}>

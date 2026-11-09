@@ -139,7 +139,6 @@ export function AppShell(): React.JSX.Element {
           </span>
           {collapsed ? null : <span className="brand-text">SENTRY</span>}
         </div>
-        {collapsed ? null : <div className="nav-group">Overview</div>}
         <nav aria-label="Primary navigation">
           <NavLink
             key="/"
@@ -152,7 +151,6 @@ export function AppShell(): React.JSX.Element {
             {NAV[0]?.icon}
             {collapsed ? null : <span className="nav-label">{NAV[0]?.label}</span>}
           </NavLink>
-          {collapsed ? null : <div className="nav-group">Workspace</div>}
           <NavLink
             key="/projects"
             to="/projects"
@@ -163,7 +161,6 @@ export function AppShell(): React.JSX.Element {
             {NAV[1]?.icon}
             {collapsed ? null : <span className="nav-label">{NAV[1]?.label}</span>}
           </NavLink>
-          {collapsed ? null : <div className="nav-group">System</div>}
           {NAV.slice(2).map((item) =>
             item.end === true ? (
               <NavLink

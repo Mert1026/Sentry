@@ -9,7 +9,10 @@ import {
   createInvestigationPlanId,
   createOperationId,
   nowIsoTimestamp,
+  toolDownloadsEnabled,
   webAccessEnabled,
+  withToolchains,
+  type ToolchainSetup,
   type AgentRunId,
   type OperationId,
   describePlanRejection,
@@ -40,6 +43,7 @@ import {
   groundCoverage,
   resolveReportChecks,
   reportableDepthPlan,
+  applyRetestPlan,
   depthPolicy,
   boundCorrectionMessage,
   buildPlanningCorrectionIntro,
@@ -101,6 +105,8 @@ export interface DeepSeekHarnessAdapterOptions {
   readonly modelId?: string;
   readonly provider?: string;
   readonly environment?: NodeJS.ProcessEnv;
+  /** Installed language toolchains to put on the agent's PATH; read when each run starts. */
+  readonly toolchains?: (workspace: string) => Promise<ToolchainSetup | undefined>;
   readonly clientFactory?: DeepSeekClientFactory;
   readonly shutdownTimeoutMs?: number;
   readonly turnTimeoutMs?: number;
@@ -982,12 +988,16 @@ export class DeepSeekHarnessAdapter implements HarnessAdapter {
       // instant) indicate host startup over the 9P bridge can exceed 30s
       // without being wedged; the retry alone cannot fix a too-small
       // budget. Timeouts still enforced, just calibrated to the slow path.
+      const toolchains = await this.options
+        .toolchains?.(request.workspace.runtimePath)
+        .catch(() => undefined);
+      const runEnvironment = withToolchains(this.environment, toolchains);
       const createClient = () =>
         this.clientFactory({
           executable: this.runtime.executable,
           cwd: request.workspace.runtimePath,
           dshHome,
-          environment: this.environment,
+          environment: runEnvironment,
           modelId: this.runtime.modelId,
           provider: this.runtime.provider,
           profilePatches: [profilePatchPath],
@@ -1081,12 +1091,15 @@ export class DeepSeekHarnessAdapter implements HarnessAdapter {
           planRejection = describePlanRejection(undefined, true);
         } else {
           try {
-            planResult = reportableDepthPlan(
-              SentryInvestigationPlanV1Schema.parse(
-                parseWholeJson(planning.text, 'planning', pipeline),
+            planResult = applyRetestPlan(
+              reportableDepthPlan(
+                SentryInvestigationPlanV1Schema.parse(
+                  parseWholeJson(planning.text, 'planning', pipeline),
+                ),
+                depthPolicy(request.task.context) !== undefined,
+                maxPlannedChecks(request.task.context),
               ),
-              depthPolicy(request.task.context) !== undefined,
-              maxPlannedChecks(request.task.context),
+              request.task.context,
             );
             break;
           } catch (cause) {
@@ -1149,6 +1162,9 @@ export class DeepSeekHarnessAdapter implements HarnessAdapter {
         contextBudget,
         network: {
           webAccess: webAccessEnabled(request.executionSafeguards),
+          // DeepSeek's sandbox governs file effects only and has no network policy, so this
+          // line is guidance in the prompt, not an enforced allowlist.
+          toolDownloads: toolDownloadsEnabled(request.executionSafeguards),
           webToolsAvailable: false,
         },
         event: (body) => event(request.agentRunId, body),

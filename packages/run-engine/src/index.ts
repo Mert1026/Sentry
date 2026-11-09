@@ -1,4 +1,11 @@
-import { depthPolicy, profileContextEntry, PROFILE_CONTEXT_KEY } from '@qa/evidence-pipeline';
+import {
+  depthPolicy,
+  profileContextEntry,
+  PROFILE_CONTEXT_KEY,
+  RETEST_CONTEXT_KEY,
+  retestContextEntry,
+  type RetestItem,
+} from '@qa/evidence-pipeline';
 import { ProjectProfileBuilder, profileState } from './profile-builder.js';
 import {
   createWorkspacePreparer,
@@ -23,7 +30,9 @@ import {
   AgentRunSchema,
   HarnessRunRequestSchema,
   QARunSchema,
+  RETEST_MAX_FINDINGS,
   RunActivitySchema,
+  RunRetestSchema,
   TargetSpecSchema,
   type AgentRun,
   type ProjectRevision,
@@ -34,6 +43,7 @@ import {
   type HarnessWorkspace,
   type QARun,
   type RunProfileUsage,
+  type RunRetest,
   type TargetSpec,
 } from '@qa/schemas';
 import {
@@ -95,6 +105,15 @@ export interface RunOptions {
   readonly revisionId?: string;
   /** Hand every agent that has a fresh profile of this revision its own orientation notes. Omitted means off. */
   readonly useProfile?: boolean;
+  /**
+   * Re-test findings reported on earlier revisions against the revision this run uses. Every finding
+   * becomes one fixed check; 'reporter' gives each finding to the agent that reported it, 'all'
+   * gives every finding to every selected agent. Replaces the agents' own planning.
+   */
+  readonly retest?: {
+    readonly findings: ReadonlyArray<{ readonly runId: string; readonly findingId: string }>;
+    readonly who: 'reporter' | 'all';
+  };
   readonly onHarnessRequest?: (request: HarnessRunRequest) => void;
   /** Signals this request's identity immediately after the initial row is saved. */
   readonly onRunCreated?: (run: QARun) => void;
@@ -240,7 +259,14 @@ export class RunCoordinator {
     const project = this.projects.getProject(projectId);
     if (project === undefined)
       throw new RunEngineError('PROJECT_NOT_FOUND', 'Project not found: ' + projectId);
-    const selectedIds = options.agentStackIds ?? this.registry.list().map((item) => item.stack.id);
+    const retest =
+      options.retest === undefined
+        ? undefined
+        : this.prepareRetest(projectId, options.retest, options);
+    const selectedIds =
+      retest?.agentStackIds ??
+      options.agentStackIds ??
+      this.registry.list().map((item) => item.stack.id);
     const selected = selectedIds.map((id) => {
       const registration = this.registry.resolve(id);
       if (registration === undefined)
@@ -315,7 +341,14 @@ export class RunCoordinator {
         sourceRoot = material;
         expectedSnapshotHash = await this.projects.expectedRetainedHash(projectId, stored);
       }
-      const context = project.context ?? this.repository.getContextForRevision(revision.id);
+      // The project's own context describes its CURRENT revision. A run on an older retained
+      // revision must use that revision's context, so its bytes are never judged against
+      // instructions written for different code. Only a revision with no context of its own falls
+      // back to the project's.
+      const context =
+        revision.id === currentId
+          ? (project.context ?? this.repository.getContextForRevision(revision.id))
+          : (this.repository.getContextForRevision(revision.id) ?? project.context);
       if (context === undefined) throw new Error('PROJECT_CONTEXT_NOT_FOUND: ' + revision.id);
       const snapshot = await this.snapshots.createSnapshot({
         projectId,
@@ -326,7 +359,10 @@ export class RunCoordinator {
         // exclusions; the snapshot must hash the same tree or excluded
         // noise (installed dependencies, logs) reports phantom drift.
         ...(revision.hashVersion === 2
-          ? { exclude: (relativePath: string) => matchImportExclusion(relativePath) }
+          ? {
+              exclude: (relativePath: string, entryType?: 'file' | 'directory' | 'symlink') =>
+                matchImportExclusion(relativePath, undefined, entryType),
+            }
           : {}),
       });
       if (snapshot.contentHash !== (expectedSnapshotHash ?? revision.contentHash))
@@ -367,6 +403,7 @@ export class RunCoordinator {
             ...(options.toolDownloads === true ? { toolDownloads: true } : {}),
           },
           profileUsage,
+          ...(retest === undefined ? {} : { retest: retest.spec }),
         },
         createdAt,
         startedAt: createdAt,
@@ -377,6 +414,7 @@ export class RunCoordinator {
       // Frozen manifest file set: the immutable source of truth for scope
       // validation (never the mutable working copy).
       const frozenBaseline = await this.snapshots.baselineFileHashes(snapshot.id);
+      const frozenPaths = await this.snapshots.manifestPaths(snapshot.id);
       const effectiveMode = mode;
       const effectiveIncludePaths: readonly string[] | undefined =
         options.target?.includePaths === undefined ? undefined : [...options.target.includePaths];
@@ -410,6 +448,7 @@ export class RunCoordinator {
         };
         const unknown = scope.includePaths.filter(
           (candidate) =>
+            !frozenPaths.has(candidate) &&
             !frozenBaseline.has(candidate) &&
             ![...frozenBaseline.keys()].some((file) => file.startsWith(candidate + '/')),
         );
@@ -441,10 +480,16 @@ export class RunCoordinator {
             (targetSpec.userInstructions === undefined
               ? ''
               : 'Target instructions: ' + targetSpec.userInstructions + ' ');
+      const retestPreamble =
+        retest === undefined
+          ? ''
+          : 'RETEST RUN. Do not run a general QA. Re-test only the findings listed in the mission context under "retest", one check each, against the current code. ';
       const instructionMessage =
-        targetSpec === undefined && options.instructions === undefined
+        targetSpec === undefined && options.instructions === undefined && retest === undefined
           ? undefined
-          : targetedPreamble + (options.instructions ?? 'No additional user instructions.');
+          : targetedPreamble +
+            retestPreamble +
+            (options.instructions ?? 'No additional user instructions.');
       // Micro-patch §8: the hook may flip targeted→full (explicit fallback).
       // Update the SAME persisted row before agents begin — configuration
       // preparation has not started execution, so no second QARun is created.
@@ -461,6 +506,7 @@ export class RunCoordinator {
             ? {}
             : { executionSafeguards: run.configuration.executionSafeguards }),
           profileUsage,
+          ...(run.configuration.retest === undefined ? {} : { retest: run.configuration.retest }),
           ...(instructionMessage === undefined
             ? {}
             : { instructions: { message: instructionMessage, createdAt } }),
@@ -544,6 +590,13 @@ export class RunCoordinator {
                   projectContext: context,
                   runInstructions: run.configuration.instructions ?? null,
                   qaPolicy: run.configuration.policy,
+                  ...(retest === undefined
+                    ? {}
+                    : {
+                        [RETEST_CONTEXT_KEY]: retestContextEntry(
+                          retest.itemsFor(registration.stack.id),
+                        ),
+                      }),
                 },
                 ...(options.onHarnessRequest === undefined
                   ? {}
@@ -611,7 +664,15 @@ export class RunCoordinator {
       if (outcome === 'cancelled') {
         const pending = this.repository.getRunControlRequest(runId);
         if (pending !== undefined && pending.completedAt === undefined) {
-          this.repository.saveRunControlRequest({ ...pending, completedAt: nowIsoTimestamp() });
+          // A request that arrived as the last worker settled may never have been acknowledged
+          // by the worker loop; the owner settling the run is that acknowledgement. Without it
+          // the record shows "completed" with nobody having acknowledged it.
+          const settledAt = nowIsoTimestamp();
+          this.repository.saveRunControlRequest({
+            ...pending,
+            acknowledgedAt: pending.acknowledgedAt ?? settledAt,
+            completedAt: settledAt,
+          });
         }
       }
       await this.exporter.export(runId, 'log');
@@ -671,6 +732,105 @@ export class RunCoordinator {
       else usage.missingAgentStackIds.push(stack.id);
     }
     return { usage, texts };
+  }
+
+  /**
+   * Resolves the findings a retest run takes on: each must be a stored finding of this project. Returns
+   * the spec saved on the run, the agents that take part and each agent's numbered items.
+   */
+  private prepareRetest(
+    projectId: ProjectId,
+    request: NonNullable<RunOptions['retest']>,
+    options: RunOptions,
+  ): {
+    spec: RunRetest;
+    agentStackIds: AgentStackId[];
+    itemsFor: (agentStackId: string) => RetestItem[];
+  } {
+    if (request.findings.length === 0 || request.findings.length > RETEST_MAX_FINDINGS)
+      throw new RunEngineError(
+        'INVALID_TARGET',
+        'A retest takes between 1 and ' + RETEST_MAX_FINDINGS + ' findings.',
+      );
+    const registered = this.registry.list().map((item) => item.stack.id as AgentStackId);
+    const found = request.findings.map((ref, index) => {
+      const sourceRun = this.repository.getRun(ref.runId as QARunId);
+      if (sourceRun === undefined || sourceRun.projectId !== projectId)
+        throw new RunEngineError(
+          'INVALID_TARGET',
+          'Run ' + ref.runId + ' is not part of this project',
+        );
+      const finding = this.repository
+        .listFindings(sourceRun.id)
+        .find((candidate) => candidate.id === ref.findingId);
+      if (finding === undefined)
+        throw new RunEngineError('INVALID_TARGET', 'Finding ' + ref.findingId + ' was not found');
+      const revisionId = this.repository.getSnapshot(sourceRun.snapshotId)?.projectRevisionId;
+      const hash =
+        (revisionId === undefined
+          ? undefined
+          : this.repository.getRevision(revisionId)?.contentHash) ?? '';
+      const digits = hash.replace(/^sha256:/, '');
+      return {
+        n: index + 1,
+        finding,
+        sourceRun,
+        revision: digits.length <= 6 ? digits : digits.slice(0, 3) + '...' + digits.slice(-3),
+      };
+    });
+    if (new Set(found.map((item) => item.finding.id)).size !== found.length)
+      throw new RunEngineError('INVALID_TARGET', 'The same finding was listed twice.');
+    const everyone =
+      options.agentStackIds === undefined
+        ? registered
+        : (options.agentStackIds as readonly AgentStackId[]);
+    const reporters = [...new Set(found.map((item) => item.finding.sourceAgentStackId))];
+    const agentStackIds = request.who === 'reporter' ? reporters : [...everyone];
+    for (const id of agentStackIds)
+      if (!registered.includes(id))
+        throw new RunEngineError('AGENT_STACK_NOT_FOUND', 'Agent stack not found: ' + id);
+    const assigned = (item: (typeof found)[number]): AgentStackId[] =>
+      request.who === 'reporter' ? [item.finding.sourceAgentStackId] : agentStackIds;
+    return {
+      spec: RunRetestSchema.parse({
+        who: request.who,
+        items: found.map((item) => ({
+          n: item.n,
+          findingId: item.finding.id,
+          sourceRunId: item.sourceRun.id,
+          sourceAgentStackId: item.finding.sourceAgentStackId,
+          title: item.finding.title,
+          assignedAgentStackIds: assigned(item),
+        })),
+      }),
+      agentStackIds,
+      itemsFor: (agentStackId) =>
+        found
+          .filter((item) => assigned(item).includes(agentStackId as AgentStackId))
+          .map(({ n, finding, revision }) => ({
+            n,
+            findingId: finding.id,
+            title: finding.title,
+            severity: finding.severity,
+            confidence: finding.confidence,
+            category: finding.category,
+            locations: finding.locations.map(
+              (place) =>
+                place.relativePath + (place.startLine === undefined ? '' : ':' + place.startLine),
+            ),
+            description: finding.description.slice(0, 2000),
+            ...(finding.expectedBehavior === undefined
+              ? {}
+              : { expectedBehavior: finding.expectedBehavior.slice(0, 1000) }),
+            ...(finding.actualBehavior === undefined
+              ? {}
+              : { actualBehavior: finding.actualBehavior.slice(0, 1000) }),
+            reproductionSteps: finding.reproductionSteps
+              .map((step) => step.slice(0, 500))
+              .slice(0, 10),
+            reportedOnRevision: revision,
+          })),
+    };
   }
 
   private async runAgent(input: {
@@ -865,9 +1025,14 @@ export class RunCoordinator {
             if (event.type === 'investigation.plan.created') this.repository.savePlan(event.plan);
             else if (event.type === 'investigation.hypothesis.discovered')
               this.repository.saveHypothesis(event.hypothesis);
-            else if (event.type === 'finding.submitted') this.repository.saveFinding(event.finding);
-            else if (event.type === 'evidence.submitted')
+            else if (event.type === 'finding.submitted') {
+              // A retest answers "is it fixed, and if not why"; it never adds findings of its own.
+              if (input.run.configuration.retest === undefined)
+                this.repository.saveFinding(event.finding);
+            } else if (event.type === 'evidence.submitted') {
+              this.assertEvidenceArtifactsExist(event.evidence, input.run.id);
               this.repository.saveEvidence(event.evidence);
+            }
             agentRun = this.projectAgentRunEvent(agentRun, event);
           });
           input.onHarnessEventPersisted?.(event, agentRun);
@@ -1574,7 +1739,8 @@ export class RunCoordinator {
     }
     if (checkpoint === undefined) return;
     for (const evidence of checkpoint.evidence) this.repository.saveEvidence(evidence);
-    for (const finding of checkpoint.findings) this.repository.saveFinding(finding);
+    if (this.repository.getRun(qaRunId)?.configuration.retest === undefined)
+      for (const finding of checkpoint.findings) this.repository.saveFinding(finding);
   }
 
   async recover(): Promise<void> {
@@ -1664,6 +1830,18 @@ export class RunCoordinator {
       });
       this.projects.recoverAbandonedRunLock(run.projectId, run.id);
     }
+    // Runs terminalized just above may still carry a request that was kept open because the
+    // requesting runtime (this one) is alive. Close those now, so one recovery pass leaves the
+    // run and its control request in agreement instead of needing a second pass.
+    for (const pending of this.repository.listPendingRunControlRequests()) {
+      const run = this.repository.getRun(pending.qaRunId as QARunId);
+      if (
+        run !== undefined &&
+        ['completed', 'partial', 'failed', 'cancelled'].includes(run.status)
+      ) {
+        this.repository.saveRunControlRequest({ ...pending, completedAt: timestamp });
+      }
+    }
     for (const copy of this.repository.listManagedCopiesByState(['locked_for_run'])) {
       if (copy.lockedByQARunId !== undefined) {
         if (copy.runtimeInstanceId !== undefined && lease.isFresh(copy.runtimeInstanceId)) continue;
@@ -1676,6 +1854,39 @@ export class RunCoordinator {
         }
       }
     }
+  }
+
+  /**
+   * Evidence that points at an artifact must point at one that exists for this run. Adapters
+   * normally embed their output instead, so this only refuses references that cannot be followed.
+   */
+  private assertEvidenceArtifactsExist(evidence: unknown, runId: QARunId): void {
+    const requireArtifact = (id: string): void => {
+      const artifact = this.repository.getArtifact(id as never);
+      if (
+        artifact === undefined ||
+        (artifact.qaRunId !== undefined && artifact.qaRunId !== runId)
+      ) {
+        throw new HarnessProtocolError(
+          'INVALID_EVENT_SEQUENCE',
+          'Evidence references artifact ' + id + ' that does not exist for this run',
+        );
+      }
+    };
+    const visit = (value: unknown): void => {
+      if (Array.isArray(value)) {
+        for (const entry of value) visit(entry);
+        return;
+      }
+      if (typeof value !== 'object' || value === null) return;
+      for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+        if (/ArtifactId$/.test(key) && typeof entry === 'string') requireArtifact(entry);
+        else if (/^artifactIds$/i.test(key) && Array.isArray(entry)) {
+          for (const id of entry) if (typeof id === 'string') requireArtifact(id);
+        } else visit(entry);
+      }
+    };
+    visit(evidence);
   }
 
   private requireRuntimeLease(): RuntimeInstanceLease {
@@ -1697,3 +1908,4 @@ export * from './activity-projector.js';
 export * from './exporters.js';
 export * from './sandbox.js';
 export * from './simulation.js';
+export * from './findings-by-revision.js';

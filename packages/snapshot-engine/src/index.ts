@@ -30,7 +30,10 @@ export interface CreateSnapshotInput {
   readonly signal?: AbortSignal;
   /** Entries the revision hash excluded (hashVersion 2 import exclusions)
    *  must be excluded here too, or the two hashes can never agree. */
-  readonly exclude?: (relativePath: string) => boolean;
+  readonly exclude?: (
+    relativePath: string,
+    entryType?: 'file' | 'directory' | 'symlink',
+  ) => boolean;
 }
 
 export class SnapshotEngine {
@@ -46,7 +49,12 @@ export class SnapshotEngine {
   scanRevision(
     root: string,
     signal?: AbortSignal,
-    options: { readonly exclude?: (relativePath: string) => boolean } = {},
+    options: {
+      readonly exclude?: (
+        relativePath: string,
+        entryType?: 'file' | 'directory' | 'symlink',
+      ) => boolean;
+    } = {},
   ): Promise<ScanTreeResult> {
     return scanTree(root, {
       ...(signal === undefined ? {} : { signal }),
@@ -59,6 +67,35 @@ export class SnapshotEngine {
    * from the stored NDJSON manifest (file entries only). No rescan: the
    * manifest was written at snapshot-creation time from the locked revision.
    */
+  /**
+   * Every file, symlink and directory path in the frozen manifest. Targeted QA validates the
+   * paths a person picks against this, so a symlink or an empty directory recorded in the
+   * snapshot can be chosen like a file.
+   */
+  async manifestPaths(snapshotId: SnapshotId): Promise<ReadonlySet<string>> {
+    const snapshot = this.repository.getSnapshot(snapshotId);
+    if (snapshot === undefined) throw new Error('SNAPSHOT_NOT_FOUND: ' + snapshotId);
+    const artifact = this.repository.getArtifact(snapshot.manifest.artifactId);
+    if (artifact === undefined) throw new Error('SNAPSHOT_MANIFEST_MISSING: ' + snapshotId);
+    const absolute = resolveInside(this.dataRoot, artifact.relativeStoragePath);
+    const paths = new Set<string>();
+    const lines = createInterface({ input: createReadStream(absolute), crlfDelay: Infinity });
+    for await (const line of lines) {
+      if (line.trim().length === 0) continue;
+      try {
+        const entry = JSON.parse(line) as { relativePath?: unknown; type?: unknown };
+        if (
+          (entry.type === 'file' || entry.type === 'symlink' || entry.type === 'directory') &&
+          typeof entry.relativePath === 'string'
+        )
+          paths.add(entry.relativePath);
+      } catch {
+        continue;
+      }
+    }
+    return paths;
+  }
+
   async baselineFileHashes(snapshotId: SnapshotId): Promise<ReadonlyMap<string, string>> {
     const snapshot = this.repository.getSnapshot(snapshotId);
     if (snapshot === undefined) throw new Error('SNAPSHOT_NOT_FOUND: ' + snapshotId);

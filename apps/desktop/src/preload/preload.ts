@@ -22,7 +22,12 @@ async function pickDirectory(): Promise<string | null> {
   throw Object.assign(new Error('Directory picker failed'), { code: 'DIALOG_FAILED' });
 }
 
-const api: SentryDesktopApi & { dialogs: { pickDirectory(): Promise<string | null> } } = {
+const api: SentryDesktopApi & {
+  dialogs: {
+    pickDirectory(): Promise<string | null>;
+    pickTargets(projectId: string, kind: 'files' | 'folder'): Promise<string[]>;
+  };
+} = {
   projects: {
     list: () => invoke('projects:list', {}),
     add: (sourcePath: string) => invoke('projects:add', { sourcePath }),
@@ -42,6 +47,16 @@ const api: SentryDesktopApi & { dialogs: { pickDirectory(): Promise<string | nul
     buildProfile: (projectId: string, agentStackIds?: string[]) =>
       invoke(
         'projects:build-profile',
+        agentStackIds === undefined ? { projectId } : { projectId, agentStackIds },
+      ),
+    toolchainNeeds: (projectId: string) => invoke('projects:toolchain-needs', { projectId }),
+    toolchainSelection: (projectId: string) =>
+      invoke('projects:toolchain-selection', { projectId }),
+    findingsByRevision: (projectId: string) =>
+      invoke('projects:findings-by-revision', { projectId }),
+    assessToolchains: (projectId: string, agentStackIds?: string[]) =>
+      invoke(
+        'projects:assess-toolchains',
         agentStackIds === undefined ? { projectId } : { projectId, agentStackIds },
       ),
   },
@@ -81,6 +96,16 @@ const api: SentryDesktopApi & { dialogs: { pickDirectory(): Promise<string | nul
     status: () => invoke('toolchains:status', {}),
     install: (packId: string, version: string) => invoke('toolchains:install', { packId, version }),
     remove: (packId: string, version: string) => invoke('toolchains:remove', { packId, version }),
+    customStatus: () => invoke('toolchains:custom-status', {}),
+    customInstall: (input: { name: string; command: string; pathEntries?: string[] }) =>
+      invoke('toolchains:custom-install', input),
+    customRemove: (name: string) => invoke('toolchains:custom-remove', { name }),
+  },
+  openai: {
+    accountStatus: () => invoke('openai:account-status', {}),
+    accountLogin: () => invoke('openai:account-login', {}),
+    accountCancelLogin: () => invoke('openai:account-cancel-login', {}),
+    accountLogout: () => invoke('openai:account-logout', {}),
   },
   system: {
     info: () => invoke('system:info', {}),
@@ -127,7 +152,10 @@ const api: SentryDesktopApi & { dialogs: { pickDirectory(): Promise<string | nul
       };
     },
   },
-  dialogs: { pickDirectory },
+  dialogs: {
+    pickDirectory,
+    pickTargets: (projectId, kind) => invoke('sentry:dialog:pick-targets', { projectId, kind }),
+  },
 };
 
 contextBridge.exposeInMainWorld('sentry', api);

@@ -18,6 +18,10 @@ export const IPC_CHANNELS = [
   'projects:suggest-targets',
   'projects:profile',
   'projects:build-profile',
+  'projects:toolchain-needs',
+  'projects:assess-toolchains',
+  'projects:findings-by-revision',
+  'projects:toolchain-selection',
   'runs:list',
   'runs:get',
   'runs:status',
@@ -40,6 +44,13 @@ export const IPC_CHANNELS = [
   'toolchains:status',
   'toolchains:install',
   'toolchains:remove',
+  'toolchains:custom-status',
+  'toolchains:custom-install',
+  'toolchains:custom-remove',
+  'openai:account-status',
+  'openai:account-login',
+  'openai:account-cancel-login',
+  'openai:account-logout',
   'system:active-runs',
   'runtime:status',
   'runtime:distros',
@@ -110,16 +121,122 @@ export interface ProjectProfileStatus {
   readonly agents: readonly ProjectProfileAgent[];
 }
 
+export interface ToolchainNeedItem {
+  readonly packId: string;
+  readonly version: string;
+  readonly reason: string;
+}
+
+export interface ToolchainNeedsAgent {
+  readonly agentStackId: string;
+  readonly state: 'none' | 'fresh' | 'stale';
+  readonly createdAt?: string;
+  readonly summary?: string;
+  readonly needs?: readonly ToolchainNeedItem[];
+  readonly assessing: boolean;
+  readonly error?: string;
+}
+
+export interface ToolchainNeedsStatus {
+  readonly projectId: string;
+  readonly agents: readonly ToolchainNeedsAgent[];
+}
+
+export interface RevisionFindingItem {
+  readonly id: string;
+  readonly title: string;
+  readonly category: string;
+  readonly severity: string;
+  readonly confidence: string;
+  readonly location: string;
+}
+
+export interface RevisionRetestOutcome {
+  readonly n: number;
+  readonly findingId: string;
+  readonly title: string;
+  readonly verdict: 'still_reproduces' | 'no_longer_reproduces' | 'cannot_tell';
+  readonly details?: string;
+}
+
+export interface RevisionAgentRunItem {
+  readonly runId: string;
+  readonly mode: string;
+  readonly runStatus: string;
+  readonly agentStatus: string;
+  readonly at: string;
+  readonly findings: readonly RevisionFindingItem[];
+  /** Present only in a retest run: the agent's verdict on each earlier finding it was given. */
+  readonly retest?: readonly RevisionRetestOutcome[];
+}
+
+export interface RevisionAgentItem {
+  readonly agentStackId: string;
+  readonly runs: readonly RevisionAgentRunItem[];
+}
+
+export interface RevisionFindingsItem {
+  readonly revisionId: string;
+  readonly contentHash: string;
+  readonly importedAt: string;
+  readonly agents: readonly RevisionAgentItem[];
+}
+
+export interface FindingsByRevision {
+  readonly projectId: string;
+  readonly currentRevisionId: string;
+  readonly revisions: readonly RevisionFindingsItem[];
+}
+
+export interface ToolchainRequestItem {
+  readonly packId: string;
+  readonly label: string;
+  readonly requested: string;
+  readonly offered?: string;
+  readonly installed: readonly string[];
+  readonly selected?: string;
+  readonly state: 'match' | 'fallback' | 'not_installed' | 'not_offered';
+}
+
+export interface ToolchainSelection {
+  readonly projectId: string;
+  readonly items: readonly ToolchainRequestItem[];
+}
+
+export interface OpenAiAccountStatus {
+  readonly installed: boolean;
+  readonly signedIn: boolean;
+  readonly bridgeRunning: boolean;
+  readonly login: 'idle' | 'waiting' | 'done' | 'failed';
+  /** Sign-in link while a login is waiting. */
+  readonly loginUrl?: string;
+  readonly error?: string;
+  readonly version: string;
+}
+
+export interface CustomAddonStatus {
+  readonly name: string;
+  readonly command: string;
+  readonly pathEntries: readonly string[];
+  readonly installed: boolean;
+  readonly installing: boolean;
+  readonly installedAt?: string;
+  readonly sizeMb?: number;
+  readonly error?: string;
+}
+
 export interface ToolchainVersionStatus {
   readonly version: string;
   readonly installed: boolean;
   readonly installing: boolean;
   readonly sizeMb?: number;
   readonly error?: string;
+  readonly verification?: string;
 }
 
 export interface ToolchainPackStatus {
   readonly id: string;
+  readonly category: 'language' | 'package' | 'build' | 'qa' | 'infra' | 'database';
   readonly label: string;
   readonly description: string;
   readonly approxSizeMb: number;
@@ -148,6 +265,17 @@ export interface SentryDesktopApi {
       projectId: string,
       agentStackIds?: string[],
     ): Promise<{ projectId: string; started: string[] }>;
+    /** What the project's own files ask for, per toolchain, against what is installed. */
+    toolchainSelection(projectId: string): Promise<ToolchainSelection>;
+    /** What each agent says it would need from the Toolchains library for the project. */
+    toolchainNeeds(projectId: string): Promise<ToolchainNeedsStatus>;
+    /** Every revision with runs, newest first: each agent's runs and raw findings, kept apart. */
+    findingsByRevision(projectId: string): Promise<FindingsByRevision>;
+    /** Asks the agents (all, or the listed stacks) what they need; returns at once. */
+    assessToolchains(
+      projectId: string,
+      agentStackIds?: string[],
+    ): Promise<{ projectId: string; started: string[] }>;
   };
   readonly runs: {
     list(projectId: string): Promise<unknown[]>;
@@ -169,6 +297,11 @@ export interface SentryDesktopApi {
         webAccess?: boolean;
         toolDownloads?: boolean;
         useProfile?: boolean;
+        /** Re-test findings from earlier revisions on this one; replaces the agents' own planning. */
+        retest?: {
+          findings: Array<{ runId: string; findingId: string }>;
+          who: 'reporter' | 'all';
+        };
       },
     ): Promise<DesktopOperation>;
     /** Back-compat alias for start. */
@@ -183,6 +316,11 @@ export interface SentryDesktopApi {
         webAccess?: boolean;
         toolDownloads?: boolean;
         useProfile?: boolean;
+        /** Re-test findings from earlier revisions on this one; replaces the agents' own planning. */
+        retest?: {
+          findings: Array<{ runId: string; findingId: string }>;
+          who: 'reporter' | 'all';
+        };
       },
     ): Promise<DesktopOperation>;
     cancel(runId: string): Promise<unknown>;
@@ -260,6 +398,21 @@ export interface SentryDesktopApi {
     status(): Promise<ToolchainPackStatus[]>;
     install(packId: string, version: string): Promise<{ started: boolean }>;
     remove(packId: string, version: string): Promise<{ removed: true }>;
+    /** Add-ons installed with the person's own command, apart from the listed packs. */
+    customStatus(): Promise<CustomAddonStatus[]>;
+    customInstall(input: {
+      name: string;
+      command: string;
+      pathEntries?: string[];
+    }): Promise<{ started: boolean }>;
+    customRemove(name: string): Promise<{ removed: true }>;
+  };
+  readonly openai: {
+    accountStatus(): Promise<OpenAiAccountStatus>;
+    /** Starts the ChatGPT sign-in; resolves with the link to open in a browser. */
+    accountLogin(): Promise<{ url: string }>;
+    accountCancelLogin(): Promise<{ cancelled: true }>;
+    accountLogout(): Promise<{ signedOut: true }>;
   };
   readonly system: {
     info(): Promise<{ dataRoot: string; versions: Record<string, string> }>;

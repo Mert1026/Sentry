@@ -1,17 +1,43 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CHATGPT_MODELS,
+  CHATGPT_MODELS_BEYOND_ZEN,
   CUSTOM_MODEL_VALUE,
   DEEPSEEK_MODELS,
   LEGACY_DEEPSEEK_ALIASES,
   OPENCODE_GO_MODELS,
   OPENCODE_ZEN_MODELS,
   ZAI_GLM_MODELS,
+  chatGptModelNote,
   modelsForOpenCodeMode,
   resolveOpenCodeModelMode,
   stripKnownOpenCodePrefix,
   resolveOpenCodeBinarySuggestion,
   suggestManagedOpenCodeBinary,
 } from '../../src/renderer/lib/provider-models.js';
+
+describe('ChatGPT model catalog', () => {
+  it('lists OpenAI models from the Zen table, newest first, with no duplicates', () => {
+    expect(CHATGPT_MODELS[0]).toBe('gpt-6.1-sol');
+    expect(new Set(CHATGPT_MODELS).size).toBe(CHATGPT_MODELS.length);
+    // Every id is either in the documented Zen table or deliberately listed as an addition.
+    for (const id of CHATGPT_MODELS)
+      expect(OPENCODE_ZEN_MODELS.includes(id) || CHATGPT_MODELS_BEYOND_ZEN.includes(id)).toBe(true);
+    expect(CHATGPT_MODELS).toContain('gpt-6.1-terra');
+    expect(CHATGPT_MODELS.indexOf('gpt-6.1-terra')).toBe(CHATGPT_MODELS.indexOf('gpt-6.1-sol') + 1);
+  });
+
+  it('notes only what the model id itself says', () => {
+    expect(chatGptModelNote('gpt-5.5-pro')).toContain('Pro');
+    expect(chatGptModelNote('gpt-5.4-mini')).toContain('smaller');
+    expect(chatGptModelNote('gpt-5-nano')).toContain('smaller');
+    expect(chatGptModelNote('gpt-5.1-codex-mini')).toContain('smaller');
+    expect(chatGptModelNote('gpt-5.3-codex-spark')).toContain('Codex');
+    expect(chatGptModelNote('gpt-5.1-codex-max')).toContain('Codex');
+    expect(chatGptModelNote('gpt-6.1-sol')).toBeUndefined();
+    expect(chatGptModelNote('gpt-5.5')).toBeUndefined();
+  });
+});
 
 describe('provider model catalogs', () => {
   // The official Go docs Model ID table publishes exactly 29 ids (Go and Go

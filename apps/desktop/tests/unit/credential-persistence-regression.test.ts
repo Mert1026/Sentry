@@ -272,6 +272,48 @@ describe('credential persistence through application service and restart', () =>
     expect((await readFile(legacy, 'utf8')).includes(synthetic)).toBe(true);
   });
 
+  it('never deletes the encrypted store when the legacy path is another spelling of it', async () => {
+    const credentialFile = join(root, 'store', 'providers.json');
+    const writer = new ProviderCredentialService({
+      filePath: credentialFile,
+      safeStorage: backend(),
+      legacyEnvPath: join(root, 'absent.env'),
+    });
+    await writer.saveKey('DEEPSEEK_API_KEY', synthetic);
+    // Same file, written differently (extra segment that resolves back to it).
+    const alias = join(root, 'store', 'sub', '..', 'providers.json');
+    const reader = new ProviderCredentialService({
+      filePath: credentialFile,
+      safeStorage: backend(),
+      legacyEnvPath: alias,
+    });
+    await reader.load();
+    expect(await readFile(credentialFile, 'utf8')).toContain('DEEPSEEK_API_KEY');
+    await reader.forgetFile();
+    // forgetFile removes the real store only through forgetAll; the alias must not unlink it twice.
+    expect(reader.getValue('DEEPSEEK_API_KEY')).toBeUndefined();
+  });
+
+  it('keeps model preferences off a credential file that is itself called models.json', async () => {
+    const credentialFile = join(root, 'store', 'models.json');
+    const service = new ProviderCredentialService({
+      filePath: credentialFile,
+      safeStorage: backend(),
+      legacyEnvPath: join(root, 'absent.env'),
+    });
+    await service.saveKey('DEEPSEEK_API_KEY', synthetic);
+    await service.saveKey('SENTRY_DEEPSEEK_MODEL', 'deepseek-flash');
+    const store = JSON.parse(await readFile(credentialFile, 'utf8')) as {
+      secrets?: Record<string, unknown>;
+    };
+    // The encrypted store is intact and the preference landed in its own file.
+    expect(Object.keys(store.secrets ?? {})).toContain('DEEPSEEK_API_KEY');
+    const prefs = JSON.parse(await readFile(join(root, 'store', 'models.prefs.json'), 'utf8')) as {
+      models: Record<string, string>;
+    };
+    expect(prefs.models['SENTRY_DEEPSEEK_MODEL']).toBe('deepseek-flash');
+  });
+
   it('environment credentials remain explicitly environmental when a stored entry is unreadable', async () => {
     const service = make();
     await mkdir(join(root, 'credentials'));

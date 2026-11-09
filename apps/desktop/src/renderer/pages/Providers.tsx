@@ -1,12 +1,16 @@
 import React from 'react';
+import { InfoPopover } from '../components/InfoPopover.js';
+import { LoadingOverlay } from '../components/BlockingOverlay.js';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check } from 'lucide-react';
 import { sentryApi } from '../lib/sentry-api.js';
 import {
   CUSTOM_MODEL_VALUE,
+  CHATGPT_MODELS,
   DEEPSEEK_MODELS,
   LEGACY_DEEPSEEK_ALIASES,
+  chatGptModelNote,
   OPENCODE_GO_MODELS,
   OPENCODE_ZEN_MODELS,
   ZAI_GLM_MODELS,
@@ -16,7 +20,7 @@ import {
   stripKnownOpenCodePrefix,
 } from '../lib/provider-models.js';
 import { PageHeader } from '../components/ui/PageHeader.js';
-import { CollapsibleSection } from '../components/ui/CollapsibleSection.js';
+import { OpenAiAccountPanel } from '../components/OpenAiAccountPanel.js';
 
 interface ProviderStatus {
   name: string;
@@ -45,13 +49,22 @@ const DESCRIPTIONS: Record<string, string> = {
   SENTRY_OPENCODE_BINARY: 'OpenCode harness executable override (non-secret).',
   OPENCODE_API_KEY:
     'OpenCode Console provider key (secret, from opencode.ai/console). Used for both OpenCode Go monthly subscriptions (Provider: opencode-go) and OpenCode Zen pay-as-you-go credits (Provider: opencode).',
+  SENTRY_OPENAI_AUTH:
+    'How the ChatGPT agent signs in (non-secret): key (OpenAI API key) or account (your ChatGPT account through the local bridge).',
   SENTRY_OPENCODE_PROVIDER:
     'OpenCode upstream provider (non-secret): opencode-go (OpenCode Go monthly subscription gateway), opencode (OpenCode Zen pay-as-you-go Console gateway), or openrouter (OpenRouter pay-as-you-go gateway; default when unset).',
+  OPENAI_API_KEY:
+    'OpenAI API key (secret, from platform.openai.com/api-keys). Used by the ChatGPT agent when it signs in with an API key. Pay-as-you-go on your OpenAI account.',
+  SENTRY_CHATGPT_REASONING:
+    'How hard the ChatGPT agent thinks (non-secret): low, medium or high. Higher effort usually finds more but takes longer and costs more. Unset uses the provider default.',
+  SENTRY_CHATGPT_MODEL:
+    'ChatGPT agent model id (non-secret), an OpenAI model such as gpt-5.5. The ChatGPT agent runs the OpenCode harness against OpenAI.',
 };
 
 const SECRET_NAMES: ReadonlySet<string> = new Set([
   'OPENROUTER_API_KEY',
   'OPENCODE_API_KEY',
+  'OPENAI_API_KEY',
   'DEEPSEEK_API_KEY',
   'ANTHROPIC_AUTH_TOKEN',
 ]);
@@ -60,7 +73,7 @@ interface AgentFieldSpec {
   readonly name: string;
   readonly label: string;
   readonly placeholder?: string;
-  readonly modelList?: 'opencode' | 'deepseek' | 'glm';
+  readonly modelList?: 'opencode' | 'deepseek' | 'glm' | 'chatgpt';
   readonly detailsLabel?: string | null;
 }
 
@@ -130,6 +143,18 @@ const AGENT_CARDS: readonly AgentCardSpec[] = [
         placeholder: 'https://api.z.ai/api/anthropic',
       },
       { name: 'ANTHROPIC_AUTH_TOKEN', label: 'Token' },
+    ],
+  },
+  {
+    title: 'ChatGPT',
+    subtitle: 'Fourth reviewer · OpenAI through your API key or your ChatGPT account',
+    fields: [
+      {
+        name: 'SENTRY_CHATGPT_MODEL',
+        modelList: 'chatgpt',
+        label: 'Model',
+        placeholder: 'e.g. gpt-5.5',
+      },
     ],
   },
 ];
@@ -289,11 +314,13 @@ export function Providers(): React.JSX.Element {
           </>
         }
       />
-      <p className="body-secondary" style={{ margin: 0 }}>
-        Save encrypts the credential with the OS keychain, persists it, and loads it into the host
-        process immediately — it survives application restarts. Secret values are never displayed
-        and never leave the desktop host process.
-      </p>
+      <div className="info-aligned-row" style={{ justifyContent: 'flex-end' }}>
+        <InfoPopover title="Provider credentials">
+          Save encrypts the credential with the OS keychain, persists it, and loads it into the host
+          process immediately — it survives application restarts. Secret values are never displayed
+          and never leave the desktop host process.
+        </InfoPopover>
+      </div>
       {error !== undefined ? (
         <div className="error-box" role="alert">
           {error}{' '}
@@ -318,7 +345,7 @@ export function Providers(): React.JSX.Element {
           </button>
         </div>
       ) : null}
-      {statuses.isLoading ? <div className="skeleton">Loading provider status…</div> : null}
+      {statuses.isLoading ? <LoadingOverlay>Loading provider status…</LoadingOverlay> : null}
       {statuses.isError ? (
         <div className="error-box" role="alert">
           Provider status unavailable. Credential presence could not be checked.{' '}
@@ -336,13 +363,23 @@ export function Providers(): React.JSX.Element {
       <div className="cards">
         {AGENT_CARDS.map((card) => (
           <section className="card" key={card.title} aria-label={card.title + ' provider settings'}>
-            <h2 className="section-title">{card.title}</h2>
-            <p className="metadata" style={{ margin: '4px 0 12px' }}>
-              {card.subtitle}
-            </p>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                marginBottom: 12,
+                justifyContent: 'space-between',
+              }}
+            >
+              <h2 className="section-title">{card.title}</h2>
+              <InfoPopover title={card.title}>{card.subtitle}</InfoPopover>
+            </div>
             {card.title === 'OpenCode' ? <OpenCodeProviderGuidance byName={byName} /> : null}
             {card.title === 'OpenCode' ? (
               <OpenCodeCard {...fieldProps} />
+            ) : card.title === 'ChatGPT' ? (
+              <ChatGptCard {...fieldProps} onError={fail} />
             ) : (
               card.fields.map((field) =>
                 field.modelList === undefined ? (
@@ -378,20 +415,22 @@ export function Providers(): React.JSX.Element {
           </section>
         ))}
       </div>
-      <CollapsibleSection title="Advanced runtime binaries">
-        <HarnessBinaryCard
-          statuses={statuses.isError ? [] : (statuses.data ?? [])}
-          statusPending={statuses.isLoading}
-          detectedOpenCodeBinary={detectedOpenCodeBinary}
-          values={values}
-          setValues={setValues}
-          onSave={(name, value) => save.mutate({ name, value })}
-          onClear={(name) => clear.mutate(name)}
-          savePending={save.isPending}
-          clearPending={clear.isPending}
-          onError={fail}
-        />
-      </CollapsibleSection>
+      <div className="info-aligned-row" style={{ justifyContent: 'flex-end' }}>
+        <InfoPopover title="Advanced runtime binaries">
+          <HarnessBinaryCard
+            statuses={statuses.isError ? [] : (statuses.data ?? [])}
+            statusPending={statuses.isLoading}
+            detectedOpenCodeBinary={detectedOpenCodeBinary}
+            values={values}
+            setValues={setValues}
+            onSave={(name, value) => save.mutate({ name, value })}
+            onClear={(name) => clear.mutate(name)}
+            savePending={save.isPending}
+            clearPending={clear.isPending}
+            onError={fail}
+          />
+        </InfoPopover>
+      </div>
       <div className="card">
         <h2 className="section-title">Forget all provider credentials</h2>
         <p className="body-secondary">
@@ -536,6 +575,18 @@ function CredentialField(props: {
                       : 'Status unavailable'}
           {activeHint !== undefined ? ' · ' + activeHint : ''}
         </span>
+        <span className="info-row-spacer" />
+        {disclosureLabel !== null ? (
+          <InfoPopover title={props.label}>
+            <p className="metadata mono" style={{ margin: '4px 0' }}>
+              {props.name}
+              {item !== undefined ? ' · ' + item.persistence + ' · ' + item.source : ''}
+            </p>
+            <p className="metadata" style={{ margin: 0 }}>
+              {DESCRIPTIONS[props.name] ?? ''}
+            </p>
+          </InfoPopover>
+        ) : null}
       </div>
       <div
         style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 4 }}
@@ -574,18 +625,6 @@ function CredentialField(props: {
         <p className="metadata">
           Stored credential unavailable. Check OS secure storage; keep the existing store.
         </p>
-      ) : null}
-      {disclosureLabel !== null ? (
-        <details style={{ marginTop: 4 }}>
-          <summary className="metadata">{disclosureLabel}</summary>
-          <p className="metadata mono" style={{ margin: '4px 0' }}>
-            {props.name}
-            {item !== undefined ? ' · ' + item.persistence + ' · ' + item.source : ''}
-          </p>
-          <p className="metadata" style={{ margin: 0 }}>
-            {DESCRIPTIONS[props.name] ?? ''}
-          </p>
-        </details>
       ) : null}
     </div>
   );
@@ -696,6 +735,18 @@ function ModelSelectField(props: ModelFieldProps): React.JSX.Element {
                       ? 'Not set'
                       : 'Status unavailable'}
         </span>
+        <span className="info-row-spacer" />
+        {disclosureLabel !== null ? (
+          <InfoPopover title={props.label}>
+            <p className="metadata mono" style={{ margin: '4px 0' }}>
+              {props.name}
+              {item !== undefined ? ' · ' + item.persistence + ' · ' + item.source : ''}
+            </p>
+            <p className="metadata" style={{ margin: 0 }}>
+              {props.description ?? ''}
+            </p>
+          </InfoPopover>
+        ) : null}
       </div>
       <div
         style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 4 }}
@@ -765,18 +816,6 @@ function ModelSelectField(props: ModelFieldProps): React.JSX.Element {
         <p className="metadata">
           Stored credential unavailable. Check OS secure storage; keep the existing store.
         </p>
-      ) : null}
-      {disclosureLabel !== null ? (
-        <details style={{ marginTop: 4 }}>
-          <summary className="metadata">{disclosureLabel}</summary>
-          <p className="metadata mono" style={{ margin: '4px 0' }}>
-            {props.name}
-            {item !== undefined ? ' · ' + item.persistence + ' · ' + item.source : ''}
-          </p>
-          <p className="metadata" style={{ margin: 0 }}>
-            {props.description ?? ''}
-          </p>
-        </details>
       ) : null}
     </div>
   );
@@ -873,10 +912,12 @@ function CredentialSourceSelector(props: {
           Use OpenRouter key
         </button>
       </div>
-      <p className="metadata" style={{ margin: '4px 0 0' }}>
-        Both keys are stored securely. Switching only changes which key Sentry uses; the other key
-        stays saved.
-      </p>
+      <div className="info-aligned-row" style={{ justifyContent: 'flex-end' }}>
+        <InfoPopover title="Provider keys">
+          Both keys are stored securely. Switching only changes which key Sentry uses; the other key
+          stays saved.
+        </InfoPopover>
+      </div>
     </div>
   );
 }
@@ -1062,6 +1103,143 @@ function OpenCodeCard(props: {
     </div>
   );
 }
+const REASONING_EFFORTS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: '', label: 'Default (provider setting)' },
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
+];
+
+/** How hard the ChatGPT agent thinks. Saving applies at once; "Default" removes the setting. */
+function ReasoningEffortField(props: {
+  readonly value: string;
+  readonly pending: boolean;
+  readonly onChange: (value: string) => void;
+}): React.JSX.Element {
+  const known = REASONING_EFFORTS.some((option) => option.value === props.value);
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <label htmlFor="provider-SENTRY_CHATGPT_REASONING" className="card-title">
+          Reasoning effort
+        </label>
+        <span className="info-row-spacer" />
+        <InfoPopover title="Reasoning effort">
+          {DESCRIPTIONS['SENTRY_CHATGPT_REASONING'] ?? ''}
+        </InfoPopover>
+      </div>
+      <select
+        id="provider-SENTRY_CHATGPT_REASONING"
+        aria-label="Value for SENTRY_CHATGPT_REASONING"
+        value={known ? props.value : ''}
+        disabled={props.pending}
+        onChange={(event) => props.onChange(event.target.value)}
+        style={{ minWidth: 200, width: '100%', marginTop: 4 }}
+      >
+        {REASONING_EFFORTS.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+/**
+ * ChatGPT agent card: its own model, plus how it signs in to OpenAI: an API key, or the person's
+ * ChatGPT account through the local bridge. Both choices stay saved; switching only changes which
+ * one runs use.
+ */
+function ChatGptCard(props: {
+  readonly onError: (error: unknown) => void;
+  readonly values: Record<string, string>;
+  readonly setValues: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  readonly onSave: (name: string, value: string) => void;
+  readonly onClear: (name: string) => void;
+  readonly savePending: boolean;
+  readonly clearPending: boolean;
+  readonly byName: Map<string, ProviderStatus>;
+  readonly statusPending: boolean;
+}): React.JSX.Element {
+  const authStatus = props.byName.get('SENTRY_OPENAI_AUTH');
+  const account =
+    authStatus?.configured === true && authStatus.hint.trim().toLowerCase() === 'account';
+  const common = {
+    values: props.values,
+    setValues: props.setValues,
+    onSave: props.onSave,
+    onClear: props.onClear,
+    savePending: props.savePending,
+    clearPending: props.clearPending,
+    byName: props.byName,
+    statusPending: props.statusPending,
+  };
+  return (
+    <div>
+      <ModelSelectField
+        label="Model"
+        name="SENTRY_CHATGPT_MODEL"
+        placeholder="e.g. gpt-5.5"
+        detailsLabel="Explanation"
+        description={DESCRIPTIONS['SENTRY_CHATGPT_MODEL']}
+        options={CHATGPT_MODELS}
+        optionNote={chatGptModelNote}
+        {...common}
+      />
+      <ReasoningEffortField
+        value={
+          props.byName.get('SENTRY_CHATGPT_REASONING')?.configured === true
+            ? (props.byName.get('SENTRY_CHATGPT_REASONING')?.hint ?? '')
+            : ''
+        }
+        pending={props.savePending || props.clearPending}
+        onChange={(next) =>
+          next === ''
+            ? props.onClear('SENTRY_CHATGPT_REASONING')
+            : props.onSave('SENTRY_CHATGPT_REASONING', next)
+        }
+      />
+      <div style={{ marginBottom: 12 }}>
+        <span id="openai-auth-label" className="metadata">
+          Sign in with
+        </span>
+        <div
+          role="group"
+          aria-labelledby="openai-auth-label"
+          style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}
+        >
+          <button
+            className={account ? 'compact ghost' : 'primary compact'}
+            aria-pressed={!account}
+            disabled={props.savePending}
+            onClick={() => props.onSave('SENTRY_OPENAI_AUTH', 'key')}
+          >
+            API key
+          </button>
+          <button
+            className={account ? 'primary compact' : 'compact ghost'}
+            aria-pressed={account}
+            disabled={props.savePending}
+            onClick={() => props.onSave('SENTRY_OPENAI_AUTH', 'account')}
+          >
+            ChatGPT account
+          </button>
+        </div>
+      </div>
+      {account ? (
+        <OpenAiAccountPanel onError={props.onError} />
+      ) : (
+        <CredentialField
+          label="OpenAI API key"
+          name="OPENAI_API_KEY"
+          detailsLabel="Explanation"
+          {...common}
+        />
+      )}
+    </div>
+  );
+}
 const BINARY_FIELDS = [
   { name: 'SENTRY_OPENCODE_BINARY', label: 'OpenCode executable' },
   { name: 'SENTRY_DEEPSEEK_BINARY', label: 'DeepSeek executable' },
@@ -1101,13 +1279,18 @@ export function HarnessBinaryCard(props: {
   }, [openCodeSuggestion, openCodeDraft, openCodeSaved?.configured === true, props.setValues]);
   return (
     <div className="card" style={{ marginBottom: 12, marginTop: 8 }}>
-      <h3 className="card-title">Execution runtime</h3>
-      <p className="body-secondary">
-        Provider CLIs (opencode, dsh, Claude Code) execute inside the WSL2 Sentry runtime on Linux.
-        Optional absolute Linux paths below override PATH lookup; leaving a field empty keeps
-        automatic discovery. Paths refer to the selected WSL Linux runtime — Windows paths (C:… ) do
-        not apply. See <Link to="/environment">Environment</Link> for the runtime doctor state.
-      </p>
+      <div
+        style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'space-between' }}
+      >
+        <h3 className="card-title">Execution runtime</h3>
+        <InfoPopover title="Execution runtime">
+          Provider CLIs (opencode, dsh, Claude Code) execute inside the WSL2 Sentry runtime on
+          Linux. Optional absolute Linux paths below override PATH lookup; leaving a field empty
+          keeps automatic discovery. Paths refer to the selected WSL Linux runtime — Windows paths
+          (C:… ) do not apply. See <Link to="/environment">Environment</Link> for the runtime doctor
+          state.
+        </InfoPopover>
+      </div>
       {BINARY_FIELDS.map((field) => {
         const status = props.statuses.find((s) => s.name === field.name);
         const current = props.values[field.name] ?? '';
@@ -1132,9 +1315,7 @@ export function HarnessBinaryCard(props: {
                     : 'Status unavailable'}
               {status?.hint !== undefined && status.hint.length > 0 ? '; ' + status.hint : ''})
             </span>
-            <p className="muted" style={{ margin: '4px 0' }}>
-              {DESCRIPTIONS[field.name] ?? ''}
-            </p>
+            <InfoPopover title={field.label}>{DESCRIPTIONS[field.name] ?? ''}</InfoPopover>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
               <input
                 type="text"

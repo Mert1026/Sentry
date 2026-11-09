@@ -13,7 +13,7 @@ import { spawnSync } from 'node:child_process';
 import { accessSync, constants, statSync } from 'node:fs';
 import { isAbsolute, join } from 'node:path';
 import { z } from 'zod';
-import { INITIAL_AGENT_STACKS } from '@qa/domain';
+import { AGENT_STACKS } from '@qa/domain';
 import {
   SentryDatabase,
   SentryRepository,
@@ -22,8 +22,15 @@ import {
   resolveSentryDataRoot,
 } from '@qa/persistence';
 import { ProjectManager } from '@qa/project-manager';
-import { RunCoordinator, SystemdSandboxBackend, sandboxStagingParent } from '@qa/run-engine';
 import {
+  RunCoordinator,
+  SystemdSandboxBackend,
+  findingsByRevision,
+  sandboxStagingParent,
+} from '@qa/run-engine';
+import {
+  createChatGptRegistration,
+  chatGptEnvironment,
   createOpenCodeRegistration,
   credentialEnvForProvider,
   managedOpenCodeExecutable,
@@ -66,6 +73,7 @@ import {
 
 import { runtimeReleaseIdentity } from './distribution.js';
 import { ToolchainManager } from './toolchains.js';
+import { OpenAiAccount } from './openai-account.js';
 const releaseIdentity = runtimeReleaseIdentity();
 export const RUNTIME_VERSION = releaseIdentity?.version ?? '1.0.2';
 
@@ -129,15 +137,59 @@ export function assertExportTransportSize(sizeBytes: number, runId: string): voi
   );
 }
 
+interface ExportContentLike {
+  readonly format: 'log' | 'json';
+  readonly sizeBytes: number;
+  readonly contentBase64: string;
+}
+
+/**
+ * Export content travels as base64, which the string redactor cannot see into. Decode it, apply
+ * the same redaction every other runtime response gets, and re-encode. JSON stays valid JSON
+ * because it is redacted as a parsed value, not as text.
+ */
+export function sanitizeExportContent<T extends ExportContentLike>(content: T): T {
+  const text = Buffer.from(content.contentBase64, 'base64').toString('utf8');
+  let redacted: string;
+  if (content.format === 'json') {
+    try {
+      redacted =
+        JSON.stringify(sanitize(JSON.parse(text)), null, 2) + (text.endsWith('\n') ? '\n' : '');
+    } catch {
+      redacted = sanitize(text) as string;
+    }
+  } else {
+    redacted = sanitize(text) as string;
+  }
+  if (redacted === text) return content;
+  const bytes = Buffer.from(redacted, 'utf8');
+  return { ...content, sizeBytes: bytes.byteLength, contentBase64: bytes.toString('base64') };
+}
+
 function sanitize(value: unknown): unknown {
   // Defense in depth: never let KEY/TOKEN/SECRET-looking values reach stdout.
   if (typeof value === 'string') {
-    return value
-      .replace(/\b(Bearer)\s+\S+/gi, '$1 [REDACTED]')
-      .replace(
-        /\b([A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD))\s*[:=]\s*([^\s,;]+)/gi,
-        '$1=[REDACTED]',
-      );
+    return value.replace(/\b(Bearer)\s+\S+/gi, '$1 [REDACTED]').replace(
+      // Optional quotes around the name and a quoted or bare value, so JSON such as
+      // {"authToken":"abc"} is masked like authToken=abc.
+      /(["']?)\b([A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD))\1(\s*[:=]\s*)(?:"([^"]*)"|'([^']*)'|([^\s,;"'}]+))/gi,
+      // Keep the author's spacing, separator and quotes, and leave an already redacted value as
+      // it is, so redaction never rewrites text that held no secret (for example a stored excerpt).
+      (
+        match,
+        quote: string,
+        name: string,
+        separator: string,
+        doubleQuoted: string | undefined,
+        singleQuoted: string | undefined,
+        bare: string | undefined,
+      ) => {
+        const secret = doubleQuoted ?? singleQuoted ?? bare ?? '';
+        if (secret === '[REDACTED]') return match;
+        const valueQuote = doubleQuoted !== undefined ? '"' : singleQuoted !== undefined ? "'" : '';
+        return quote + name + quote + separator + valueQuote + '[REDACTED]' + valueQuote;
+      },
+    );
   }
   if (Array.isArray(value)) return value.map((entry) => sanitize(entry));
   if (typeof value === 'object' && value !== null) {
@@ -256,6 +308,37 @@ export function probeSandboxDeps(): SandboxDepsStatus {
 /** Sentry-managed DeepSeek wrapper path (the Bash CLI entry operators use). */
 export function deepseekManagedWrapperPath(dataRoot: string): string {
   return join(dataRoot, 'tools', 'deepseek', 'bin', 'dsh');
+}
+
+/** Sentry-managed Claude Code executable (the GLM agent's harness) inside the Linux data root. */
+export function claudeManagedExecutablePath(dataRoot: string): string {
+  return join(dataRoot, 'tools', 'claude-code', 'node_modules', '.bin', 'claude');
+}
+
+/**
+ * The executable an agent will actually launch, and where that choice came from: an explicit
+ * override from the environment wins, otherwise the Sentry-managed install. Used for every agent
+ * so the Environment page reports the real path instead of a value baked in per agent.
+ */
+export function resolveAgentExecutable(input: {
+  readonly override: string | undefined;
+  readonly managed: string;
+}): {
+  readonly path: string;
+  readonly source: 'environment' | 'managed';
+  readonly present: boolean;
+} {
+  const override = input.override?.trim();
+  const path = override !== undefined && override.length > 0 ? override : input.managed;
+  let present = false;
+  try {
+    accessSync(path, constants.X_OK);
+    present = true;
+  } catch {
+    present = false;
+  }
+  const fromEnvironment = override !== undefined && override.length > 0;
+  return { path, source: fromEnvironment ? 'environment' : 'managed', present };
 }
 
 /**
@@ -445,11 +528,20 @@ export class SentryRuntimeHost {
   /** Profile builds in flight and the last failure per project and agent (memory only). */
   private readonly profileBuilds = new Map<string, AbortController>();
   private readonly profileErrors = new Map<string, string>();
+  /** Toolchain assessments in flight and the last failure per project and agent (memory only). */
+  private readonly needsBuilds = new Map<string, AbortController>();
+  private readonly needsErrors = new Map<string, string>();
   private readonly toolchains: ToolchainManager;
+  private readonly openAiAccount: OpenAiAccount;
   private readonly activeImports = new Set<AbortController>();
   private readonly activeUpdates = new Set<AbortController>();
   private readonly notify: (event: string, payload?: unknown) => void;
-  private configuredModels: { opencode?: string; deepseek?: string; glm?: string } = {};
+  private configuredModels: {
+    opencode?: string;
+    deepseek?: string;
+    glm?: string;
+    chatgpt?: string;
+  } = {};
   private closed = false;
   private shutdownRequested = false;
 
@@ -460,6 +552,8 @@ export class SentryRuntimeHost {
     this.notify = notify;
     this.dataRoot = dataRootOverride ?? defaultLinuxDataRoot();
     this.toolchains = new ToolchainManager(this.dataRoot);
+    this.openAiAccount = new OpenAiAccount({ dataRoot: this.dataRoot });
+    void this.refreshOpenAiAccountReady();
     this.database = new SentryDatabase({ dataRoot: this.dataRoot });
     this.repository = new SentryRepository(this.database);
     this.lease = new RuntimeInstanceLease(this.repository);
@@ -472,10 +566,22 @@ export class SentryRuntimeHost {
         createOpenCodeRegistration({
           managedExecutable: managedOpenCodeExecutable(this.dataRoot),
           toolchains: (workspace) => this.toolchains.setup(workspace),
+          openAiAccountBridge: () => this.openAiAccount.ensureBridge(),
         }),
       )
-      .register(createDeepSeekRegistration())
-      .register(createGlmRegistration());
+      .register(
+        createChatGptRegistration({
+          managedExecutable: managedOpenCodeExecutable(this.dataRoot),
+          toolchains: (workspace) => this.toolchains.setup(workspace),
+          openAiAccountBridge: () => this.openAiAccount.ensureBridge(),
+        }),
+      )
+      .register(
+        createDeepSeekRegistration({ toolchains: (workspace) => this.toolchains.setup(workspace) }),
+      )
+      .register(
+        createGlmRegistration({ toolchains: (workspace) => this.toolchains.setup(workspace) }),
+      );
     this.coordinator = new RunCoordinator(
       this.dataRoot,
       this.repository,
@@ -529,7 +635,9 @@ export class SentryRuntimeHost {
     if (this.closed) return;
     this.closed = true;
     for (const build of this.profileBuilds.values()) build.abort();
+    for (const build of this.needsBuilds.values()) build.abort();
     this.cancelAddProject();
+    this.openAiAccount.dispose();
     this.lease.release();
     this.database.close();
   }
@@ -557,11 +665,29 @@ export class SentryRuntimeHost {
     });
   }
 
+  /** Mirror "a ChatGPT sign-in is stored" into the env flag the OpenCode credential check reads. */
+  private async refreshOpenAiAccountReady(): Promise<void> {
+    process.env['SENTRY_OPENAI_ACCOUNT_READY'] = (await this.openAiAccount.signedIn()) ? '1' : '';
+  }
+
   configure(params: unknown): unknown {
     const parsed = RuntimeConfigureParamsSchema.parse(params ?? {});
+    if (parsed.reasoningEffort?.chatgpt !== undefined) {
+      if (parsed.reasoningEffort.chatgpt === 'default')
+        delete process.env['SENTRY_CHATGPT_REASONING'];
+      else process.env['SENTRY_CHATGPT_REASONING'] = parsed.reasoningEffort.chatgpt;
+    }
+    if (parsed.openAiAuth !== undefined) {
+      process.env['SENTRY_OPENAI_AUTH'] = parsed.openAiAuth;
+      void this.refreshOpenAiAccountReady();
+    }
     if (parsed.models.opencode !== undefined) {
       process.env['SENTRY_OPENCODE_MODEL'] = parsed.models.opencode;
       this.configuredModels = { ...this.configuredModels, opencode: parsed.models.opencode };
+    }
+    if (parsed.models.chatgpt !== undefined) {
+      process.env['SENTRY_CHATGPT_MODEL'] = parsed.models.chatgpt;
+      this.configuredModels = { ...this.configuredModels, chatgpt: parsed.models.chatgpt };
     }
     if (parsed.models.deepseek !== undefined) {
       process.env['SENTRY_DEEPSEEK_MODEL'] = parsed.models.deepseek;
@@ -578,6 +704,9 @@ export class SentryRuntimeHost {
     }
     if (parsed.providers.openCodeApiKey !== undefined) {
       process.env['OPENCODE_API_KEY'] = parsed.providers.openCodeApiKey;
+    }
+    if (parsed.providers.openAiApiKey !== undefined) {
+      process.env['OPENAI_API_KEY'] = parsed.providers.openAiApiKey;
     }
     if (parsed.openCodeProvider !== undefined) {
       process.env['SENTRY_OPENCODE_PROVIDER'] = parsed.openCodeProvider;
@@ -747,6 +876,59 @@ export class SentryRuntimeHost {
     return { projectId: id, started };
   }
 
+  /** What every agent says it would need from the Toolchains library, plus runs in flight and failures. */
+  async toolchainNeedsStatus(projectId: string): Promise<unknown> {
+    const id = ProjectIdInput.parse(projectId);
+    try {
+      const agents = await this.coordinator.profiles.needsStatus(id as never);
+      return {
+        projectId: id,
+        agents: agents.map((agent) => {
+          const key = id + ':' + agent.agentStackId;
+          const error = this.needsErrors.get(key);
+          return {
+            ...agent,
+            assessing: this.needsBuilds.has(key),
+            ...(error === undefined ? {} : { error }),
+          };
+        }),
+      };
+    } catch (error) {
+      const sanitized = toError(error);
+      throw rpcError(sanitized.code, sanitized.message);
+    }
+  }
+
+  /** Asks the agents what they need and returns at once; progress arrives as toolchainNeeds.updated. */
+  assessToolchains(projectId: string, agentStackIds?: string[]): unknown {
+    const id = ProjectIdInput.parse(projectId);
+    if (this.projects.getProject(id as never) === undefined)
+      throw rpcError('PROJECT_NOT_FOUND', 'Project not found: ' + id);
+    const wanted = agentStackIds ?? this.registry.list().map((item) => item.stack.id as string);
+    const started: string[] = [];
+    for (const stackId of wanted) {
+      if (this.registry.resolve(stackId as never) === undefined)
+        throw rpcError('AGENT_STACK_NOT_FOUND', 'Agent stack not found: ' + stackId);
+      const key = id + ':' + stackId;
+      if (this.needsBuilds.has(key)) continue;
+      const controller = new AbortController();
+      this.needsBuilds.set(key, controller);
+      this.needsErrors.delete(key);
+      started.push(stackId);
+      void this.coordinator.profiles
+        .assessToolchains(id as never, stackId as never, controller.signal)
+        .catch((error: unknown) => {
+          this.needsErrors.set(key, toError(error).message.slice(0, 500));
+        })
+        .finally(() => {
+          this.needsBuilds.delete(key);
+          if (!this.closed)
+            this.notify('toolchainNeeds.updated', { projectId: id, agentStackId: stackId });
+        });
+    }
+    return { projectId: id, started };
+  }
+
   async updateProject(projectId: string, sourcePath?: string): Promise<unknown> {
     const id = ProjectIdInput.parse(projectId);
     // Salvage pass: a previous update killed mid-flight (client timeout,
@@ -825,6 +1007,32 @@ export class SentryRuntimeHost {
       detectedEcosystem: ecosystem,
       warnings:
         ecosystem.length === 0 ? ['No known ecosystem markers at the working-copy root.'] : [],
+    };
+  }
+
+  /** What the project's own files ask for, per toolchain, against what is installed. */
+  async toolchainSelection(projectId: string): Promise<unknown> {
+    const id = ProjectIdInput.parse(projectId);
+    const record = this.projects.getProject(id as never);
+    if (record === undefined) throw rpcError('PROJECT_NOT_FOUND', 'Project not found: ' + id);
+    const { projectDataPaths } = await import('@qa/persistence');
+    return {
+      projectId: id,
+      items: await this.toolchains.selection(
+        projectDataPaths(this.dataRoot, id as never).workingCopy,
+      ),
+    };
+  }
+
+  /** Every revision with runs, newest first, with each agent's runs and findings kept apart. */
+  findingsByRevision(projectId: string): unknown {
+    const id = ProjectIdInput.parse(projectId);
+    const record = this.projects.getProject(id as never);
+    if (record === undefined) throw rpcError('PROJECT_NOT_FOUND', 'Project not found: ' + id);
+    return {
+      projectId: id,
+      currentRevisionId: record.revision.id,
+      revisions: findingsByRevision(this.repository, id as never),
     };
   }
 
@@ -916,6 +1124,14 @@ export class SentryRuntimeHost {
       ...(parsed.toolDownloads === true ? { toolDownloads: true } : {}),
       ...(parsed.revisionId === undefined ? {} : { revisionId: parsed.revisionId }),
       ...(parsed.useProfile === true ? { useProfile: true } : {}),
+      ...(parsed.retest === undefined
+        ? {}
+        : {
+            retest: {
+              findings: parsed.retest.findings.map((ref) => ({ ...ref })),
+              who: parsed.retest.who,
+            },
+          }),
     });
     const settled = runPromise.then(
       (details) => {
@@ -986,7 +1202,11 @@ export class SentryRuntimeHost {
       }
       if (sizeBytes >= 0) assertExportTransportSize(sizeBytes, id);
     }
-    return this.coordinator.exportContent(id as never, parsed);
+    const content = (await this.coordinator.exportContent(
+      id as never,
+      parsed,
+    )) as ExportContentLike;
+    return sanitizeExportContent(content);
   }
 
   exportRun(runId: string, format: string): Promise<unknown> {
@@ -1006,9 +1226,13 @@ export class SentryRuntimeHost {
     // (not in harness code): presence + versions + a minimal no-model
     // bubblewrap init smoke. Never throws; unknown means unverified.
     const sandboxDeps = probeSandboxDeps();
-    const [opencode, deepseek, glm] = await Promise.all([
+    const [opencode, chatgpt, deepseek, glm] = await Promise.all([
       doctorOpenCode({
         managedExecutable: managedOpenCodeExecutable(this.dataRoot),
+      }).catch(() => undefined),
+      doctorOpenCode({
+        managedExecutable: managedOpenCodeExecutable(this.dataRoot),
+        environment: chatGptEnvironment(),
       }).catch(() => undefined),
       doctorDeepSeek().catch(() => undefined),
       doctorGlm().catch(() => undefined),
@@ -1049,8 +1273,8 @@ export class SentryRuntimeHost {
         reason: error instanceof Error ? error.message.slice(0, 300) : 'probe failed',
       };
     }
-    const stacks = INITIAL_AGENT_STACKS.map((s) => {
-      const opencodeDoctor = opencode as
+    const stacks = AGENT_STACKS.map((s) => {
+      const opencodeDoctor = (s.id === 'stack_chatgpt_main' ? chatgpt : opencode) as
         | {
             executable?: string;
             executableSource?: string;
@@ -1065,9 +1289,9 @@ export class SentryRuntimeHost {
         .slice(0, 3)
         .join('; ');
       const base =
-        s.id === 'stack_opencode_main'
+        s.id === 'stack_opencode_main' || s.id === 'stack_chatgpt_main'
           ? {
-              ...stackStatus(s.id, opencode as never),
+              ...stackStatus(s.id, (s.id === 'stack_chatgpt_main' ? chatgpt : opencode) as never),
               ...(opencodeDoctor?.modelId === undefined ? {} : { modelId: opencodeDoctor.modelId }),
               ...(opencodeDoctor?.provider === undefined
                 ? {}
@@ -1079,16 +1303,36 @@ export class SentryRuntimeHost {
               ...(opencodeNote.length === 0 ? {} : { note: opencodeNote }),
             }
           : s.id === 'stack_deepseek_main'
-            ? {
-                ...stackStatus(s.id, deepseek as never),
-                executionPath: deepseekManagedWrapperPath(this.dataRoot),
-                wrapperNote:
-                  'Managed wrapper available; production SDK runtime resolves separately at startup.',
-              }
-            : {
-                ...stackStatus(s.id, glm as never),
-                ...glmSandboxStatus(sandboxDeps),
-              };
+            ? (() => {
+                const resolved = resolveAgentExecutable({
+                  override: process.env['SENTRY_DEEPSEEK_BINARY'],
+                  managed: deepseekManagedWrapperPath(this.dataRoot),
+                });
+                return {
+                  ...stackStatus(s.id, deepseek as never),
+                  executionPath: resolved.path,
+                  executableSource: resolved.source,
+                  // Only claim a managed wrapper when it is the one in use and it exists.
+                  ...(resolved.source === 'managed' && resolved.present
+                    ? {
+                        wrapperNote:
+                          'Managed wrapper available; production SDK runtime resolves separately at startup.',
+                      }
+                    : {}),
+                };
+              })()
+            : (() => {
+                const resolved = resolveAgentExecutable({
+                  override: process.env['SENTRY_CLAUDE_BINARY'] ?? process.env['SENTRY_GLM_BINARY'],
+                  managed: claudeManagedExecutablePath(this.dataRoot),
+                });
+                return {
+                  ...stackStatus(s.id, glm as never),
+                  executionPath: resolved.path,
+                  executableSource: resolved.source,
+                  ...glmSandboxStatus(sandboxDeps),
+                };
+              })();
       return {
         id: s.id,
         displayName: s.displayName,
@@ -1251,16 +1495,21 @@ export class SentryRuntimeHost {
     };
     // Sandbox/isolation probes run per requested provider that needs them —
     // never defaulted to true for unprobed providers.
-    if (wants('stack_opencode_main')) {
+    // OpenCode and ChatGPT share the harness; ChatGPT sees its own provider/model.
+    for (const [openStackId, openEnv] of [
+      ['stack_opencode_main', env],
+      ['stack_chatgpt_main', chatGptEnvironment(env)],
+    ] as const) {
+      if (!wants(openStackId)) continue;
       const provider = normalizeOpenCodeProvider(
-        env['SENTRY_OPENCODE_PROVIDER'],
-        env['SENTRY_OPENCODE_MODEL'],
+        openEnv['SENTRY_OPENCODE_PROVIDER'],
+        openEnv['SENTRY_OPENCODE_MODEL'],
       );
       // Shared resolution+probe: the exact executable production execution
       // would launch, probed with the spawn-based helper (PATH-aware — the
       // same effective runtime environment production uses).
       const probed = await SentryRuntimeHost.probeOpencodeResolved(
-        env,
+        openEnv,
         managedOpenCodeExecutable(this.dataRoot),
       );
       const version = probed.available ? probed.version : undefined;
@@ -1279,11 +1528,11 @@ export class SentryRuntimeHost {
       // complete (transient unit launch, bwrap smoke, masking primitive).
       const sandbox = linux ? await SentryRuntimeHost.probeOpencodeSandbox(env) : undefined;
       pushVerdict(
-        'stack_opencode_main',
+        openStackId,
         evaluateOpencodeGate({
           credential: openCodeCredentialPresent(provider, env),
-          credentialName: credentialEnvForProvider(provider),
-          model: (env['SENTRY_OPENCODE_MODEL'] ?? '').length > 0,
+          credentialName: credentialEnvForProvider(provider, openEnv),
+          model: (openEnv['SENTRY_OPENCODE_MODEL'] ?? '').length > 0,
           executable: probed.executable,
           exists: probed.available,
           version,
@@ -1295,8 +1544,10 @@ export class SentryRuntimeHost {
       );
     }
     if (wants('stack_deepseek_main')) {
-      const wrapperPath =
-        env['SENTRY_DEEPSEEK_BINARY']?.trim() || deepseekManagedWrapperPath(this.dataRoot);
+      const wrapperPath = resolveAgentExecutable({
+        override: env['SENTRY_DEEPSEEK_BINARY'],
+        managed: deepseekManagedWrapperPath(this.dataRoot),
+      }).path;
       const probed = SentryRuntimeHost.probeLocalExecutable(wrapperPath);
       const dshPackage = SentryRuntimeHost.resolveDshPackage();
       const verdict = evaluateDeepseekGate({
@@ -1411,6 +1662,39 @@ export class SentryRuntimeHost {
         return this.toolchains
           .remove(requireString(params, 'packId'), requireString(params, 'version'))
           .then(() => ({ removed: true }));
+      case 'openai.accountStatus':
+        return this.refreshOpenAiAccountReady().then(() => this.openAiAccount.status());
+      case 'openai.accountLogin':
+        return this.openAiAccount.startLogin();
+      case 'openai.accountCancelLogin':
+        this.openAiAccount.cancelLogin();
+        return { cancelled: true };
+      case 'openai.accountLogout':
+        return this.openAiAccount.logout().then(async () => {
+          await this.refreshOpenAiAccountReady();
+          return { signedOut: true };
+        });
+      case 'toolchains.customStatus':
+        return this.toolchains.custom.list();
+      case 'toolchains.customInstall': {
+        const input = z
+          .object({
+            name: z.string().min(1).max(60),
+            command: z.string().min(1).max(5000),
+            pathEntries: z.array(z.string().min(1).max(120)).max(10).optional(),
+          })
+          .strict()
+          .parse(params);
+        return this.toolchains.custom.install({
+          name: input.name,
+          command: input.command,
+          ...(input.pathEntries === undefined ? {} : { pathEntries: input.pathEntries }),
+        });
+      }
+      case 'toolchains.customRemove':
+        return this.toolchains.custom
+          .remove(requireString(params, 'name'))
+          .then(() => ({ removed: true }));
       case 'projects.profile':
         return this.profileStatus(requireString(params, 'projectId'));
       case 'projects.buildProfile': {
@@ -1420,6 +1704,19 @@ export class SentryRuntimeHost {
           ids === undefined ? undefined : z.array(z.string().min(1).max(200)).max(10).parse(ids),
         );
       }
+      case 'projects.toolchainNeeds':
+        return this.toolchainNeedsStatus(requireString(params, 'projectId'));
+      case 'projects.assessToolchains': {
+        const ids = params['agentStackIds'];
+        return this.assessToolchains(
+          requireString(params, 'projectId'),
+          ids === undefined ? undefined : z.array(z.string().min(1).max(200)).max(10).parse(ids),
+        );
+      }
+      case 'projects.toolchainSelection':
+        return this.toolchainSelection(requireString(params, 'projectId'));
+      case 'projects.findingsByRevision':
+        return this.findingsByRevision(requireString(params, 'projectId'));
       case 'runs.list':
         return this.listRuns(requireString(params, 'projectId'));
       case 'runs.get':
@@ -1469,6 +1766,23 @@ const StartRunParamsSchema = z
     webAccess: z.boolean().optional(),
     toolDownloads: z.boolean().optional(),
     useProfile: z.boolean().optional(),
+    retest: z
+      .object({
+        findings: z
+          .array(
+            z
+              .object({
+                runId: z.string().min(1).max(100),
+                findingId: z.string().min(1).max(100),
+              })
+              .strict(),
+          )
+          .min(1)
+          .max(12),
+        who: z.enum(['reporter', 'all']),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 

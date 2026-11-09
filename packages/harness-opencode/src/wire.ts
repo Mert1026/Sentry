@@ -158,6 +158,12 @@ export interface ParsedOpenCodeTurn {
   readonly usage?: AgentUsage | undefined;
   /** Model steps observed this turn (step-finish count). */
   readonly steps: number;
+  /**
+   * Largest prompt any single step of this turn sent (new input plus cache reads and writes).
+   * This is how full the session actually got; the summed `usage.inputTokens` re-counts the
+   * whole conversation once per step and is only a billing figure.
+   */
+  readonly peakContextTokens?: number | undefined;
   /** First sessionID observed on any envelope (turn-level continuity). */
   readonly sessionId?: string | undefined;
   /** Top-level error envelopes (provider/auth failures). */
@@ -237,6 +243,7 @@ export function parseOpenCodeTurn(stdout: string): ParsedOpenCodeTurn {
   const tools: OpenCodeToolObservation[] = [];
   let usage: AgentUsage | undefined;
   let steps = 0;
+  let peakContextTokens: number | undefined;
   let sessionId: string | undefined;
   const errors: string[] = [];
   let envelopes = 0;
@@ -306,7 +313,12 @@ export function parseOpenCodeTurn(stdout: string): ParsedOpenCodeTurn {
       const tokens = (part as unknown as { tokens?: unknown }).tokens;
       if (tokens !== null && typeof tokens === 'object' && !Array.isArray(tokens)) {
         const parsedTokens = StepFinishTokensSchema.safeParse(tokens);
-        if (parsedTokens.success) usage = sumUsageInto(usage, parsedTokens.data);
+        if (parsedTokens.success) {
+          usage = sumUsageInto(usage, parsedTokens.data);
+          const t = parsedTokens.data;
+          const context = (t.input ?? 0) + (t.cache?.read ?? 0) + (t.cache?.write ?? 0);
+          if (context > 0) peakContextTokens = Math.max(peakContextTokens ?? 0, context);
+        }
       }
     }
     // step-start, snapshot/patch/agent/retry/compaction and any future
@@ -327,5 +339,16 @@ export function parseOpenCodeTurn(stdout: string): ParsedOpenCodeTurn {
       : jsonLines > 0
         ? 'unknown-protocol'
         : 'malformed';
-  return { outcome, text, tools, usage, steps, sessionId, errors, envelopes, skippedLines };
+  return {
+    outcome,
+    text,
+    tools,
+    usage,
+    steps,
+    peakContextTokens,
+    sessionId,
+    errors,
+    envelopes,
+    skippedLines,
+  };
 }

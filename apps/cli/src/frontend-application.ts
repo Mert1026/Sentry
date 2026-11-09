@@ -29,16 +29,18 @@ export interface FrontendOptions {
 }
 
 const TERMINAL_RUN = new Set(['completed', 'partial', 'failed', 'cancelled']);
-const AGENT_NAMES = ['opencode', 'deepseek', 'glm'] as const;
+const AGENT_NAMES = ['opencode', 'deepseek', 'glm', 'chatgpt'] as const;
 const MODEL_ENV: Record<string, string> = {
   opencode: 'SENTRY_OPENCODE_MODEL',
   deepseek: 'SENTRY_DEEPSEEK_MODEL',
   glm: 'SENTRY_GLM_MODEL',
+  chatgpt: 'SENTRY_CHATGPT_MODEL',
 };
 const HARNESS_NAME: Record<string, string> = {
   opencode: 'opencode',
   deepseek: 'deepseek-harness',
   glm: 'claude-code',
+  chatgpt: 'opencode',
 };
 
 function success(command: CliSuccessEnvelope['command'], data: unknown): CliSuccessEnvelope {
@@ -90,6 +92,9 @@ export function frontendErrorEnvelope(
 }
 
 function brokerError(code: string, message: string): { code: string; message: string } {
+  // The engine says INVALID_TARGET for a retest naming a finding that does not exist; to a CLI
+  // caller that is a bad argument, and the message says which one.
+  if (code === 'INVALID_TARGET') return { code: 'INVALID_ARGUMENT', message: bounded(message) };
   if (CliErrorCodeSchema.safeParse(code).success) {
     return { code, message: bounded(message) };
   }
@@ -278,11 +283,16 @@ export async function executeFrontendCommand(
           realAgentExecution: true,
           runCancellation: true,
           targetedExecution: true,
+          retest: true,
+          findingsByRevision: true,
+          projectProfile: true,
+          toolchains: true,
         },
         agentStacks: [
           { id: 'opencode', displayName: 'OpenCode QA Agent', harness: 'opencode' },
           { id: 'deepseek', displayName: 'DeepSeek QA Agent', harness: 'deepseek-harness' },
           { id: 'glm', displayName: 'GLM QA Agent', harness: 'claude-code' },
+          { id: 'chatgpt', displayName: 'ChatGPT QA Agent', harness: 'opencode' },
         ],
         runResultExport: true,
         asyncRunStart: true,
@@ -381,6 +391,48 @@ export async function executeFrontendCommand(
         })),
       });
     }
+    if (input.command === 'project.findings') {
+      const found = (await broker.request('projects:findings-by-revision', {
+        projectId: input.projectId,
+      })) as { currentRevisionId?: string; revisions?: unknown[] } | undefined;
+      return success(input.command, {
+        projectId: input.projectId,
+        ...(found?.currentRevisionId === undefined
+          ? {}
+          : { currentRevisionId: found.currentRevisionId }),
+        revisions: Array.isArray(found?.revisions) ? found.revisions : [],
+      });
+    }
+    if (input.command === 'project.profile') {
+      return success(input.command, {
+        projectId: input.projectId,
+        profile: await broker.request('projects:profile', { projectId: input.projectId }),
+      });
+    }
+    if (input.command === 'project.profile-build') {
+      return success(input.command, {
+        projectId: input.projectId,
+        profile: await broker.request('projects:build-profile', {
+          projectId: input.projectId,
+          ...(input.agents === undefined
+            ? {}
+            : { agentStackIds: input.agents.map((name) => stackIdForAgent(name)) }),
+        }),
+      });
+    }
+    if (input.command === 'toolchain.status') {
+      return success(input.command, { toolchains: await broker.request('toolchains:status', {}) });
+    }
+    if (input.command === 'toolchain.install' || input.command === 'toolchain.remove') {
+      return success(input.command, {
+        packId: input.packId,
+        version: input.version,
+        result: await broker.request(
+          input.command === 'toolchain.install' ? 'toolchains:install' : 'toolchains:remove',
+          { packId: input.packId, version: input.version },
+        ),
+      });
+    }
     if (input.command === 'project.doctor') {
       const report = (await broker.request('projects:doctor', {
         projectId: input.projectId,
@@ -424,9 +476,16 @@ export async function executeFrontendCommand(
                 .filter((value) => value.length > 0),
             }),
         ...(input.instructions === undefined ? {} : { instructions: input.instructions }),
-        agentStackIds: input.agents.map((name) => stackIdForAgent(name)),
+        // A retest that leaves the agents to the findings sends none.
+        ...(input.agents.length === 0
+          ? {}
+          : { agentStackIds: input.agents.map((name) => stackIdForAgent(name)) }),
         ...(input.runTimeoutMs === undefined ? {} : { runTimeoutMs: input.runTimeoutMs }),
         ...(input.webAccess === true ? { webAccess: true } : {}),
+        ...(input.toolDownloads === true ? { toolDownloads: true } : {}),
+        ...(input.useProfile === true ? { useProfile: true } : {}),
+        ...(input.revisionId === undefined ? {} : { revisionId: input.revisionId }),
+        ...(input.retest === undefined ? {} : { retest: input.retest }),
       })) as { operationId?: string; runId?: string; status?: string } & Record<string, unknown>;
       if (typeof started.runId !== 'string') {
         throw new DesktopProtocolError(

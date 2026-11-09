@@ -65,6 +65,10 @@ export const SDK_DOWNLOAD_HOSTS: readonly string[] = [
   // Python tooling
   'astral.sh',
   'bootstrap.pypa.io',
+  // conda-forge (compilers, Node, Ruby, databases, ...) and the Swift toolchain
+  'conda.anaconda.org',
+  'conda-static.anaconda.org',
+  'download.swift.org',
   // JVM
   'api.adoptium.net',
   'archive.apache.org',

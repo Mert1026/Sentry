@@ -27,6 +27,7 @@ import {
   type TurnStop,
 } from './depth.js';
 import { deletesData, hazardModuleKey, type HazardFile } from './hazard-scan.js';
+import { isRetestCheck } from './retest.js';
 import {
   PhaseDeadlineReached,
   investigationDeadline,
@@ -57,6 +58,11 @@ export interface InvestigationTurn {
   readonly usage?: AgentUsage | undefined;
   /** Provider steps in the turn; adapters without step counts omit it (one turn = one step). */
   readonly steps?: number;
+  /**
+   * How full the session got during the turn, when the adapter can tell (largest single-step
+   * prompt). Absent keeps the older estimate, the turn's summed input usage.
+   */
+  readonly contextTokens?: number | undefined;
 }
 
 /** Everything vendor-specific the host-driven check loop delegates to an adapter. */
@@ -89,6 +95,12 @@ export interface CheckInvestigationHooks<T extends InvestigationTurn> {
   readonly isTurnTimeout: (cause: unknown) => boolean;
   /** Infrastructure loss with banked work (spawn failure, mid-run sandbox death) that must not fail the run. */
   readonly isSalvageable?: (cause: unknown) => boolean;
+  /**
+   * The provider declined one check's content (a safety filter, not an outage). That check is
+   * reported inconclusive and the remaining checks continue in a fresh session, instead of the
+   * whole agent failing and discarding the checks already decided.
+   */
+  readonly isProviderRefusal?: (cause: unknown) => boolean;
   /** Events a failed turn never flushed, emitted before the failure is handled. */
   readonly partialEvents?: (cause: unknown) => Iterable<HarnessEvent>;
   /** Cleanup after the investigation was interrupted (before the report context starts). */
@@ -282,8 +294,9 @@ export async function* investigateChecks<T extends InvestigationTurn>(
           );
         seed = '';
         const before = new Set(operations.keys());
-        const outcome = yield* guarded(text, before);
+        // The session may be left dead if this turn throws, so a report context is needed either way.
         ran = true;
+        const outcome = yield* guarded(text, before);
         if (!outcome.stopped) {
           usage = sumAgentUsage(usage, outcome.value.usage ?? {});
           steps += outcome.value.steps ?? 1;
@@ -396,11 +409,13 @@ export async function* investigateChecks<T extends InvestigationTurn>(
         checkStartedAt = now();
         softAt = checkStartedAt + checkSoftBudgetMs(left, tasks.length - n);
         await rotate(plan.plannedChecks.length);
+        // From here the session may be left stopped or dead (a turn that threw is swallowed
+        // below), so the report must start in a fresh context whether or not the turn finished.
+        ran = true;
         const text = seed + task.prompt();
         seed = '';
         const before = new Set(operations.keys());
         const outcome = yield* guarded(text, before);
-        ran = true;
         if (!outcome.stopped) {
           usage = sumAgentUsage(usage, outcome.value.usage ?? {});
           steps += outcome.value.steps ?? 1;
@@ -488,8 +503,8 @@ export async function* investigateChecks<T extends InvestigationTurn>(
         const text = seed + buildHazardPrompt(file.file, file.hazards);
         seed = '';
         const before = new Set(operations.keys());
-        const outcome = yield* guarded(text, before);
         ran = true;
+        const outcome = yield* guarded(text, before);
         if (outcome.stopped) {
           idle += 1;
           continue;
@@ -524,7 +539,7 @@ export async function* investigateChecks<T extends InvestigationTurn>(
   }
 
   try {
-    for (; currentCheck < plan.plannedChecks.length; currentCheck += 1) {
+    checkLoop: for (; currentCheck < plan.plannedChecks.length; currentCheck += 1) {
       yield hooks.event({
         type: 'agent.status',
         status: 'investigating',
@@ -583,6 +598,22 @@ export async function* investigateChecks<T extends InvestigationTurn>(
           else issued = outcome.value.steps ?? 1;
           turn = outcome.stopped ? ({ text: '' } as T) : outcome.value;
         } catch (cause) {
+          if ((hooks.isProviderRefusal?.(cause) ?? false) && !hooks.cancelled()) {
+            // The provider's safety filter declined this check. Skip it, keep what the earlier
+            // checks established, and give the next check a clean session: the declined turn
+            // is still part of this one.
+            yield hooks.event({
+              type: 'warning',
+              code: 'QA_PROVIDER_REFUSED',
+              message:
+                'The model provider declined this check (its safety filter flagged the content); it is reported inconclusive and the remaining checks continue in a fresh session.',
+            });
+            blockedChecks.push(description(currentCheck));
+            unprovenChecks.push(description(currentCheck));
+            checkEndKeys[currentCheck] = new Set(operations.keys());
+            await rotate(currentCheck);
+            continue checkLoop;
+          }
           // Reactive compaction: one fresh-session retry of THIS check.
           if (!isContextWindowExceeded(cause) || contextRetried || hooks.cancelled()) throw cause;
           contextRetried = true;
@@ -737,6 +768,14 @@ export async function* investigateChecks<T extends InvestigationTurn>(
               ...turn,
               text: nudged.value.text,
               usage: sumAgentUsage(turn.usage, nudged.value.usage ?? {}),
+              ...(turn.contextTokens === undefined && nudged.value.contextTokens === undefined
+                ? {}
+                : {
+                    contextTokens: Math.max(
+                      turn.contextTokens ?? 0,
+                      nudged.value.contextTokens ?? 0,
+                    ),
+                  }),
             };
             issued += nudged.value.steps ?? 1;
           }
@@ -745,7 +784,7 @@ export async function* investigateChecks<T extends InvestigationTurn>(
           // Any other nudge failure keeps the original turn's banked work.
         }
       }
-      contextBudget.observeTurn(turn.usage);
+      contextBudget.observeTurn(turn.usage, turn.contextTokens);
       if (!turnProducedProof(ledgerBeforeTurn, operations))
         unprovenChecks.push(description(currentCheck));
       if (turnRepeatedRedProof(ledgerBeforeTurn, operations) && !closingTriagesFailures(turn.text))
@@ -758,8 +797,13 @@ export async function* investigateChecks<T extends InvestigationTurn>(
       checkEndKeys[currentCheck] = new Set(operations.keys());
     }
     yield* secondPass();
-    yield* deepenRound();
-    yield* sweepRound();
+    // A retest answers one question per finding. It never follows leads, deepens or sweeps files:
+    // that would spend budget on, and possibly report, problems nobody asked about.
+    const retestOnly = plan.plannedChecks.length > 0 && plan.plannedChecks.every(isRetestCheck);
+    if (!retestOnly) {
+      yield* deepenRound();
+      yield* sweepRound();
+    }
   } catch (cause) {
     if (
       (depth === undefined && !recoverable(cause)) ||
@@ -770,12 +814,20 @@ export async function* investigateChecks<T extends InvestigationTurn>(
     blockedChecks.push(...plan.plannedChecks.slice(currentCheck));
     hooks.onInterrupted?.();
     await hooks.startReportContext(renderCheckConclusions(plan, checkConclusions));
+    sessionStopped = false;
     yield hooks.event({
       type: 'warning',
       code: 'QA_INVESTIGATION_INCOMPLETE',
       message:
         'Investigation turn ended early; remaining checks are inconclusive. Reporting only this agent’s observed facts in a fresh report-only context; analysis is partial.',
     });
+  }
+  // The report continues in whatever session is current. If the last turn left it stopped, that
+  // session is dead ("OpenCode session was aborted"), and the report would fail after the whole
+  // investigation was done. Start it fresh instead.
+  if (sessionStopped) {
+    await hooks.startReportContext(renderCheckConclusions(plan, checkConclusions));
+    sessionStopped = false;
   }
   return { blockedChecks, unprovenChecks, redRetryChecks, checkConclusions, usage, steps };
 }

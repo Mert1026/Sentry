@@ -1,4 +1,5 @@
 import React from 'react';
+import { InfoPopover, InfoSection } from './InfoPopover.js';
 import { StatusPill } from './ui/StatusPill.js';
 import type { ProjectProfileAgent } from '../../shared/ipc-contract.js';
 
@@ -41,13 +42,33 @@ export function ProjectProfilePanel({
   const anyBuilding = agents.some((agent) => agent.building);
   return (
     <div className="card">
-      <h3 className="card-title">Project profile</h3>
-      <p className="body-secondary" style={{ marginTop: 0 }}>
-        Each agent reads the project once and writes its own notes: structure, entry points, and
-        build and test commands. No bugs or verdicts are recorded. A run can hand every agent its
-        own notes, which saves reconnaissance time. The notes are unverified context, and agents
-        still read and test the real code.
-      </p>
+      <div className="project-info-title">
+        <h3 className="card-title">Project profile</h3>
+        <InfoPopover title="Project profile">
+          <InfoSection title="What the profile is" open>
+            <p>
+              Each agent can read this project and write its own orientation notes about its
+              structure, entry points, and build and test commands.
+            </p>
+          </InfoSection>
+          <InfoSection title="How runs use it">
+            <p>
+              A later QA run can give an agent its own notes to reduce repeated reconnaissance. The
+              notes are unverified context, not findings or verdicts; agents still inspect and test
+              the real code.
+            </p>
+          </InfoSection>
+          <InfoSection title="When it goes out of date">
+            <p>Profiles are tied to the project revision and become out of date when it changes.</p>
+          </InfoSection>
+          <InfoSection title="What it costs">
+            <p>
+              Building profiles uses provider budget: each selected agent completes a short planning
+              turn, so the total cost depends on the providers and number of agents chosen.
+            </p>
+          </InfoSection>
+        </InfoPopover>
+      </div>
       {stacks.length === 0 ? (
         <span className="muted">Loading agents…</span>
       ) : (
@@ -112,7 +133,9 @@ export function ProjectProfilePanel({
           );
         })
       )}
-      <div style={{ marginTop: 12 }}>
+      <div
+        style={{ marginTop: 12, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}
+      >
         <button
           className="primary"
           disabled={anyBuilding || loading || stacks.length === 0}
@@ -120,9 +143,7 @@ export function ProjectProfilePanel({
         >
           {anyBuilding ? 'Agents are writing…' : 'Get to know the project (all agents)'}
         </button>
-        <p className="metadata" style={{ margin: '6px 0 0' }}>
-          Uses provider budget: one short planning turn per agent.
-        </p>
+        <span className="metadata">Uses provider budget</span>
       </div>
       {buildError !== undefined ? (
         <p className="error-box" role="alert" style={{ marginTop: 8 }}>

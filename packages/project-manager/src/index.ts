@@ -1,4 +1,4 @@
-import { basename, dirname, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, resolve } from 'node:path';
 import {
   access,
   constants,
@@ -32,6 +32,7 @@ import {
 } from '@qa/schemas';
 import {
   assertNoPathOverlap,
+  assertNoSymlinkBelow,
   copyTree,
   DEFAULT_IMPORT_EXCLUSIONS,
   estimateTree,
@@ -90,6 +91,14 @@ export function revisionMaterialPath(
 }
 
 async function validateSource(sourcePath: string): Promise<string> {
+  // An empty or relative path would silently resolve against the runtime's own working
+  // directory and import that instead of the project the person meant.
+  if (sourcePath.trim() === '' || !isAbsolute(sourcePath)) {
+    throw new ProjectManagerError(
+      'PROJECT_SOURCE_NOT_FOUND',
+      'Project source must be an absolute path: "' + sourcePath + '"',
+    );
+  }
   const source = resolve(sourcePath);
   let sourceStat;
   try {
@@ -123,10 +132,12 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
-function exclusionPredicate(includeAll?: boolean): ((relativePath: string) => boolean) | undefined {
+function exclusionPredicate(
+  includeAll?: boolean,
+): ((relativePath: string, entryType?: 'file' | 'directory' | 'symlink') => boolean) | undefined {
   if (includeAll === true) return undefined;
   const set = DEFAULT_IMPORT_EXCLUSIONS;
-  return (relativePath: string) => matchImportExclusion(relativePath, set);
+  return (relativePath, entryType) => matchImportExclusion(relativePath, set, entryType);
 }
 
 function sourceExclusionPredicate(
@@ -307,8 +318,8 @@ export class ProjectManager {
     if (inertLinks.size > 0) {
       const revisionExclude = revision.hashVersion === 2 ? exclusionPredicate(false) : undefined;
       const view = await this.snapshots.scanRevision(workingCopyPath, undefined, {
-        exclude: (relativePath) =>
-          inertLinks.has(relativePath) || (revisionExclude?.(relativePath) ?? false),
+        exclude: (relativePath, entryType) =>
+          inertLinks.has(relativePath) || (revisionExclude?.(relativePath, entryType) ?? false),
       });
       expectedHash = view.contentHash;
     }
@@ -441,7 +452,9 @@ export class ProjectManager {
     const revisionId = createProjectRevisionId();
     const operationId = createOperationId();
     const staging = resolve(paths.staging, 'update-' + revisionId);
-    const backup = resolve(paths.root, 'working-copy.backup');
+    // One backup per update. A shared name let a second update's rollback copy be deleted by the
+    // first update's cleanup, which runs after its database commit has already freed the project.
+    const backup = updateBackupPath(paths.root, operationId);
     const timestamp = nowIsoTimestamp();
     let operation = RuntimeOperationSchema.parse({
       schemaVersion: 1,
@@ -709,6 +722,9 @@ export class ProjectManager {
   async deleteProject(projectId: ProjectId): Promise<void> {
     const lease = this.runtimeLease();
     const paths = projectDataPaths(this.dataRoot, projectId);
+    // A link planted in the projects folder must never redirect deletion at material elsewhere.
+    // Checked before anything is marked, so a refusal leaves the project untouched.
+    await assertNoSymlinkBelow(this.dataRoot, paths.root, { includeLeaf: false });
     const tombstone = paths.root + '.deleting';
     const timestamp = nowIsoTimestamp();
     let operation = RuntimeOperationSchema.parse({
@@ -802,8 +818,16 @@ export class ProjectManager {
   async recoverAbandonedOperations(observer: RuntimeInstanceLease): Promise<void> {
     for (const operation of this.repository.listRuntimeOperations()) {
       if (observer.isFresh(operation.runtimeInstanceId)) continue;
-      if (operation.type === 'project_update') await this.recoverUpdate(operation);
-      else await this.recoverDelete(operation);
+      try {
+        if (operation.type === 'project_update') await this.recoverUpdate(operation);
+        else await this.recoverDelete(operation);
+      } catch (cause) {
+        // A link on the project's path means recovery would act on files elsewhere. Leave this
+        // operation and its project exactly as they are (nothing deleted or moved) and keep
+        // starting; every other failure still stops recovery as before.
+        if (cause instanceof Error && cause.message.startsWith('PATH_ESCAPE')) continue;
+        throw cause;
+      }
     }
   }
 
@@ -823,10 +847,17 @@ export class ProjectManager {
 
   private async recoverUpdate(operation: RuntimeOperation): Promise<void> {
     const paths = projectDataPaths(this.dataRoot, operation.projectId);
-    const backup = resolve(paths.root, 'working-copy.backup');
+    await assertNoSymlinkBelow(this.dataRoot, paths.root, { includeLeaf: false });
+    const ownBackup = updateBackupPath(paths.root, operation.id);
+    // Updates made before backups were per-operation used one shared name.
+    const legacyBackup = resolve(paths.root, 'working-copy.backup');
+    const backup = (await exists(ownBackup)) ? ownBackup : legacyBackup;
     const copy = this.repository.getManagedCopy(operation.projectId);
     if (operation.stage === 'committed' || copy?.state === 'ready') {
-      await rm(backup, { recursive: true, force: true });
+      await rm(ownBackup, { recursive: true, force: true });
+      if (!(await exists(ownBackup)) && backup === legacyBackup) {
+        await rm(legacyBackup, { recursive: true, force: true });
+      }
       await rm(paths.staging, { recursive: true, force: true });
       await mkdir(paths.staging, { recursive: true });
       this.repository.deleteRuntimeOperation(operation.id);
@@ -864,6 +895,10 @@ export class ProjectManager {
   private async recoverDelete(operation: RuntimeOperation): Promise<void> {
     const paths = projectDataPaths(this.dataRoot, operation.projectId);
     const tombstone = paths.root + '.deleting';
+    // Finishing a deletion removes whatever is at these paths. Refuse when a link above them
+    // (for example a replaced projects folder) would send that removal to files elsewhere.
+    await assertNoSymlinkBelow(this.dataRoot, paths.root, { includeLeaf: false });
+    await assertNoSymlinkBelow(this.dataRoot, tombstone);
     const project = this.repository.getProject(operation.projectId);
     if (project === undefined || operation.stage === 'database_deleted') {
       await rm(tombstone, { recursive: true, force: true });
@@ -892,7 +927,7 @@ export class ProjectManager {
     source: string,
     destination: string,
     signal?: AbortSignal,
-    exclude?: (relativePath: string) => boolean,
+    exclude?: (relativePath: string, entryType?: 'file' | 'directory' | 'symlink') => boolean,
   ): Promise<void> {
     const estimate = await estimateTree(source, signal, {
       ...(exclude === undefined ? {} : { exclude }),
@@ -911,6 +946,11 @@ export class ProjectManager {
       // Portable free-space checks are best-effort; copy errors remain authoritative.
     }
   }
+}
+
+/** Where one update keeps the working copy it can roll back to. */
+function updateBackupPath(projectRoot: string, operationId: string): string {
+  return resolve(projectRoot, 'working-copy.backup-' + operationId);
 }
 
 export * from './errors.js';

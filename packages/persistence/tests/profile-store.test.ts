@@ -2,9 +2,9 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { ProjectProfile } from '@qa/schemas';
+import type { ProjectProfile, ToolchainNeeds } from '@qa/schemas';
 import { createProjectId, createProjectRevisionId } from '@qa/shared';
-import { ProjectProfileStore, projectDataPaths } from '../src/index.js';
+import { ProjectProfileStore, ToolchainNeedsStore, projectDataPaths } from '../src/index.js';
 
 const roots: string[] = [];
 const dataRoot = async (): Promise<string> => {
@@ -70,5 +70,55 @@ describe('ProjectProfileStore', () => {
   it('refuses an oversized profile', async () => {
     const store = new ProjectProfileStore(await dataRoot());
     await expect(store.write(profile({ text: 'x'.repeat(9000) }))).rejects.toThrow();
+  });
+});
+
+describe('ToolchainNeedsStore', () => {
+  const needs = (overrides: Partial<ToolchainNeeds> = {}): ToolchainNeeds => ({
+    schemaVersion: 1,
+    projectId,
+    agentStackId: 'stack_opencode_main' as never,
+    projectRevisionId: createProjectRevisionId(),
+    contentHash: 'sha256:abc',
+    summary: 'A Node CLI.',
+    needs: [{ packId: 'node', version: '24', reason: '.nvmrc' }],
+    createdAt: new Date().toISOString(),
+    ...overrides,
+  });
+
+  it('round-trips and lives apart from the profile of the same agent', async () => {
+    const root = await dataRoot();
+    const store = new ToolchainNeedsStore(root);
+    const profiles = new ProjectProfileStore(root);
+    const mine = needs();
+    await store.write(mine);
+    expect(await store.read(projectId, mine.agentStackId)).toEqual(mine);
+    expect(await profiles.read(projectId, mine.agentStackId)).toBeUndefined();
+    const file = join(
+      projectDataPaths(root, projectId).root,
+      'toolchain-needs',
+      mine.agentStackId + '.json',
+    );
+    expect(JSON.parse(await readFile(file, 'utf8')).needs).toHaveLength(1);
+  });
+
+  it('ignores damaged or mismatched files and can remove an entry', async () => {
+    const root = await dataRoot();
+    const store = new ToolchainNeedsStore(root);
+    const mine = needs();
+    await store.write(mine);
+    const file = join(
+      projectDataPaths(root, projectId).root,
+      'toolchain-needs',
+      mine.agentStackId + '.json',
+    );
+    await writeFile(file, '{ not json', 'utf8');
+    expect(await store.read(projectId, mine.agentStackId)).toBeUndefined();
+    await store.write(mine);
+    await store.remove(projectId, mine.agentStackId);
+    expect(await store.read(projectId, mine.agentStackId)).toBeUndefined();
+    await mkdir(join(projectDataPaths(root, projectId).root, 'toolchain-needs'), {
+      recursive: true,
+    });
   });
 });

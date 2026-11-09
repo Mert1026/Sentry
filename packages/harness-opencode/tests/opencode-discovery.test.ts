@@ -8,6 +8,8 @@ import {
   doctorOpenCode,
   isExecutableFileSync,
   managedOpenCodeExecutable,
+  credentialEnvForProvider,
+  openAiAccountMode,
   openCodeCredential,
   openCodeCredentialPresent,
   openCodeProviderSpec,
@@ -163,6 +165,29 @@ describe('OpenCode executable discovery', () => {
       'https://opencode.ai/zen/go/v1',
     );
     expect(openCodeUpstreamBaseUrl('opencode-go')).toBe('https://opencode.ai/zen/go/v1');
+    expect(openCodeProviderSpec('openai')?.credentialEnv).toBe('OPENAI_API_KEY');
+    expect(openCodeUpstreamBaseUrl('openai')).toBe('https://api.openai.com/v1');
+    expect(openCodeCredential('openai', { OPENAI_API_KEY: 'sk-test-openai' })).toBe(
+      'sk-test-openai',
+    );
+    expect(openCodeCredentialPresent('openai', { OPENROUTER_API_KEY: 'sk-or-x' })).toBe(false);
+    // Account mode: ready only once a sign-in is stored; no API key is involved.
+    const account = { SENTRY_OPENAI_AUTH: 'account' };
+    expect(openAiAccountMode('openai', account)).toBe(true);
+    expect(openAiAccountMode('openrouter', account)).toBe(false);
+    expect(openAiAccountMode('openai', { SENTRY_OPENAI_AUTH: 'key' })).toBe(false);
+    expect(openCodeCredentialPresent('openai', account)).toBe(false);
+    expect(
+      openCodeCredentialPresent('openai', { ...account, SENTRY_OPENAI_ACCOUNT_READY: '1' }),
+    ).toBe(true);
+    expect(
+      openCodeCredentialPresent('openai', {
+        OPENAI_API_KEY: 'sk-x',
+        SENTRY_OPENAI_AUTH: 'account',
+      }),
+    ).toBe(false);
+    expect(credentialEnvForProvider('openai', account)).toContain('account');
+    expect(credentialEnvForProvider('openai', {})).toBe('OPENAI_API_KEY');
     expect(openCodeProviderSpec('nope')).toBeUndefined();
     const env = { OPENROUTER_API_KEY: 'sk-or-x', OPENCODE_API_KEY: 'zen-key' };
     expect(openCodeCredential('openrouter', env)).toBe('sk-or-x');

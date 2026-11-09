@@ -243,8 +243,65 @@ export const ZAI_GLM_MODELS: readonly string[] = [
   'glm-5',
 ];
 
+/**
+ * Models offered to the ChatGPT agent that are not in the Zen table below. They were added because
+ * an account can use them, so they are listed by request rather than from that documentation.
+ */
+export const CHATGPT_MODELS_BEYOND_ZEN: readonly string[] = ['gpt-6.1-terra'];
+
+/**
+ * OpenAI models offered to the ChatGPT agent: the OpenAI rows of the official OpenCode Zen model
+ * table (verified 2026-10-25) plus `CHATGPT_MODELS_BEYOND_ZEN`, newest first. Exact API ids. The
+ * dropdown also accepts any custom id, because the models a ChatGPT plan can use differ from the
+ * models an API key can use.
+ */
+export const CHATGPT_MODELS: readonly string[] = [
+  'gpt-6.1-sol',
+  'gpt-6.1-terra',
+  'gpt-6-sol',
+  'gpt-6-astra',
+  'gpt-6-luna',
+  'gpt-5.6-sol',
+  'gpt-5.6-terra',
+  'gpt-5.6-luna',
+  'gpt-5.5',
+  'gpt-5.5-pro',
+  'gpt-5.4',
+  'gpt-5.4-pro',
+  'gpt-5.4-mini',
+  'gpt-5.4-nano',
+  'gpt-5.3-codex',
+  'gpt-5.3-codex-spark',
+  'gpt-5.2',
+  'gpt-5.2-codex',
+  'gpt-5.1',
+  'gpt-5.1-codex',
+  'gpt-5.1-codex-max',
+  'gpt-5.1-codex-mini',
+  'gpt-5',
+  'gpt-5-codex',
+  'gpt-5-nano',
+];
+
+/**
+ * What a ChatGPT model id says about itself (read from the id, never invented): Pro, Mini/Nano
+ * and Codex variants. Plain ids have no note.
+ */
+export function chatGptModelNote(id: string): string | undefined {
+  if (/-pro$/.test(id)) return 'higher-effort Pro model (slower, costs more)';
+  if (/-(mini|nano)$/.test(id)) return 'smaller, faster model';
+  if (/-codex-(mini)$/.test(id)) return 'smaller, faster Codex model';
+  if (/-codex(-max|-spark)?$/.test(id)) return 'coding-tuned Codex model';
+  return undefined;
+}
+
 /** Provider prefixes that may qualify a saved OpenCode model id. */
-const KNOWN_OPENCODE_PREFIXES: readonly string[] = ['opencode-go', 'opencode', 'openrouter'];
+const KNOWN_OPENCODE_PREFIXES: readonly string[] = [
+  'opencode-go',
+  'opencode',
+  'openrouter',
+  'openai',
+];
 
 /**
  * Strip a known provider prefix (`opencode-go/`, `opencode/`,

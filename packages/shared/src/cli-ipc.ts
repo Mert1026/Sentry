@@ -24,6 +24,12 @@ export const CLI_BROKER_COMMANDS: readonly string[] = [
   'projects:update',
   'projects:doctor',
   'projects:suggest-targets',
+  'projects:profile',
+  'projects:build-profile',
+  'projects:findings-by-revision',
+  'toolchains:status',
+  'toolchains:install',
+  'toolchains:remove',
   'runs:list',
   'runs:get',
   'runs:status',
@@ -175,7 +181,7 @@ export function parseRequestMessage(
 }
 
 const SECRET_SHAPE =
-  /(api[_-]?key|token|secret|password|authorization|bearer|anthropic_auth_token|openrouter_api_key|opencode_api_key|deepseek_api_key)/i;
+  /(api[_-]?key|token|secret|password|authorization|bearer|anthropic_auth_token|openrouter_api_key|opencode_api_key|openai_api_key|deepseek_api_key)/i;
 
 export function containsSecretShapedValue(value: string): boolean {
   return SECRET_SHAPE.test(value);

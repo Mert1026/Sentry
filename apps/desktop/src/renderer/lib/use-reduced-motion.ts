@@ -1,22 +1,37 @@
 import React from 'react';
+import { isReducedMotionEnabled } from './app-preferences.js';
+
+const PREFS_EVENT = 'sentry:preferences-changed';
 
 /**
- * Live prefers-reduced-motion flag. CSS animations are already disabled
- * globally under the media query; JS/SMIL-driven motion (edge pulses,
- * traveling dots) must check this hook so the whole product honors the
- * user's accessibility preference.
+ * Live reduced-motion flag: true when the OS asks for it or the user turned
+ * "Workspace Motion & Animations" off in Settings. CSS animations are cut
+ * globally; JS/SMIL-driven motion (edge pulses, traveling dots, camera
+ * moves) must check this hook so the whole product honors the setting.
  */
 export function useReducedMotion(): boolean {
-  const [reduced, setReduced] = React.useState<boolean>(() => {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
-    return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  });
+  const read = (): boolean => {
+    const os =
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    return os || isReducedMotionEnabled();
+  };
+  const [reduced, setReduced] = React.useState<boolean>(read);
   React.useEffect(() => {
-    if (typeof window.matchMedia !== 'function') return;
-    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const onChange = (): void => setReduced(media.matches);
-    media.addEventListener('change', onChange);
-    return () => media.removeEventListener('change', onChange);
+    const onChange = (): void => setReduced(read());
+    const media =
+      typeof window.matchMedia === 'function'
+        ? window.matchMedia('(prefers-reduced-motion: reduce)')
+        : null;
+    media?.addEventListener('change', onChange);
+    window.addEventListener(PREFS_EVENT, onChange);
+    window.addEventListener('storage', onChange);
+    return () => {
+      media?.removeEventListener('change', onChange);
+      window.removeEventListener(PREFS_EVENT, onChange);
+      window.removeEventListener('storage', onChange);
+    };
   }, []);
   return reduced;
 }

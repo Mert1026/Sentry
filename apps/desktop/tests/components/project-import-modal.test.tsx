@@ -40,7 +40,9 @@ function mountProjects(options: {
   render(
     <QueryClientProvider client={client}>
       <MemoryRouter>
-        <Projects />
+        <div className="content">
+          <Projects />
+        </div>
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -91,6 +93,10 @@ describe('Project import modal window & cancellation', () => {
     fireEvent.click(screen.getAllByRole('button', { name: /Add Project/i })[0]!);
     const dialog = await screen.findByRole('dialog', { name: 'Adding project to Sentry' });
     expect(dialog).toBeTruthy();
+    const content = document.querySelector('.content') as HTMLElement;
+    expect(content.contains(dialog)).toBe(false);
+    expect(content.style.overflow).toBe('hidden');
+    expect(content.inert).toBe(true);
     expect(dialog.querySelector('img[src="./smooth_loader_flat_logo.gif"]')).toBeTruthy();
     expect(dialog.textContent).toContain('my-repo');
     expect(dialog.textContent).toContain('0s');
@@ -109,6 +115,8 @@ describe('Project import modal window & cancellation', () => {
     await waitFor(() =>
       expect(screen.queryByRole('dialog', { name: 'Adding project to Sentry' })).toBeNull(),
     );
+    expect(content.style.overflow).toBe('');
+    expect(content.inert).not.toBe(true);
     expect(screen.queryByRole('alert')).toBeNull();
   });
 });

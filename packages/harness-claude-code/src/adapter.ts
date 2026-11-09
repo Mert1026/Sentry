@@ -12,8 +12,10 @@ import {
   webAccessEnabled,
   allowedAgentHosts,
   toolDownloadsEnabled,
+  withToolchains,
   type AgentRunId,
   type OperationId,
+  type ToolchainSetup,
   describePlanRejection,
   describeSchemaIssues,
 } from '@qa/shared';
@@ -41,6 +43,7 @@ import {
   groundCoverage,
   resolveReportChecks,
   reportableDepthPlan,
+  applyRetestPlan,
   depthPolicy,
   boundCorrectionMessage,
   buildPlanningCorrectionIntro,
@@ -111,6 +114,8 @@ export interface ClaudeCodeHarnessAdapterOptions {
   readonly modelId?: string;
   readonly provider?: string;
   readonly environment?: NodeJS.ProcessEnv;
+  /** Installed language toolchains to put on the agent's PATH; read when each run starts. */
+  readonly toolchains?: (workspace: string) => Promise<ToolchainSetup | undefined>;
   readonly clientFactory?: ClaudeClientFactory;
   readonly shutdownTimeoutMs?: number;
   readonly turnTimeoutMs?: number;
@@ -1493,15 +1498,21 @@ export class ClaudeCodeHarnessAdapter implements HarnessAdapter {
         ),
         'utf8',
       );
+      const toolchains = await this.options
+        .toolchains?.(request.workspace.runtimePath)
+        .catch(() => undefined);
       const spec: ClaudeSpawnSpec = {
         executable: this.runtime.executable,
         cwd: request.workspace.runtimePath,
         configDir,
         homeDir: ephemeralHome,
-        environment: {
-          ...this.environment,
-          ...dependencyCacheEnvironment(request.workspace.runtimePath),
-        },
+        environment: withToolchains(
+          {
+            ...this.environment,
+            ...dependencyCacheEnvironment(request.workspace.runtimePath),
+          },
+          toolchains,
+        ),
         webAccess: webAccessEnabled(request.executionSafeguards),
         modelId: this.runtime.modelId,
         settingsPath,
@@ -1615,12 +1626,15 @@ export class ClaudeCodeHarnessAdapter implements HarnessAdapter {
           planRejection = describePlanRejection(undefined, true);
         } else {
           try {
-            planResult = reportableDepthPlan(
-              SentryInvestigationPlanV1Schema.parse(
-                parseWholeJson(planning.text, 'planning', pipeline),
+            planResult = applyRetestPlan(
+              reportableDepthPlan(
+                SentryInvestigationPlanV1Schema.parse(
+                  parseWholeJson(planning.text, 'planning', pipeline),
+                ),
+                depthPolicy(request.task.context) !== undefined,
+                maxPlannedChecks(request.task.context),
               ),
-              depthPolicy(request.task.context) !== undefined,
-              maxPlannedChecks(request.task.context),
+              request.task.context,
             );
             break;
           } catch (cause) {

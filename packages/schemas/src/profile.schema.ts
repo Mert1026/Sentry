@@ -39,3 +39,32 @@ export const RunProfileUsageSchema = z
   })
   .strict();
 export type RunProfileUsage = z.infer<typeof RunProfileUsageSchema>;
+
+/** One library entry (a toolchain pack and version) an agent says it needs for a project. */
+export const ToolchainNeedSchema = z
+  .object({
+    packId: z.string().min(1).max(40),
+    version: z.string().min(1).max(40),
+    reason: z.string().min(1).max(500),
+  })
+  .strict();
+export type ToolchainNeed = z.infer<typeof ToolchainNeedSchema>;
+
+/**
+ * What one agent says it would need from the Toolchains library to build and test a project.
+ * Advice for the person installing packs; it never changes what a run does.
+ */
+export const ToolchainNeedsSchema = z
+  .object({
+    schemaVersion: SchemaVersionSchema,
+    projectId: ProjectIdSchema,
+    agentStackId: AgentStackIdSchema,
+    projectRevisionId: ProjectRevisionIdSchema,
+    /** Content hash of the revision the agent read; a different hash makes it stale. */
+    contentHash: z.string().min(1).max(200),
+    summary: z.string().min(1).max(4000),
+    needs: z.array(ToolchainNeedSchema).max(40),
+    createdAt: IsoTimestampSchema,
+  })
+  .strict();
+export type ToolchainNeeds = z.infer<typeof ToolchainNeedsSchema>;

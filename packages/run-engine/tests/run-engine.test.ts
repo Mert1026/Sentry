@@ -845,6 +845,13 @@ describe('revision-targeted runs', () => {
           'utf8',
         ),
       ).toBe('B');
+      // The run judged the OLD bytes with the OLD revision's context, not the project's current one.
+      const oldContext = f.repository.getContextForRevision(firstRevision);
+      const currentContext = f.repository.getContextForRevision(updated.revision.id);
+      expect(oldContext).toBeDefined();
+      expect(currentContext).toBeDefined();
+      expect(oldContext?.id).not.toBe(currentContext?.id);
+      expect(result.run.projectContextSnapshotId).toBe(oldContext?.id);
     } finally {
       f.lease.release();
       f.database.close();

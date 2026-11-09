@@ -5,10 +5,11 @@ import { ArrowRight, FolderKanban, Plus } from 'lucide-react';
 import { pickDirectory, sentryApi } from '../lib/sentry-api.js';
 import { PageHeader } from '../components/ui/PageHeader.js';
 import { StatusPill } from '../components/ui/StatusPill.js';
-import { CollapsibleSection } from '../components/ui/CollapsibleSection.js';
+import { InfoPopover } from '../components/InfoPopover.js';
 import { CopyId } from '../components/CopyId.js';
 import { EmptyState } from '../components/ui/EmptyState.js';
 import { RemoveProjectButton } from '../components/RemoveProjectButton.js';
+import { BlockingOverlay, LoadingOverlay } from '../components/BlockingOverlay.js';
 
 function folderLeafName(path: string): string {
   const normalized = path.replace(/[\\/]+$/, '');
@@ -140,7 +141,7 @@ export function Projects(): React.JSX.Element {
         </div>
       ) : null}
       {projects.isLoading ? (
-        <div className="skeleton">Loading projects…</div>
+        <LoadingOverlay>Loading projects…</LoadingOverlay>
       ) : projects.isError ? (
         <div className="error-box" role="alert">
           Could not load projects:{' '}
@@ -195,81 +196,91 @@ export function Projects(): React.JSX.Element {
           ))}
         </div>
       )}
-      <CollapsibleSection title="Advanced: add by path">
-        <div
-          style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 8 }}
-        >
-          <input
-            value={manualPath}
-            onChange={(e) => setManualPath(e.target.value)}
+      <div className="info-aligned-row" style={{ justifyContent: 'flex-end' }}>
+        <InfoPopover title="Advanced: add by path">
+          <div
+            style={{
+              display: 'flex',
+              gap: 8,
+              flexWrap: 'wrap',
+              alignItems: 'center',
+              marginTop: 8,
+            }}
+          >
+            <input
+              value={manualPath}
+              onChange={(e) => setManualPath(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && manualPath.trim().length > 0 && !add.isPending) {
+                  add.mutate(manualPath.trim());
+                }
+              }}
+              placeholder="Paste a folder path, then Enter"
+              aria-label="Project folder path"
+              style={{ minWidth: 280, flex: 1 }}
+            />
+            <button
+              disabled={manualPath.trim().length === 0 || add.isPending}
+              onClick={() => add.mutate(manualPath.trim())}
+            >
+              Add by path
+            </button>
+          </div>
+        </InfoPopover>
+      </div>
+      {modalOpen ? (
+        <BlockingOverlay>
+          <div
+            className="project-import-backdrop"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Adding project to Sentry"
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && manualPath.trim().length > 0 && !add.isPending) {
-                add.mutate(manualPath.trim());
+              if (e.key === 'Escape') {
+                e.preventDefault();
+                e.stopPropagation();
               }
             }}
-            placeholder="Paste a folder path, then Enter"
-            aria-label="Project folder path"
-            style={{ minWidth: 280, flex: 1 }}
-          />
-          <button
-            disabled={manualPath.trim().length === 0 || add.isPending}
-            onClick={() => add.mutate(manualPath.trim())}
           >
-            Add by path
-          </button>
-        </div>
-      </CollapsibleSection>
-      {modalOpen ? (
-        <div
-          className="project-import-backdrop"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Adding project to Sentry"
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') {
-              e.preventDefault();
-              e.stopPropagation();
-            }
-          }}
-        >
-          <div className="project-import-modal">
-            <img
-              src="./smooth_loader_flat_logo.gif"
-              alt=""
-              className="project-import-loader"
-              aria-hidden="true"
-            />
-            <h2 className="section-title" style={{ fontSize: 16 }}>
-              Adding project to Sentry
-            </h2>
-            <div
-              className="mono metadata truncate"
-              style={{ maxWidth: '100%' }}
-              title={activeFolder}
-              data-no-translate="true"
-            >
-              {folderLeafName(activeFolder)}
-            </div>
-            <div className="project-import-timer" aria-live="polite">
-              <span>Elapsed:</span>
-              <span data-no-translate="true">{elapsedSeconds}s</span>
-            </div>
-            <p className="body-secondary" style={{ margin: 0 }}>
-              Copying and indexing project files into the isolated Sentry runtime store. This window
-              will close automatically when the import completes.
-            </p>
-            <div style={{ marginTop: 6 }}>
-              <button
-                type="button"
-                className="danger compact"
-                disabled={cancelling}
-                onClick={() => void cancelImport()}
+            <div className="project-import-modal">
+              <img
+                src="./smooth_loader_flat_logo.gif"
+                alt=""
+                className="project-import-loader"
+                aria-hidden="true"
+              />
+              <h2 className="section-title" style={{ fontSize: 16 }}>
+                Adding project to Sentry
+              </h2>
+              <div
+                className="mono metadata truncate"
+                style={{ maxWidth: '100%' }}
+                title={activeFolder}
+                data-no-translate="true"
               >
-                {cancelling ? 'Cancelling…' : 'Cancel import'}
-              </button>
+                {folderLeafName(activeFolder)}
+              </div>
+              <div className="project-import-timer" aria-live="polite">
+                <span>Elapsed:</span>
+                <span data-no-translate="true">{elapsedSeconds}s</span>
+              </div>
+              <p className="body-secondary" style={{ margin: 0 }}>
+                Copying and indexing project files into the isolated Sentry runtime store. This
+                window will close automatically when the import completes.
+              </p>
+              <div style={{ marginTop: 6 }}>
+                <button
+                  type="button"
+                  className="danger compact"
+                  disabled={cancelling}
+                  onClick={() => void cancelImport()}
+                >
+                  {cancelling ? 'Cancelling…' : 'Cancel import'}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        </BlockingOverlay>
       ) : null}
     </div>
   );
