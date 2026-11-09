@@ -219,6 +219,11 @@ export const RuntimeConfigureParamsSchema = z
     // How provider `openai` authenticates: an API key (default) or the
     // person's ChatGPT account through the runtime's loopback bridge.
     openAiAuth: z.enum(['key', 'account']).optional(),
+    // Reasoning effort per agent (provider default when 'default'). Full-state like openAiAuth.
+    reasoningEffort: z
+      .object({ chatgpt: z.enum(['default', 'low', 'medium', 'high']).optional() })
+      .strict()
+      .optional(),
     // Harness executable overrides (non-secret absolute paths inside the
     // runtime environment, e.g. a user-local opencode install). Ephemeral
     // like everything else here; additive, so the version stays 1.

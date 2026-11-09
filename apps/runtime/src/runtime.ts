@@ -641,6 +641,11 @@ export class SentryRuntimeHost {
 
   configure(params: unknown): unknown {
     const parsed = RuntimeConfigureParamsSchema.parse(params ?? {});
+    if (parsed.reasoningEffort?.chatgpt !== undefined) {
+      if (parsed.reasoningEffort.chatgpt === 'default')
+        delete process.env['SENTRY_CHATGPT_REASONING'];
+      else process.env['SENTRY_CHATGPT_REASONING'] = parsed.reasoningEffort.chatgpt;
+    }
     if (parsed.openAiAuth !== undefined) {
       process.env['SENTRY_OPENAI_AUTH'] = parsed.openAiAuth;
       void this.refreshOpenAiAccountReady();

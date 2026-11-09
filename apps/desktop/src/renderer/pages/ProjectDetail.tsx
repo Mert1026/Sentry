@@ -12,8 +12,14 @@ import {
   Layers,
   GitBranch,
   Activity,
+  CalendarDays,
+  CheckCircle2,
+  Clock,
+  History,
+  Tag,
 } from 'lucide-react';
 import { CopyId } from '../components/CopyId.js';
+import { InfoTile } from '../components/InfoTile.js';
 import { StatusIcon } from '../components/StatusGlyph.js';
 import { PageHeader, PageSection } from '../components/ui/PageHeader.js';
 import { StatusPill, dotClassForStatus } from '../components/ui/StatusPill.js';
@@ -55,6 +61,20 @@ function shortModel(modelId: string | undefined): string {
 
 function shortRevision(id: string): string {
   return id.length > 18 ? id.slice(0, 12) + '…' : id;
+}
+
+function formatRevisionDay(iso: string | undefined): string {
+  if (iso === undefined || iso === '') return '—';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return date.toLocaleDateString([], { year: 'numeric', month: '2-digit', day: '2-digit' });
+}
+
+function formatRevisionClock(iso: string | undefined): string {
+  if (iso === undefined || iso === '') return '—';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
 function formatRevisionDate(iso: string | undefined): string {
@@ -502,6 +522,32 @@ export function ProjectDetail(): React.JSX.Element {
                   </select>
                 </div>
               </div>
+              {effectiveRevision === undefined ? null : (
+                <div className="rs-tiles--revision" aria-label="Selected revision">
+                  <InfoTile
+                    icon={CalendarDays}
+                    label="Date"
+                    value={formatRevisionDay(effectiveRevision.importedAt)}
+                    compact
+                  />
+                  <InfoTile
+                    icon={Clock}
+                    label="Time"
+                    value={formatRevisionClock(effectiveRevision.importedAt)}
+                    compact
+                  />
+                  <InfoTile
+                    icon={olderRevision ? History : CheckCircle2}
+                    label="Status"
+                    value={olderRevision ? 'Older revision' : 'Current'}
+                    tone={olderRevision ? 'warn' : 'success'}
+                    compact
+                  />
+                  <InfoTile icon={Tag} label="Name" tone={undefined} wide compact>
+                    <CopyId id={effectiveRevision.id} short={40} maxWidth={300} />
+                  </InfoTile>
+                </div>
+              )}
               {mode === 'targeted' ? (
                 <div style={{ marginTop: 12 }}>
                   <TargetPathInput

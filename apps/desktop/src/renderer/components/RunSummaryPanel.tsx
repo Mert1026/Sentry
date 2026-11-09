@@ -1,7 +1,19 @@
 import React from 'react';
+import {
+  Activity,
+  BookOpen,
+  CheckCircle2,
+  Crosshair,
+  Download,
+  Globe,
+  Layers,
+  Users,
+  XCircle,
+} from 'lucide-react';
 import { CopyId } from './CopyId.js';
 import { StatusPill, dotClassForStatus } from './ui/StatusPill.js';
 import { AGENT_DISPLAY_NAMES, formatCount } from '../lib/agent-telemetry.js';
+import { InfoTile as Tile } from './InfoTile.js';
 
 export function RunSummaryPanel({
   snapshot,
@@ -53,54 +65,111 @@ export function RunSummaryPanel({
   const failedCount = agentRuns.filter((agent) =>
     ['failed', 'timed_out', 'interrupted'].includes(String(agent['status'])),
   ).length;
+  const webOn = configuration?.executionSafeguards?.webAccess === true;
+  const downloadsOn = configuration?.executionSafeguards?.toolDownloads === true;
+  const profileWithout =
+    (profileUsage?.staleAgentStackIds.length ?? 0) +
+    (profileUsage?.missingAgentStackIds.length ?? 0);
+  /** A count tile jumps to the first agent in that state; with none (or no canvas) it is plain. */
+  const focusFirst = (statuses: string[]): (() => void) | undefined => {
+    if (onFocusAgent === undefined) return undefined;
+    const match = agentRuns.find((agent) => statuses.includes(String(agent['status'])));
+    return match === undefined ? undefined : () => onFocusAgent(String(match['agentStackId']));
+  };
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div className="rs-panel" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <section aria-label="Run status">
         <div className="section-title" style={{ marginBottom: 8 }}>
           Run
         </div>
         <StatusPill status={String(run['status'] ?? 'unknown')} />
-        <div className="metadata" style={{ marginTop: 6 }}>
-          {String(run['mode'] ?? '').toUpperCase() +
-            ' QA · ' +
-            (run['executionKind'] === 'production' ? 'Production' : 'Legacy simulation')}
+        <div className="rs-tiles">
+          <Tile
+            icon={run['mode'] === 'targeted' ? Crosshair : Layers}
+            label="Mode"
+            value={String(run['mode'] ?? '').toUpperCase() + ' QA'}
+            hint={run['executionKind'] === 'production' ? 'Production' : 'Legacy simulation'}
+            tone={run['executionKind'] === 'production' ? 'on' : 'warn'}
+            wide
+          />
+          <Tile
+            icon={Globe}
+            label="Web access"
+            value={webOn ? 'On' : 'Off'}
+            state={webOn ? 'on' : 'off'}
+            tone={webOn ? 'on' : undefined}
+            iconWhenNarrow
+          />
+          <Tile
+            icon={Download}
+            label="Tool and SDK downloads"
+            value={downloadsOn ? 'On' : 'Off'}
+            state={downloadsOn ? 'on' : 'off'}
+            tone={downloadsOn ? 'on' : undefined}
+            iconWhenNarrow
+          />
+          {profileUsage === undefined ? null : (
+            <Tile
+              icon={BookOpen}
+              label="Project profile"
+              value={
+                profileUsage.requested
+                  ? 'Used by ' + profileUsage.usedAgentStackIds.length + ' agent(s)'
+                  : 'Off'
+              }
+              state={profileUsage.requested ? 'on' : 'off'}
+              tone={profileUsage.requested ? (profileWithout > 0 ? 'warn' : 'on') : undefined}
+              hint={
+                profileUsage.requested && profileWithout > 0
+                  ? profileWithout + ' without (out of date or not built)'
+                  : undefined
+              }
+              hintWarn
+              wide
+            />
+          )}
         </div>
-        <div className="metadata" style={{ marginTop: 4 }}>
-          {'Web access: ' +
-            (configuration?.executionSafeguards?.webAccess === true ? 'on' : 'off') +
-            ' · tool and SDK downloads: ' +
-            (configuration?.executionSafeguards?.toolDownloads === true ? 'on' : 'off')}
-        </div>
-        {profileUsage === undefined ? null : (
-          <div className="metadata" style={{ marginTop: 4 }}>
-            {profileUsage.requested
-              ? 'Project profile: used by ' +
-                profileUsage.usedAgentStackIds.length +
-                ' agent(s)' +
-                (profileUsage.staleAgentStackIds.length + profileUsage.missingAgentStackIds.length >
-                0
-                  ? ', ' +
-                    (profileUsage.staleAgentStackIds.length +
-                      profileUsage.missingAgentStackIds.length) +
-                    ' without (out of date or not built)'
-                  : '')
-              : 'Project profile: off'}
-          </div>
-        )}
       </section>
       <section aria-label="Results by agent">
         <div className="section-title" style={{ marginBottom: 8 }}>
           Results
         </div>
-        <p className="metadata">{String(selected.length) + ' selected'}</p>
-        <p className="metadata">
-          {String(runningCount) +
-            ' running · ' +
-            String(completedAgentCount) +
-            ' completed · ' +
-            String(failedCount) +
-            ' failed / timed out / interrupted'}
-        </p>
+        <div className="rs-tiles">
+          <Tile
+            icon={Users}
+            label="Selected"
+            value={String(selected.length)}
+            count
+            tone={selected.length === 0 ? 'zero' : undefined}
+          />
+          <Tile
+            icon={Activity}
+            label="Running"
+            value={String(runningCount)}
+            count
+            tone={runningCount > 0 ? 'busy' : 'zero'}
+            title="Show the first running agent on the canvas"
+            onClick={focusFirst(['starting', 'planning', 'running'])}
+          />
+          <Tile
+            icon={CheckCircle2}
+            label="Completed"
+            value={String(completedAgentCount)}
+            count
+            tone={completedAgentCount > 0 ? 'success' : 'zero'}
+            title="Show the first completed agent on the canvas"
+            onClick={focusFirst(['completed'])}
+          />
+          <Tile
+            icon={XCircle}
+            label="Failed"
+            value={String(failedCount)}
+            count
+            tone={failedCount > 0 ? 'danger' : 'zero'}
+            title="Failed, timed out or interrupted: show the first one on the canvas"
+            onClick={focusFirst(['failed', 'timed_out', 'interrupted'])}
+          />
+        </div>
         {selected.length > 0 ? (
           <div
             className="result-observation"

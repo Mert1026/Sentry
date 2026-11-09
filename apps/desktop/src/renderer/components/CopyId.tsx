@@ -2,7 +2,15 @@ import React from 'react';
 import { Check, Copy } from 'lucide-react';
 import { truncateMiddle } from '../lib/agent-telemetry.js';
 
-export function CopyId({ id, short = 14 }: { id: string; short?: number }): React.JSX.Element {
+export function CopyId({
+  id,
+  short = 14,
+  maxWidth = 160,
+}: {
+  id: string;
+  short?: number;
+  maxWidth?: number;
+}): React.JSX.Element {
   const [copied, setCopied] = React.useState(false);
   const timer = React.useRef<number | undefined>(undefined);
   React.useEffect(() => () => window.clearTimeout(timer.current), []);
@@ -18,7 +26,7 @@ export function CopyId({ id, short = 14 }: { id: string; short?: number }): Reac
   };
   return (
     <span className="copy-chip" title={id}>
-      <span className="truncate" style={{ maxWidth: 160 }}>
+      <span className="truncate" style={{ maxWidth }}>
         {truncateMiddle(id, short)}
       </span>
       <button

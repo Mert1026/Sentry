@@ -55,6 +55,8 @@ const DESCRIPTIONS: Record<string, string> = {
     'OpenCode upstream provider (non-secret): opencode-go (OpenCode Go monthly subscription gateway), opencode (OpenCode Zen pay-as-you-go Console gateway), or openrouter (OpenRouter pay-as-you-go gateway; default when unset).',
   OPENAI_API_KEY:
     'OpenAI API key (secret, from platform.openai.com/api-keys). Used by the ChatGPT agent when it signs in with an API key. Pay-as-you-go on your OpenAI account.',
+  SENTRY_CHATGPT_REASONING:
+    'How hard the ChatGPT agent thinks (non-secret): low, medium or high. Higher effort usually finds more but takes longer and costs more. Unset uses the provider default.',
   SENTRY_CHATGPT_MODEL:
     'ChatGPT agent model id (non-secret), an OpenAI model such as gpt-5.5. The ChatGPT agent runs the OpenCode harness against OpenAI.',
 };
@@ -1101,6 +1103,49 @@ function OpenCodeCard(props: {
     </div>
   );
 }
+const REASONING_EFFORTS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: '', label: 'Default (provider setting)' },
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
+];
+
+/** How hard the ChatGPT agent thinks. Saving applies at once; "Default" removes the setting. */
+function ReasoningEffortField(props: {
+  readonly value: string;
+  readonly pending: boolean;
+  readonly onChange: (value: string) => void;
+}): React.JSX.Element {
+  const known = REASONING_EFFORTS.some((option) => option.value === props.value);
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <label htmlFor="provider-SENTRY_CHATGPT_REASONING" className="card-title">
+          Reasoning effort
+        </label>
+        <span className="info-row-spacer" />
+        <InfoPopover title="Reasoning effort">
+          {DESCRIPTIONS['SENTRY_CHATGPT_REASONING'] ?? ''}
+        </InfoPopover>
+      </div>
+      <select
+        id="provider-SENTRY_CHATGPT_REASONING"
+        aria-label="Value for SENTRY_CHATGPT_REASONING"
+        value={known ? props.value : ''}
+        disabled={props.pending}
+        onChange={(event) => props.onChange(event.target.value)}
+        style={{ minWidth: 200, width: '100%', marginTop: 4 }}
+      >
+        {REASONING_EFFORTS.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 /**
  * ChatGPT agent card: its own model, plus how it signs in to OpenAI: an API key, or the person's
  * ChatGPT account through the local bridge. Both choices stay saved; switching only changes which
@@ -1141,6 +1186,19 @@ function ChatGptCard(props: {
         options={CHATGPT_MODELS}
         optionNote={chatGptModelNote}
         {...common}
+      />
+      <ReasoningEffortField
+        value={
+          props.byName.get('SENTRY_CHATGPT_REASONING')?.configured === true
+            ? (props.byName.get('SENTRY_CHATGPT_REASONING')?.hint ?? '')
+            : ''
+        }
+        pending={props.savePending || props.clearPending}
+        onChange={(next) =>
+          next === ''
+            ? props.onClear('SENTRY_CHATGPT_REASONING')
+            : props.onSave('SENTRY_CHATGPT_REASONING', next)
+        }
       />
       <div style={{ marginBottom: 12 }}>
         <span id="openai-auth-label" className="metadata">

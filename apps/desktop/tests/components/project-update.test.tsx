@@ -264,6 +264,22 @@ describe('run revision selection', () => {
     expect(options[1]!.text).not.toContain('current');
   });
 
+  it('shows the selected revision as separate date, time, status and name tiles under the selector', async () => {
+    fixture();
+    const picker = (await screen.findByLabelText('Run revision')) as HTMLSelectElement;
+    const details = screen.getByLabelText('Selected revision');
+    // The current revision: a Current badge, its own name, and a date and time of their own.
+    expect(within(details).getByLabelText('Status: Current')).toBeTruthy();
+    expect(within(details).getByTitle('rev_01K7777777777777777777779B')).toBeTruthy();
+    expect(within(details).getByLabelText(/^Date: .*2026/)).toBeTruthy();
+    expect(within(details).getByLabelText(/^Time: \d/)).toBeTruthy();
+    // Picking an older revision switches the tiles to that revision and says it is older.
+    fireEvent.change(picker, { target: { value: 'rev_01K7777777777777777777778A' } });
+    expect(within(details).getByLabelText('Status: Older revision')).toBeTruthy();
+    expect(within(details).getByTitle('rev_01K7777777777777777777778A')).toBeTruthy();
+    expect(within(details).queryByTitle('rev_01K7777777777777777777779B')).toBeNull();
+  });
+
   it('starts the run on the selected older revision and shows it for confirmation', async () => {
     const f = fixture();
     const picker = (await screen.findByLabelText('Run revision')) as HTMLSelectElement;

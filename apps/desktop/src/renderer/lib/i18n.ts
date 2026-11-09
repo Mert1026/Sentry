@@ -117,6 +117,8 @@ function translateCore(trimmed: string): string {
   const execLine = translateExecutionRuntimeLine(trimmed);
   if (execLine !== undefined) return execLine;
 
+  // A bare duration such as "10m 02s" or "1h 05m" (the run header shows the value on its own).
+  if (/^\d+[hm] \d{2}[ms]$/.test(trimmed)) return translateDurationUnits(trimmed);
   if (trimmed.startsWith('Started ')) {
     return 'Стартирано ' + trimmed.slice('Started '.length);
   }
@@ -148,6 +150,10 @@ function translateCore(trimmed: string): string {
   const paidAgentCount = /^(\d+) agents? · uses real provider budget\.$/.exec(trimmed);
   if (paidAgentCount !== null)
     return `${paidAgentCount[1]} ${paidAgentCount[1] === '1' ? 'агент' : 'агента'} · изразходва реален бюджет на доставчика.`;
+  const usedBy = /^Used by (\d+) agent\(s\)$/.exec(trimmed);
+  if (usedBy !== null) return `Използван от ${usedBy[1]} ${usedBy[1] === '1' ? 'агент' : 'агента'}`;
+  const withoutProfile = /^(\d+) without \(out of date or not built\)$/.exec(trimmed);
+  if (withoutProfile !== null) return `${withoutProfile[1]} без профил (остарял или несъздаден)`;
   const profileUsed =
     /^Project profile: used by (\d+) agent\(s\)(?:, (\d+) without \(out of date or not built\))?$/.exec(
       trimmed,

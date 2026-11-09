@@ -475,6 +475,11 @@ export class DesktopApplicationService {
       binaries,
       ...provider,
       openAiAuth,
+      reasoningEffort: {
+        chatgpt: ['low', 'medium', 'high'].includes(get('SENTRY_CHATGPT_REASONING') ?? '')
+          ? (get('SENTRY_CHATGPT_REASONING') as 'low' | 'medium' | 'high')
+          : 'default',
+      },
     });
   }
 

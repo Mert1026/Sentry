@@ -3,11 +3,12 @@ import { InfoPopover } from '../components/InfoPopover.js';
 import { LoadingOverlay } from '../components/BlockingOverlay.js';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Check, X } from 'lucide-react';
+import { Bot, Cpu, Info, KeyRound, PackageCheck, ShieldCheck, Terminal } from 'lucide-react';
 import { sentryApi } from '../lib/sentry-api.js';
 import { runtimeConnectionState, useRuntimeStatus } from '../lib/use-runtime-status.js';
 import { PageHeader, PageSection } from '../components/ui/PageHeader.js';
 import { StatusPill } from '../components/ui/StatusPill.js';
+import { InfoTile } from '../components/InfoTile.js';
 
 interface RuntimeStatus {
   connected: boolean;
@@ -39,19 +40,6 @@ interface AgentStackHealth {
   executableSource?: string;
   wrapperNote?: string;
   note?: string;
-}
-
-function HealthRow({ ok, label }: { ok: boolean; label: string }): React.JSX.Element {
-  return (
-    <div className="metadata" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-      {ok ? (
-        <Check size={13} aria-label="yes" color="var(--success)" />
-      ) : (
-        <X size={13} aria-label="no" color="var(--text-tertiary)" />
-      )}
-      {label}
-    </div>
-  );
 }
 
 export function Environment(): React.JSX.Element {
@@ -209,51 +197,71 @@ export function Environment(): React.JSX.Element {
           {(data.agentStacks ?? []).map((stack) => (
             <div className="card" key={stack.id}>
               <div className="agent-row">
+                <Bot size={18} aria-hidden="true" style={{ color: 'var(--text-secondary)' }} />
                 <span className="grow card-title">{stack.displayName}</span>
-                <StatusPill status={stack.readiness ?? 'unknown'} />
                 <InfoPopover title={stack.displayName + ' readiness'}>
                   A saved credential does not imply the provider works until a non-billable doctor
                   verifies it inside the WSL runtime.
                 </InfoPopover>
               </div>
-              <div
-                className="mono metadata truncate"
-                style={{ margin: '4px 0 8px' }}
-                title={stack.modelId}
-              >
-                {stack.modelId}
+              <div style={{ marginTop: 8 }}>
+                <StatusPill status={stack.readiness ?? 'unknown'} />
               </div>
-              <HealthRow
-                ok={stack.configured === true}
-                label={'Credential ' + (stack.configured === true ? 'saved' : 'missing')}
-              />
-              <HealthRow
-                ok={stack.binaryAvailable === true}
-                label={'Binary ' + (stack.binaryAvailable === true ? 'available' : 'missing')}
-              />
-              <HealthRow
-                ok={stack.runtimeVerified === true}
-                label={'Runtime ' + (stack.runtimeVerified === true ? 'verified' : 'not tested')}
-              />
-              {stack.executionPath !== undefined && stack.executionPath !== '' ? (
-                <div className="mono metadata truncate" title={stack.executionPath}>
-                  {'Execution runtime: ' +
-                    stack.executionPath +
-                    (stack.executableSource !== undefined && stack.executableSource !== ''
-                      ? ' (source: ' + stack.executableSource + ')'
-                      : '')}
-                </div>
-              ) : null}
-              {stack.wrapperNote !== undefined && stack.wrapperNote !== '' ? (
-                <p className="metadata" style={{ marginBottom: 0 }}>
-                  {stack.wrapperNote}
-                </p>
-              ) : null}
-              {stack.note !== undefined && stack.note !== '' ? (
-                <p className="metadata" style={{ marginBottom: 0 }}>
-                  {stack.note}
-                </p>
-              ) : null}
+              <div className="rs-tiles" style={{ marginTop: 10 }}>
+                <InfoTile
+                  icon={Cpu}
+                  label="Model"
+                  value={stack.modelId}
+                  title={stack.modelId}
+                  wide
+                  compact
+                />
+                <InfoTile
+                  icon={KeyRound}
+                  label="Credential"
+                  value={stack.configured === true ? 'Saved' : 'Missing'}
+                  tone={stack.configured === true ? 'on' : 'warn'}
+                  compact
+                />
+                <InfoTile
+                  icon={PackageCheck}
+                  label="Binary"
+                  value={stack.binaryAvailable === true ? 'Available' : 'Missing'}
+                  tone={stack.binaryAvailable === true ? 'on' : 'warn'}
+                  compact
+                />
+                <InfoTile
+                  icon={ShieldCheck}
+                  label="Runtime"
+                  value={stack.runtimeVerified === true ? 'Verified' : 'Not tested'}
+                  tone={stack.runtimeVerified === true ? 'success' : undefined}
+                  wide
+                  compact
+                />
+                {stack.executionPath !== undefined && stack.executionPath !== '' ? (
+                  <InfoTile
+                    icon={Terminal}
+                    label="Execution runtime"
+                    hint={
+                      stack.executableSource !== undefined && stack.executableSource !== ''
+                        ? 'Source: ' + stack.executableSource
+                        : undefined
+                    }
+                    title={stack.executionPath}
+                    wide
+                    compact
+                  >
+                    <span className="mono rs-path">{stack.executionPath}</span>
+                  </InfoTile>
+                ) : null}
+                {[stack.wrapperNote, stack.note]
+                  .filter((text): text is string => text !== undefined && text !== '')
+                  .map((text) => (
+                    <InfoTile key={text} icon={Info} label="Note" wide compact>
+                      <span className="rs-note">{text}</span>
+                    </InfoTile>
+                  ))}
+              </div>
             </div>
           ))}
         </div>
