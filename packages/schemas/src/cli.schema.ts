@@ -48,6 +48,12 @@ export const CLI_COMMANDS = [
   'doctor.cleanup',
   'doctor.config',
   'project.doctor',
+  'project.findings',
+  'project.profile',
+  'project.profile-build',
+  'toolchain.status',
+  'toolchain.install',
+  'toolchain.remove',
 ] as const;
 export const CliCommandSchema = z.enum(CLI_COMMANDS);
 export type CliCommand = z.infer<typeof CliCommandSchema>;
@@ -373,7 +379,7 @@ export type AgentListResult = z.infer<typeof AgentListResultSchema>;
 export const AgentDoctorResultSchema = z
   .object({
     // 'muse' retained historically: old envelopes still validate.
-    agent: z.enum(['muse', 'opencode', 'deepseek', 'glm']),
+    agent: z.enum(['muse', 'opencode', 'deepseek', 'glm', 'chatgpt']),
     status: z.enum(['healthy', 'degraded', 'unavailable']),
     checks: z.array(
       z
@@ -542,6 +548,11 @@ export const CapabilitiesResultSchema = z
         realAgentExecution: z.literal(true),
         runCancellation: z.literal(true),
         targetedExecution: z.literal(true),
+        // Additive: present when the broker serves these (older consumers ignore them).
+        retest: z.literal(true).optional(),
+        findingsByRevision: z.literal(true).optional(),
+        projectProfile: z.literal(true).optional(),
+        toolchains: z.literal(true).optional(),
       })
       .strict(),
     // Additive Phase 4 extension: stable stack identities with their
@@ -581,6 +592,23 @@ export const CapabilitiesResultSchema = z
   .strict();
 export type CapabilitiesResult = z.infer<typeof CapabilitiesResultSchema>;
 
+/** Findings of every revision, with each retest run's verdict per earlier finding. */
+export const ProjectFindingsResultSchema = z
+  .object({ projectId: z.string().min(1).max(200), revisions: z.array(z.unknown()) })
+  .strict();
+/** Per-agent project profile state (none / fresh / stale) and notes. */
+export const ProjectProfileResultSchema = z
+  .object({ projectId: z.string().min(1).max(200), profile: z.unknown() })
+  .strict();
+export const ToolchainStatusResultSchema = z.object({ toolchains: z.unknown() }).strict();
+export const ToolchainChangeResultSchema = z
+  .object({
+    packId: z.string().min(1).max(40),
+    version: z.string().min(1).max(40),
+    result: z.unknown(),
+  })
+  .strict();
+
 export const CliResultSchemas = {
   capabilities: CapabilitiesResultSchema,
   'agent.list': AgentListResultSchema,
@@ -603,6 +631,12 @@ export const CliResultSchemas = {
   'doctor.cleanup': DoctorCleanupResultSchema,
   'doctor.config': DoctorConfigResultSchema,
   'project.doctor': ProjectDoctorResultSchema,
+  'project.findings': ProjectFindingsResultSchema,
+  'project.profile': ProjectProfileResultSchema,
+  'project.profile-build': ProjectProfileResultSchema,
+  'toolchain.status': ToolchainStatusResultSchema,
+  'toolchain.install': ToolchainChangeResultSchema,
+  'toolchain.remove': ToolchainChangeResultSchema,
 } as const;
 
 function successEnvelope<C extends CliCommand>(

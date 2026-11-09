@@ -293,6 +293,15 @@ export async function executeCommand(
     );
   }
   if (input.command === 'run.start') {
+    if (
+      input.retest !== undefined ||
+      input.useProfile === true ||
+      input.toolDownloads === true ||
+      input.revisionId !== undefined
+    )
+      throw new CliUsageError(
+        '--retest, --profile, --tools and --revision need Sentry Desktop (the direct development transport does not support them).',
+      );
     const projectId = parseArgument(ProjectIdSchema, input.projectId, 'project-id');
     const registry = new HarnessAdapterRegistry()
       .register(createOpenCodeRegistration())
@@ -463,6 +472,18 @@ export async function executeCommand(
       });
     });
   }
+  if (
+    input.command === 'project.findings' ||
+    input.command === 'project.profile' ||
+    input.command === 'project.profile-build' ||
+    input.command === 'toolchain.status' ||
+    input.command === 'toolchain.install' ||
+    input.command === 'toolchain.remove'
+  )
+    throw new CliUsageError(
+      input.command +
+        ' needs Sentry Desktop (the direct development transport does not support it).',
+    );
   if (input.command !== 'run.export') throw new CliUsageError('Unknown command');
   const runId = parseArgument(QARunIdSchema, input.runId, 'run-id');
   return withMutationRuntime(async ({ runs, repository, dataRoot }) => {

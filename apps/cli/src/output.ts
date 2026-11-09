@@ -30,7 +30,11 @@ export function emitHumanSuccess(response: CliSuccessEnvelope, io: CliIo): void 
           'Project lifecycle: yes',
           'Run inspection: yes',
           'Fake simulation: yes (development transport only)',
-          'Real agent execution: yes (OpenCode, DeepSeek, GLM)',
+          'Real agent execution: yes (OpenCode, DeepSeek, GLM, ChatGPT)',
+          'Re-test earlier findings: yes (run start --retest)',
+          'Findings by revision: yes (project findings)',
+          'Project profile: yes (project profile, project profile-build)',
+          'Toolchains: yes (toolchain status|install|remove)',
           'Run cancellation: yes',
           'Run result export: yes (run result)',
           'Async run start: yes (default; pass --wait to observe)',
@@ -137,7 +141,15 @@ export function emitHumanSuccess(response: CliSuccessEnvelope, io: CliIo): void 
       return;
     case 'run.show':
     case 'run.status':
+    case 'project.profile':
+    case 'project.profile-build':
+    case 'toolchain.status':
+    case 'toolchain.install':
+    case 'toolchain.remove':
       io.stdout(JSON.stringify(response.data, null, 2));
+      return;
+    case 'project.findings':
+      io.stdout(formatFindingsByRevision(response.data.revisions));
       return;
     case 'run.export':
       io.stdout(response.data.path);
@@ -161,4 +173,63 @@ export function successExitCode(response: CliSuccessEnvelope): number {
       : 0;
   if (total > 0) return CLI_EXIT.findings;
   return CLI_EXIT.success;
+}
+
+interface RevisionRunView {
+  readonly runId?: string;
+  readonly at?: string;
+  readonly findings?: ReadonlyArray<{ id?: string; severity?: string; title?: string }>;
+  readonly retest?: ReadonlyArray<{
+    n?: number;
+    title?: string;
+    verdict?: string;
+    details?: string;
+  }>;
+}
+interface RevisionView {
+  readonly revisionId?: string;
+  readonly agents?: ReadonlyArray<{ agentStackId?: string; runs?: readonly RevisionRunView[] }>;
+}
+
+const RETEST_LABEL: Record<string, string> = {
+  no_longer_reproduces: 'PASSED (resolved)',
+  still_reproduces: 'NOT PASSED (still there)',
+  cannot_tell: 'COULD NOT COMPLETE',
+};
+
+/** Findings per revision and agent; a retest run lists each earlier finding with its answer and reason. */
+export function formatFindingsByRevision(revisions: readonly unknown[]): string {
+  const lines: string[] = [];
+  for (const revision of revisions as readonly RevisionView[]) {
+    lines.push('Revision ' + (revision.revisionId ?? '?'));
+    for (const agent of revision.agents ?? []) {
+      for (const run of agent.runs ?? []) {
+        lines.push('  ' + (agent.agentStackId ?? '?') + '  run ' + (run.runId ?? '?'));
+        if (run.retest !== undefined) {
+          for (const outcome of run.retest) {
+            lines.push(
+              '    RETEST #' +
+                (outcome.n ?? '?') +
+                '  ' +
+                (RETEST_LABEL[outcome.verdict ?? ''] ?? 'COULD NOT COMPLETE'),
+              '      ' + (outcome.title ?? ''),
+              ...(outcome.details === undefined ? [] : ['      ' + outcome.details]),
+            );
+          }
+        } else {
+          for (const finding of run.findings ?? [])
+            lines.push(
+              '    ' +
+                (finding.severity ?? '') +
+                '  ' +
+                (finding.title ?? '') +
+                '  ' +
+                (finding.id ?? ''),
+            );
+        }
+      }
+    }
+    lines.push('');
+  }
+  return lines.length === 0 ? 'No revisions with runs yet.' : lines.join('\n').trimEnd();
 }
