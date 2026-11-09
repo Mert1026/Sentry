@@ -102,6 +102,12 @@ function translateCore(trimmed: string): string {
   if (information !== null) return `Информация: ${translateCore(information[1] ?? '')}`;
   const retestDetails = /^Retest details: (.+)$/.exec(trimmed);
   if (retestDetails !== null) return `Детайли за повторната проверка: ${retestDetails[1]}`;
+  const retestTab = /^Re-test \((\d+)\)$/.exec(trimmed);
+  if (retestTab !== null) return `Повторна проверка (${retestTab[1]})`;
+  const retestSummary =
+    /^(\d+) resolved · (\d+) not resolved(?: · (\d+) could not be determined)?$/.exec(trimmed);
+  if (retestSummary !== null)
+    return `${retestSummary[1]} решени · ${retestSummary[2]} не са решени${retestSummary[3] === undefined ? '' : ` · ${retestSummary[3]} не могат да се определят`}`;
   const assessment = /^(.+) assessment$/.exec(trimmed);
   if (assessment !== null) return `Оценка на ${assessment[1]}`;
 

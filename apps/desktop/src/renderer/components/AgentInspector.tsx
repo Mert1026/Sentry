@@ -14,6 +14,7 @@ import {
   Terminal,
 } from 'lucide-react';
 import type { AgentNodeView, TimelineItem } from '../lib/types.js';
+import { retestRows, type RetestItemInfo } from '../lib/retest-results.js';
 import {
   formatCount,
   formatElapsed,
@@ -54,6 +55,8 @@ export interface AgentInspectorData {
   }[];
   readonly findings?: readonly InspectorFinding[];
   readonly evidence?: readonly InspectorEvidence[];
+  /** Present only for an agent of a retest run: the findings it was asked to re-test. */
+  readonly retestItems?: readonly RetestItemInfo[];
 }
 
 export interface InspectorFinding {
@@ -140,6 +143,9 @@ export function AgentInspector({
   const tabs = React.useMemo(() => {
     const list = [
       { id: 'overview', label: 'Overview' },
+      ...(data.retestItems === undefined
+        ? []
+        : [{ id: 'retest', label: 'Re-test (' + data.retestItems.length + ')' }]),
       {
         id: 'findings',
         label: 'Findings' + (findings.length > 0 ? ' (' + findings.length + ')' : ''),
@@ -152,8 +158,10 @@ export function AgentInspector({
     ];
     if (developerMode) list.push({ id: 'diagnostics', label: 'Diagnostics' });
     return list;
-  }, [findings.length, evidence.length, developerMode]);
-  const [tab, setTab] = React.useState(initialTab ?? 'overview');
+  }, [findings.length, evidence.length, developerMode, data.retestItems]);
+  const [tab, setTab] = React.useState(
+    initialTab ?? (data.retestItems === undefined ? 'overview' : 'retest'),
+  );
   const activeTab = tabs.some((t) => t.id === tab) ? tab : 'overview';
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minHeight: 0 }}>
@@ -169,6 +177,9 @@ export function AgentInspector({
       <Tabs tabs={tabs} active={activeTab} onChange={setTab} label="Agent details" />
       <div style={{ minHeight: 0 }}>
         {activeTab === 'overview' ? <OverviewTab view={view} /> : null}
+        {activeTab === 'retest' && data.retestItems !== undefined ? (
+          <RetestTab items={data.retestItems} events={data.events ?? []} />
+        ) : null}
         {activeTab === 'findings' ? (
           <FindingsTab findings={findings} evidence={evidence} status={view.status} />
         ) : null}
@@ -180,6 +191,57 @@ export function AgentInspector({
           <DiagnosticsTab view={view} events={data.events ?? []} />
         ) : null}
       </div>
+    </div>
+  );
+}
+
+/** The findings picked for re-testing, each with whether it is resolved on this revision and why. */
+function RetestTab({
+  items,
+  events,
+}: {
+  items: readonly RetestItemInfo[];
+  events: readonly InspectorEvent[];
+}): React.JSX.Element {
+  const rows = retestRows(
+    items,
+    events.filter((event) => event.type === 'agent.message').map((event) => event.message ?? ''),
+  );
+  const count = (answer: string) => rows.filter((row) => row.answer === answer).length;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+        {rows.map((row) => (
+          <li key={row.n} className="card" style={{ margin: '0 0 8px', padding: 10 }}>
+            <StatusPill
+              status={
+                row.answer === 'resolved'
+                  ? 'completed'
+                  : row.answer === 'not_resolved'
+                    ? 'failed'
+                    : 'partial'
+              }
+              label={
+                row.answer === 'resolved'
+                  ? 'Passed'
+                  : row.answer === 'not_resolved'
+                    ? 'Not passed'
+                    : 'Could not complete'
+              }
+            />
+            <strong style={{ display: 'block', marginTop: 8 }}>{row.title}</strong>
+            <p className="metadata" style={{ margin: '4px 0 0' }}>
+              {row.reason}
+            </p>
+          </li>
+        ))}
+      </ul>
+      <p className="faint" role="status">
+        {count('resolved') + ' resolved · ' + count('not_resolved') + ' not resolved'}
+        {count('undetermined') > 0
+          ? ' · ' + count('undetermined') + ' could not be determined'
+          : ''}
+      </p>
     </div>
   );
 }

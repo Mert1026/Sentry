@@ -248,10 +248,11 @@ describe('re-testing findings from an older revision', () => {
     });
     fireEvent.click(screen.getByText('Agent A'));
     expect(screen.getByText('RETEST')).toBeTruthy();
-    expect(screen.getByText('Still reproduces')).toBeTruthy();
-    expect(screen.getByText('No longer reproduces')).toBeTruthy();
-    expect(screen.getByText('Cannot tell')).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'About Retest details: Old problem' })).toBeTruthy();
+    expect(screen.getByText('Not resolved')).toBeTruthy();
+    expect(screen.getByText('Resolved')).toBeTruthy();
+    expect(screen.getByText('Could not determine')).toBeTruthy();
+    // The reason is shown in the list itself, not behind an info button.
+    expect(screen.getByText('same 200 response')).toBeTruthy();
     expect(screen.queryByText(/fixed/i)).toBeNull();
     expect(screen.queryByText('No findings from this agent in this run.')).toBeNull();
   });

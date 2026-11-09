@@ -237,6 +237,8 @@ describe('retest runs', () => {
     expect(other.runs[0]?.retest?.[0]).toMatchObject({ n: 2, verdict: 'cannot_tell' });
     // Ordinary runs carry no retest block.
     expect(revisions[1]?.agents[0]?.runs[0]?.retest).toBeUndefined();
+    // A retest only answers about the earlier findings; it never stores findings of its own.
+    expect(f.repository.listFindings(retest.run.id)).toHaveLength(0);
     f.database.close();
   });
 });

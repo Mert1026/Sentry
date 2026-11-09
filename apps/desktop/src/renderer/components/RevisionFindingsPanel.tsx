@@ -46,9 +46,9 @@ const VERDICT: Record<
   RevisionRetestOutcome['verdict'],
   { label: string; status: 'failed' | 'completed' | 'partial' }
 > = {
-  still_reproduces: { label: 'Still reproduces', status: 'failed' },
-  no_longer_reproduces: { label: 'No longer reproduces', status: 'completed' },
-  cannot_tell: { label: 'Cannot tell', status: 'partial' },
+  still_reproduces: { label: 'Not resolved', status: 'failed' },
+  no_longer_reproduces: { label: 'Resolved', status: 'completed' },
+  cannot_tell: { label: 'Could not determine', status: 'partial' },
 };
 
 const keyOf = (runId: string, findingId: string): string => runId + '|' + findingId;
@@ -146,9 +146,9 @@ export function RevisionFindingsPanel({
               <InfoPopover title="Re-testing findings">
                 Select up to {RETEST_LIMIT} findings from an older revision and re-test them on the
                 current project revision. Choose the original reporting agent or all selected
-                agents. The new run reports whether each finding still reproduces, no longer
-                reproduces, or could not be determined; it does not change the original finding.
-                Re-testing uses provider budget.
+                agents. For each finding the new run answers only whether it is resolved in this
+                revision and, if it is not, why; it adds no new findings and does not change the
+                original one. Re-testing uses provider budget.
               </InfoPopover>
               <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <span>Re-test with</span>
@@ -228,9 +228,9 @@ export function RevisionFindingsPanel({
                               />{' '}
                               {outcome.title}
                               {outcome.details !== undefined ? (
-                                <InfoPopover title={'Retest details: ' + outcome.title}>
+                                <p className="metadata" style={{ margin: '4px 0 0' }}>
                                   {outcome.details}
-                                </InfoPopover>
+                                </p>
                               ) : null}
                             </li>
                           ))}
