@@ -16,6 +16,7 @@
 import { readdir, rm, stat } from 'node:fs/promises';
 import { basename, dirname, join, resolve, sep } from 'node:path';
 import { isAgentRunId } from '@qa/shared';
+import { assertNoSymlinkBelow } from './paths.js';
 import type { SentryRepository } from './repository.js';
 
 export const ORPHAN_MIN_AGE_MS = 24 * 60 * 60 * 1000;
@@ -262,6 +263,8 @@ export async function cleanupOrphans(
       continue;
     }
     try {
+      // Never remove through a link: a replaced folder above the workspace would redirect this.
+      await assertNoSymlinkBelow(resolvedRoot, resolve(candidate.path));
       await rm(resolve(candidate.path), {
         recursive: true,
         force: true,

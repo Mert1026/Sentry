@@ -359,7 +359,10 @@ export class RunCoordinator {
         // exclusions; the snapshot must hash the same tree or excluded
         // noise (installed dependencies, logs) reports phantom drift.
         ...(revision.hashVersion === 2
-          ? { exclude: (relativePath: string) => matchImportExclusion(relativePath) }
+          ? {
+              exclude: (relativePath: string, entryType?: 'file' | 'directory' | 'symlink') =>
+                matchImportExclusion(relativePath, undefined, entryType),
+            }
           : {}),
       });
       if (snapshot.contentHash !== (expectedSnapshotHash ?? revision.contentHash))

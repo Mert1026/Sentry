@@ -30,7 +30,10 @@ export interface CreateSnapshotInput {
   readonly signal?: AbortSignal;
   /** Entries the revision hash excluded (hashVersion 2 import exclusions)
    *  must be excluded here too, or the two hashes can never agree. */
-  readonly exclude?: (relativePath: string) => boolean;
+  readonly exclude?: (
+    relativePath: string,
+    entryType?: 'file' | 'directory' | 'symlink',
+  ) => boolean;
 }
 
 export class SnapshotEngine {
@@ -46,7 +49,12 @@ export class SnapshotEngine {
   scanRevision(
     root: string,
     signal?: AbortSignal,
-    options: { readonly exclude?: (relativePath: string) => boolean } = {},
+    options: {
+      readonly exclude?: (
+        relativePath: string,
+        entryType?: 'file' | 'directory' | 'symlink',
+      ) => boolean;
+    } = {},
   ): Promise<ScanTreeResult> {
     return scanTree(root, {
       ...(signal === undefined ? {} : { signal }),
