@@ -77,6 +77,9 @@ More detail: [getting started](docs/getting-started.md) and the
 
 1. **Settings → Providers**: add the credentials for the agents you will use.
    Credentials use OS-backed encryption; there is no plaintext fallback.
+   Each agent card also has a **Reasoning effort** choice (how hard the model thinks; higher
+   usually finds more but takes longer and costs more). The levels offered are the ones that
+   agent's tool accepts, and **Default** leaves it to the provider.
 2. **Environment**: check readiness. Diagnostics never make paid calls, and a
    ready state does not guarantee account credit or provider acceptance.
 3. **Settings → Application**: theme, interface language (English or Bulgarian),

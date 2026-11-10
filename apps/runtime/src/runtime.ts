@@ -672,10 +672,19 @@ export class SentryRuntimeHost {
 
   configure(params: unknown): unknown {
     const parsed = RuntimeConfigureParamsSchema.parse(params ?? {});
-    if (parsed.reasoningEffort?.chatgpt !== undefined) {
-      if (parsed.reasoningEffort.chatgpt === 'default')
-        delete process.env['SENTRY_CHATGPT_REASONING'];
-      else process.env['SENTRY_CHATGPT_REASONING'] = parsed.reasoningEffort.chatgpt;
+    // Each agent has its own reasoning effort; "default" removes it so the provider decides.
+    // (The OpenCode agent's effort reaches its harness as SENTRY_OPENCODE_VARIANT.)
+    const effortVariables = {
+      chatgpt: 'SENTRY_CHATGPT_REASONING',
+      opencode: 'SENTRY_OPENCODE_VARIANT',
+      glm: 'SENTRY_GLM_REASONING',
+      deepseek: 'SENTRY_DEEPSEEK_REASONING',
+    } as const;
+    for (const [agent, variable] of Object.entries(effortVariables)) {
+      const level = parsed.reasoningEffort?.[agent as keyof typeof effortVariables];
+      if (level === undefined) continue;
+      if (level === 'default') delete process.env[variable];
+      else process.env[variable] = level;
     }
     if (parsed.openAiAuth !== undefined) {
       process.env['SENTRY_OPENAI_AUTH'] = parsed.openAiAuth;

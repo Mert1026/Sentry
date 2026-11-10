@@ -448,3 +448,44 @@ describe('custom add-on calls', () => {
     }
   });
 });
+
+describe('runtime reasoning effort', () => {
+  it('sets each agent its own variable and removes it for default', async () => {
+    const names = [
+      'SENTRY_CHATGPT_REASONING',
+      'SENTRY_OPENCODE_VARIANT',
+      'SENTRY_GLM_REASONING',
+      'SENTRY_DEEPSEEK_REASONING',
+    ];
+    const saved = names.map((name) => process.env[name]);
+    const host = new SentryRuntimeHost(await tempDataRoot(), () => undefined);
+    try {
+      await host.recover();
+      await host.configure({
+        models: {},
+        providers: {},
+        reasoningEffort: { chatgpt: 'high', opencode: 'low', glm: 'max', deepseek: 'off' },
+      });
+      expect(process.env['SENTRY_CHATGPT_REASONING']).toBe('high');
+      expect(process.env['SENTRY_OPENCODE_VARIANT']).toBe('low');
+      expect(process.env['SENTRY_GLM_REASONING']).toBe('max');
+      expect(process.env['SENTRY_DEEPSEEK_REASONING']).toBe('off');
+      await host.configure({
+        models: {},
+        providers: {},
+        reasoningEffort: { glm: 'default', deepseek: 'default' },
+      });
+      expect(process.env['SENTRY_GLM_REASONING']).toBeUndefined();
+      expect(process.env['SENTRY_DEEPSEEK_REASONING']).toBeUndefined();
+      // An agent not mentioned keeps what it had.
+      expect(process.env['SENTRY_CHATGPT_REASONING']).toBe('high');
+    } finally {
+      host.close();
+      names.forEach((name, index) => {
+        const value = saved[index];
+        if (value === undefined) delete process.env[name];
+        else process.env[name] = value;
+      });
+    }
+  });
+});

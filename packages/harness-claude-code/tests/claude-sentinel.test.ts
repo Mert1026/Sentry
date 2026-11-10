@@ -493,3 +493,25 @@ describe('Claude executable runtime identity', () => {
     expect(isSandboxBootstrapFailureText(text)).toBe(true);
   });
 });
+
+describe('GLM reasoning effort flag', () => {
+  const base = {
+    modelId: 'glm-5.3-flash',
+    settingsPath: '/tmp/claude-home/sentry-settings.json',
+    sessionId: '11111111-1111-4111-8111-111111111111',
+    resume: false,
+  };
+
+  it('passes --effort right after the model when one is set', () => {
+    const args = buildClaudeArgs({ ...base, effort: 'xhigh' });
+    const at = args.indexOf('--effort');
+    expect(at).toBeGreaterThan(-1);
+    expect(args[at + 1]).toBe('xhigh');
+    expect(args[args.indexOf('--model') + 1]).toBe('glm-5.3-flash');
+    expect(at).toBe(args.indexOf('--model') + 2);
+  });
+
+  it('passes nothing when unset, so the provider default applies', () => {
+    expect(buildClaudeArgs(base)).not.toContain('--effort');
+  });
+});

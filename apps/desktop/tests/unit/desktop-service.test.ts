@@ -208,3 +208,22 @@ describe('desktop RPC adapter', () => {
     expect(h.seen.some((c) => c.method === 'production.preRunGate')).toBe(true);
   });
 });
+
+describe('reasoning effort reaches the runtime for every agent', () => {
+  it('pushes each agent its own level and "default" for the rest', async () => {
+    const h = await harness();
+    await h.service.providerSaveKey('SENTRY_GLM_REASONING', 'xhigh');
+    await h.service.providerSaveKey('SENTRY_DEEPSEEK_REASONING', 'off');
+    await h.service.providerSaveKey('SENTRY_CHATGPT_REASONING', 'high');
+    await h.service.pushRuntimeConfiguration();
+    const pushed = h.seen.filter((c) => c.method === 'runtime.configure').at(-1);
+    expect(pushed?.params).toMatchObject({
+      reasoningEffort: { glm: 'xhigh', deepseek: 'off', chatgpt: 'high', opencode: 'default' },
+    });
+    // A level that agent's tool does not take is never passed on.
+    await h.service.providerSaveKey('SENTRY_DEEPSEEK_REASONING', 'medium');
+    await h.service.pushRuntimeConfiguration();
+    const again = h.seen.filter((c) => c.method === 'runtime.configure').at(-1);
+    expect(again?.params).toMatchObject({ reasoningEffort: { deepseek: 'default' } });
+  });
+});

@@ -17,6 +17,7 @@ import {
   type OperationId,
   describePlanRejection,
   describeSchemaIssues,
+  parseAgentEffort,
 } from '@qa/shared';
 import {
   limitPhase,
@@ -118,6 +119,14 @@ export interface DeepSeekHarnessAdapterOptions {
     readonly harnessVersion?: string;
     readonly executableVersion?: string;
   }) => void;
+}
+
+/** The DeepSeek agent's reasoning-effort setting as a client-factory fragment (nothing when unset). */
+function effortOption(
+  environment: NodeJS.ProcessEnv,
+): { reasoningEffort: string } | Record<string, never> {
+  const reasoningEffort = parseAgentEffort('deepseek', environment['SENTRY_DEEPSEEK_REASONING']);
+  return reasoningEffort === undefined ? {} : { reasoningEffort };
 }
 
 export class DeepSeekTurnTimeoutError extends DeepSeekHarnessError {
@@ -1000,6 +1009,7 @@ export class DeepSeekHarnessAdapter implements HarnessAdapter {
           environment: runEnvironment,
           modelId: this.runtime.modelId,
           provider: this.runtime.provider,
+          ...effortOption(this.hostEnvironment),
           profilePatches: [profilePatchPath],
           initializeTimeoutMs: 120_000,
           shutdownTimeoutMs: this.shutdownTimeoutMs,

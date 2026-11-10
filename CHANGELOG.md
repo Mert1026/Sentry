@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Reasoning effort for every agent, in Settings → Providers: each agent card has its own
+  "Reasoning effort" choice with the levels that agent's tool takes (OpenCode and ChatGPT: low,
+  medium, high; GLM through Claude Code: low to maximum; DeepSeek: off, low, high, maximum).
+  "Default" passes nothing and the provider decides. The setting applies to every run of that
+  agent. It is not yet recorded on the run, and GLM and DeepSeek effort has not been exercised
+  against the live providers.
+
 ## [2.0.0] - 2026-11-09
 
 Major release. It removes the merge, verification, issue and retest features of 1.x

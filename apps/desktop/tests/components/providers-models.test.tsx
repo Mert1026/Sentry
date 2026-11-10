@@ -412,3 +412,70 @@ describe('Providers model controls', () => {
     ).toBe('unsaved-key-draft');
   });
 });
+
+describe('Reasoning effort for every agent', () => {
+  const cases: ReadonlyArray<{
+    card: string;
+    setting: string;
+    options: readonly string[];
+  }> = [
+    {
+      card: 'OpenCode',
+      setting: 'SENTRY_OPENCODE_REASONING',
+      options: ['', 'low', 'medium', 'high'],
+    },
+    {
+      card: 'GLM',
+      setting: 'SENTRY_GLM_REASONING',
+      options: ['', 'low', 'medium', 'high', 'xhigh', 'max'],
+    },
+    {
+      card: 'DeepSeek',
+      setting: 'SENTRY_DEEPSEEK_REASONING',
+      options: ['', 'off', 'low', 'high', 'max'],
+    },
+  ];
+
+  for (const { card, setting, options } of cases) {
+    it(`${card} offers only its own levels and saves and clears the choice`, async () => {
+      const save = vi.fn().mockResolvedValue({});
+      const clearKey = vi.fn().mockResolvedValue({});
+      const client = new QueryClient({
+        defaultOptions: {
+          queries: { retry: false, gcTime: Infinity },
+          mutations: { retry: false },
+        },
+      });
+      clients.push(client);
+      Object.defineProperty(window, 'sentry', {
+        configurable: true,
+        value: {
+          providers: {
+            status: vi.fn().mockResolvedValue([statusRow(setting, options[1] as string)]),
+            save,
+            clearKey,
+            forgetAll: vi.fn(),
+          },
+        },
+      });
+      render(
+        <QueryClientProvider client={client}>
+          <MemoryRouter>
+            <Providers />
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+      const region = within(screen.getByRole('region', { name: `${card} provider settings` }));
+      const select = (await region.findByLabelText(`Value for ${setting}`)) as HTMLSelectElement;
+      await waitFor(() => expect(select.value).toBe(options[1]));
+      expect(Array.from(select.querySelectorAll('option')).map((option) => option.value)).toEqual(
+        options,
+      );
+      const other = options[options.length - 1] as string;
+      fireEvent.change(select, { target: { value: other } });
+      await waitFor(() => expect(save).toHaveBeenCalledWith(setting, other));
+      fireEvent.change(select, { target: { value: '' } });
+      await waitFor(() => expect(clearKey).toHaveBeenCalledWith(setting));
+    });
+  }
+});
