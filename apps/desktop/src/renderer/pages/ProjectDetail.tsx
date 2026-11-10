@@ -17,6 +17,7 @@ import {
   Clock,
   History,
   Tag,
+  Brain,
 } from 'lucide-react';
 import { CopyId } from '../components/CopyId.js';
 import { InfoTile } from '../components/InfoTile.js';
@@ -25,6 +26,7 @@ import { PageHeader, PageSection } from '../components/ui/PageHeader.js';
 import { StatusPill, dotClassForStatus } from '../components/ui/StatusPill.js';
 import { SegmentedControl } from '../components/ui/Tabs.js';
 import { sentryApi } from '../lib/sentry-api.js';
+import { selectedEffort } from '../lib/agent-effort.js';
 import { RemoveProjectButton } from '../components/RemoveProjectButton.js';
 import { isConfirmPaidRunsEnabled } from '../lib/app-preferences.js';
 import { useI18n } from '../lib/i18n.js';
@@ -130,6 +132,14 @@ export function ProjectDetail(): React.JSX.Element {
     queryKey: ['environment'],
     queryFn: () => sentryApi().doctors.environment(),
   });
+  // Same query (and cache) as Settings → Providers, so a change there shows here at once.
+  const providers = useQuery({
+    queryKey: ['providers'],
+    queryFn: () => sentryApi().providers.status(),
+  });
+  const providerRows = Array.isArray(providers.data)
+    ? (providers.data as ReadonlyArray<{ name: string; configured: boolean; hint: string }>)
+    : undefined;
   const stacks = (
     (
       environment.data as
@@ -611,6 +621,18 @@ export function ProjectDetail(): React.JSX.Element {
                               status={stack.readiness ?? 'unknown'}
                               label={stack.readiness?.replace(/_/g, ' ') ?? 'Unknown'}
                             />
+                            {selectedEffort(stack.id, providerRows) === undefined ? null : (
+                              <span
+                                className="badge project-agent-effort"
+                                title="Reasoning effort"
+                                aria-label={
+                                  'Reasoning effort: ' + selectedEffort(stack.id, providerRows)
+                                }
+                              >
+                                <Brain size={12} aria-hidden="true" />{' '}
+                                {selectedEffort(stack.id, providerRows)}
+                              </span>
+                            )}
                           </span>
                         </span>
                       </button>

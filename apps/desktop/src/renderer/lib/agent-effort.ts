@@ -40,3 +40,17 @@ export function effortOptions(agent: EffortAgent): ReadonlyArray<{ value: string
     })),
   ];
 }
+
+/** The reasoning effort chosen in Settings → Providers for this agent stack, or "Default". */
+export function selectedEffort(
+  stackId: string,
+  providers: ReadonlyArray<{ name: string; configured: boolean; hint: string }> | undefined,
+): string | undefined {
+  if (providers === undefined) return undefined;
+  const agent = /^stack_(.+)_main$/.exec(stackId)?.[1] as EffortAgent | undefined;
+  const setting = agent === undefined ? undefined : AGENT_EFFORT_SETTING[agent];
+  if (setting === undefined) return undefined;
+  const row = providers.find((item) => item.name === setting);
+  const level = row?.configured === true ? row.hint.trim().toLowerCase() : '';
+  return EFFORT_LABELS[level] ?? 'Default';
+}

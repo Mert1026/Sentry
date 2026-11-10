@@ -279,6 +279,8 @@ function translateCore(trimmed: string): string {
     };
     return `${modes[modeRunStatus[1] ?? ''] ?? ''} изпълнение: ${translateCore(modeRunStatus[2] ?? '')}`;
   }
+  const effortLabel = /^Reasoning effort: (.+)$/.exec(trimmed);
+  if (effortLabel !== null) return `Усилие при разсъждение: ${translateCore(effortLabel[1] ?? '')}`;
   const readiness = /^(.+) readiness$/.exec(trimmed);
   if (readiness !== null) return `Готовност на ${readiness[1]}`;
   const installOne = /^Install (.+)\? About (\d+) MB\.$/.exec(trimmed);
