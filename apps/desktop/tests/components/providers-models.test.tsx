@@ -480,7 +480,7 @@ describe('Reasoning effort for every agent', () => {
   }
 });
 
-describe('ChatGPT sign-in switch', () => {
+describe('ChatGPT sign-in choice', () => {
   async function mountWith(auth: string | undefined) {
     const save = vi.fn().mockResolvedValue({});
     const client = new QueryClient({
@@ -508,24 +508,41 @@ describe('ChatGPT sign-in switch', () => {
       </QueryClientProvider>,
     );
     const card = within(await screen.findByRole('region', { name: 'ChatGPT provider settings' }));
-    return {
-      save,
-      toggle: await card.findByRole('switch', { name: 'Sign in with ChatGPT account' }),
-    };
+    const group = await card.findByRole('group', { name: 'Sign in with' });
+    const button = (name: string) => within(group).getByRole('button', { name });
+    return { save, group, button };
   }
 
-  it('is off (API key) by default and switches to the ChatGPT account', async () => {
-    const { save, toggle } = await mountWith(undefined);
-    expect(toggle.getAttribute('aria-checked')).toBe('false');
-    fireEvent.click(toggle);
-    await waitFor(() => expect(save).toHaveBeenCalledWith('SENTRY_OPENAI_AUTH', 'account'));
+  it('is two buttons like the run depth control, with the API key chosen by default', async () => {
+    const f = await mountWith(undefined);
+    expect(
+      within(f.group)
+        .getAllByRole('button')
+        .map((item) => item.textContent),
+    ).toEqual(['API key', 'ChatGPT account']);
+    expect(f.button('API key').getAttribute('aria-pressed')).toBe('true');
+    expect(f.button('ChatGPT account').getAttribute('aria-pressed')).toBe('false');
+    expect(f.group.className).toContain('segmented');
+    // No pill switch any more.
+    expect(screen.queryByRole('switch', { name: 'Sign in with ChatGPT account' })).toBeNull();
+    fireEvent.click(f.button('ChatGPT account'));
+    await waitFor(() => expect(f.save).toHaveBeenCalledWith('SENTRY_OPENAI_AUTH', 'account'));
   });
 
-  it('is on when the account is saved and switches back to the API key', async () => {
-    const { save, toggle } = await mountWith('account');
-    await waitFor(() => expect(toggle.getAttribute('aria-checked')).toBe('true'));
-    fireEvent.click(toggle);
-    await waitFor(() => expect(save).toHaveBeenCalledWith('SENTRY_OPENAI_AUTH', 'key'));
+  it('shows the ChatGPT account when it is saved and switches back to the API key', async () => {
+    const f = await mountWith('account');
+    await waitFor(() =>
+      expect(f.button('ChatGPT account').getAttribute('aria-pressed')).toBe('true'),
+    );
+    expect(f.button('API key').getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(f.button('API key'));
+    await waitFor(() => expect(f.save).toHaveBeenCalledWith('SENTRY_OPENAI_AUTH', 'key'));
+  });
+
+  it('does not save again when the chosen side is clicked', async () => {
+    const f = await mountWith(undefined);
+    fireEvent.click(f.button('API key'));
+    expect(f.save).not.toHaveBeenCalled();
   });
 });
 

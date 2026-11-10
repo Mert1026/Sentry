@@ -22,7 +22,7 @@ import {
 } from '../lib/provider-models.js';
 import { PageHeader } from '../components/ui/PageHeader.js';
 import { OpenAiAccountPanel } from '../components/OpenAiAccountPanel.js';
-import { SwitchButton } from '../components/SwitchButton.js';
+import { SegmentedControl } from '../components/ui/Tabs.js';
 
 interface ProviderStatus {
   name: string;
@@ -1214,17 +1214,19 @@ function ChatGptCard(props: {
         <span id="openai-auth-label" className="metadata">
           Sign in with
         </span>
-        <div
-          style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 6 }}
-        >
-          <span style={{ fontWeight: account ? 400 : 600 }}>API key</span>
-          <SwitchButton
-            checked={account}
-            label="Sign in with ChatGPT account"
-            disabled={props.savePending}
-            onToggle={() => props.onSave('SENTRY_OPENAI_AUTH', account ? 'key' : 'account')}
+        <div style={{ marginTop: 6 }}>
+          <SegmentedControl
+            label="Sign in with"
+            value={account ? 'account' : 'key'}
+            onChange={(value) => {
+              if (props.savePending || (value === 'account') === account) return;
+              props.onSave('SENTRY_OPENAI_AUTH', value);
+            }}
+            options={[
+              { value: 'key', label: 'API key' },
+              { value: 'account', label: 'ChatGPT account' },
+            ]}
           />
-          <span style={{ fontWeight: account ? 600 : 400 }}>ChatGPT account</span>
         </div>
       </div>
       {account ? (
