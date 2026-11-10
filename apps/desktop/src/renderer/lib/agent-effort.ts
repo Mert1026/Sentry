@@ -19,13 +19,15 @@ export const AGENT_EFFORT_SETTING: Readonly<Record<EffortAgent, string>> = {
   deepseek: 'SENTRY_DEEPSEEK_REASONING',
 };
 
+// Worded as "... effort" so each label has its own Bulgarian text: plain "High" or "Low" are
+// already translated as severity words (plural), which read wrongly for an effort level.
 export const EFFORT_LABELS: Readonly<Record<string, string>> = {
   off: 'Off (no extra thinking)',
-  low: 'Low',
-  medium: 'Medium',
-  high: 'High',
-  xhigh: 'Extra high',
-  max: 'Maximum',
+  low: 'Low effort',
+  medium: 'Medium effort',
+  high: 'High effort',
+  xhigh: 'Extra high effort',
+  max: 'Maximum effort',
 };
 
 /** The choices for one agent, "Default" first (it removes the setting). */

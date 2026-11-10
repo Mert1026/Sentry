@@ -24,8 +24,12 @@ describe('Settings → Providers reasoning effort', () => {
   it('translates every label and description to Bulgarian', () => {
     for (const text of [
       'Off (no extra thinking)',
-      'Extra high',
-      'Maximum',
+      'Low effort',
+      'Medium effort',
+      'High effort',
+      'Extra high effort',
+      'Maximum effort',
+      'Default',
       'Default (provider setting)',
     ])
       expect(translateText(text, 'bg'), text).not.toBe(text);

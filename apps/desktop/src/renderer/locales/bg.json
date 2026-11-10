@@ -778,10 +778,14 @@
   "Building profiles uses provider budget: each selected agent completes a short planning turn, so the total cost depends on the providers and number of agents chosen.": "Създаването на профили изразходва бюджет при доставчика: всеки избран агент изпълнява кратък планиращ ход, така че общата цена зависи от доставчиците и броя агенти.",
   "RETEST": "ПОВТОРНА ПРОВЕРКА",
   "Off (no extra thinking)": "Изключено (без допълнително мислене)",
-  "Extra high": "Много високо",
-  "Maximum": "Максимално",
   "How hard the OpenCode agent thinks (non-secret): low, medium or high. Higher effort usually finds more but takes longer and costs more. Some models ignore it. Unset uses the provider default.": "Колко упорито мисли агентът OpenCode (не е тайна): ниско, средно или високо. По-високото усилие обикновено намира повече, но отнема повече време и струва повече. Някои модели го игнорират. Ако не е зададено, се ползва стойността по подразбиране на доставчика.",
   "How hard the GLM agent thinks (non-secret): low, medium, high, extra high or maximum. It is passed to Claude Code as its effort level; the Z.AI endpoint decides whether it applies. Higher effort usually finds more but takes longer and costs more. Unset uses the provider default.": "Колко упорито мисли агентът GLM (не е тайна): ниско, средно, високо, много високо или максимално. Предава се на Claude Code като ниво на усилие; крайната точка на Z.AI решава дали да го приложи. По-високото усилие обикновено намира повече, но отнема повече време и струва повече. Ако не е зададено, се ползва стойността по подразбиране на доставчика.",
   "How hard the DeepSeek agent thinks (non-secret): off, low, high or maximum. Off turns extra thinking off. Higher effort usually finds more but takes longer and costs more. Unset uses the provider default.": "Колко упорито мисли агентът DeepSeek (не е тайна): изключено, ниско, високо или максимално. „Изключено“ спира допълнителното мислене. По-високото усилие обикновено намира повече, но отнема повече време и струва повече. Ако не е зададено, се ползва стойността по подразбиране на доставчика.",
-  "Sign in with ChatGPT account": "Вход чрез ChatGPT акаунт"
+  "Sign in with ChatGPT account": "Вход чрез ChatGPT акаунт",
+  "Low effort": "Ниско усилие",
+  "Medium effort": "Средно усилие",
+  "High effort": "Високо усилие",
+  "Extra high effort": "Много високо усилие",
+  "Maximum effort": "Максимално усилие",
+  "Default": "По подразбиране"
 }

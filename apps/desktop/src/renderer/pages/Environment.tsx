@@ -3,12 +3,27 @@ import { InfoPopover } from '../components/InfoPopover.js';
 import { LoadingOverlay } from '../components/BlockingOverlay.js';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Bot, Cpu, Info, KeyRound, PackageCheck, ShieldCheck, Terminal } from 'lucide-react';
+import { Bot, Brain, Cpu, Info, KeyRound, PackageCheck, ShieldCheck, Terminal } from 'lucide-react';
 import { sentryApi } from '../lib/sentry-api.js';
 import { runtimeConnectionState, useRuntimeStatus } from '../lib/use-runtime-status.js';
 import { PageHeader, PageSection } from '../components/ui/PageHeader.js';
 import { StatusPill } from '../components/ui/StatusPill.js';
 import { InfoTile } from '../components/InfoTile.js';
+import { AGENT_EFFORT_SETTING, EFFORT_LABELS, type EffortAgent } from '../lib/agent-effort.js';
+
+/** The reasoning effort chosen in Settings → Providers for this agent stack, or "Default". */
+export function selectedEffort(
+  stackId: string,
+  providers: ReadonlyArray<{ name: string; configured: boolean; hint: string }> | undefined,
+): string | undefined {
+  if (providers === undefined) return undefined;
+  const agent = /^stack_(.+)_main$/.exec(stackId)?.[1] as EffortAgent | undefined;
+  const setting = agent === undefined ? undefined : AGENT_EFFORT_SETTING[agent];
+  if (setting === undefined) return undefined;
+  const row = providers.find((item) => item.name === setting);
+  const level = row?.configured === true ? row.hint.trim().toLowerCase() : '';
+  return EFFORT_LABELS[level] ?? 'Default';
+}
 
 interface RuntimeStatus {
   connected: boolean;
@@ -48,6 +63,14 @@ export function Environment(): React.JSX.Element {
     queryFn: () => sentryApi().doctors.environment(),
   });
   const runtime = useRuntimeStatus();
+  // Same query (and cache) as Settings → Providers, so a change there shows here at once.
+  const providers = useQuery({
+    queryKey: ['providers'],
+    queryFn: () => sentryApi().providers.status(),
+  });
+  const providerRows = Array.isArray(providers.data)
+    ? (providers.data as ReadonlyArray<{ name: string; configured: boolean; hint: string }>)
+    : undefined;
   const cli = useQuery({
     queryKey: ['cli-status'],
     queryFn: () => sentryApi().cli.status(),
@@ -216,6 +239,14 @@ export function Environment(): React.JSX.Element {
                   wide
                   compact
                 />
+                {selectedEffort(stack.id, providerRows) === undefined ? null : (
+                  <InfoTile
+                    icon={Brain}
+                    label="Reasoning effort"
+                    value={selectedEffort(stack.id, providerRows) as string}
+                    compact
+                  />
+                )}
                 <InfoTile
                   icon={KeyRound}
                   label="Credential"
