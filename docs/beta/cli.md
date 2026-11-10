@@ -281,12 +281,29 @@ The CLI contract version stays 1; all new fields are additive and optional.
 
 ## Run timeouts
 
-`run start --timeout-ms <ms>` (integer, 1000–43200000) overrides the engine
-run timeout for that run and propagates canonically:
+`run start --timeout-ms <ms>` (integer, 1000–604800000) sets the run's time
+window for that run and propagates canonically:
 CLI parser → frontend → Desktop `runs:start` → WSL `runs.start` →
-RunCoordinator execution safeguards. Omitted keeps the 30-minute production
-default, so UI-started runs are unaffected. Out-of-range values fail with
+RunCoordinator execution safeguards. Omitted uses the default chosen in
+Settings → Runtime (3 hours, 6 hours, No limit or a custom value); with nothing
+chosen that is **3 hours**. The window is a ceiling, not a target: a run ends
+when its work is done. It also decides which extra passes still have time (a
+second pass needs 40% of the window left, deepening 50% and the hazard sweep
+30%), so a window shorter than about an hour quietly drops some of them.
+"No limit" is the longest window, 7 days. Out-of-range values fail with
 `INVALID_ARGUMENT` at the parser; nothing is silently ignored.
+
+## Run depth
+
+`run start --depth fast|full` chooses how many checks the agents plan. **Full**
+(the default, and what runs did before) plans about one check per 25 minutes of the
+time window, up to 8 (6 in the default 3-hour window); **fast** plans at most 3.
+Both use the same time window and the same extra passes (second pass, deepening
+and hazard sweep), so a fast run is shorter but not minimal: in one measured
+run the first pass was about 60% of the time and the extra passes about 35%.
+The depth is recorded on the run and shown next to it in Desktop. `--depth`
+does not apply to `--retest` runs, which have their own fixed checks.
+`capabilities` reports `features.runDepth: true` when the broker supports it.
 
 ## Client identity
 

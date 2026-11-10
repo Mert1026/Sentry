@@ -90,6 +90,8 @@ export interface RunOptions {
   readonly webAccess?: boolean;
   /** Opt in to the official download hosts of language toolchains and SDKs. Omitted means off. */
   readonly toolDownloads?: boolean;
+  /** How deep the run investigates: "fast" plans fewer checks, "full" (or omitted) is the usual depth. */
+  readonly depth?: 'fast' | 'full';
   /** Phase 7 (§8-§13): TARGETED QA. Same independent agent architecture
    *  and FULL-strength responsibility class, focused on a narrower scope.
    *  Omitted (or mode 'full') preserves FULL semantics unchanged (§7). */
@@ -401,6 +403,10 @@ export class RunCoordinator {
                 : SENTRY_SIMULATION_RUN_TIMEOUT_MS),
             ...(options.webAccess === true ? { webAccess: true } : {}),
             ...(options.toolDownloads === true ? { toolDownloads: true } : {}),
+            // A retest has its own fixed checks, so depth does not apply to it.
+            ...(options.depth === undefined || retest !== undefined
+              ? {}
+              : { depth: options.depth }),
           },
           profileUsage,
           ...(retest === undefined ? {} : { retest: retest.spec }),
@@ -1003,7 +1009,16 @@ export class RunCoordinator {
               : { [PROFILE_CONTEXT_KEY]: profileContextEntry(input.profileText) }),
             ...(input.preparationPolicy === undefined
               ? {}
-              : { qaDepth: { version: 1, deadlineAt }, workspacePreparation }),
+              : {
+                  qaDepth: {
+                    version: 1,
+                    deadlineAt,
+                    ...(input.run.configuration.executionSafeguards?.depth === 'fast'
+                      ? { profile: 'fast' }
+                      : {}),
+                  },
+                  workspacePreparation,
+                }),
             agentStack: stack,
           },
         },

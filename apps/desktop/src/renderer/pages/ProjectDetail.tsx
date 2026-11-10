@@ -109,6 +109,8 @@ export function ProjectDetail(): React.JSX.Element {
   const queryClient = useQueryClient();
   const [error, setError] = React.useState<string | undefined>(undefined);
   const [mode, setMode] = React.useState<'full' | 'targeted'>('full');
+  // How deep the agents investigate: Fast plans fewer checks. Full is the usual depth.
+  const [depth, setDepth] = React.useState<'fast' | 'full'>('full');
   const [targetPaths, setTargetPaths] = React.useState('');
   const [webAccess, setWebAccess] = React.useState(false);
   const [toolDownloads, setToolDownloads] = React.useState(false);
@@ -204,6 +206,7 @@ export function ProjectDetail(): React.JSX.Element {
     ...(webAccess ? { webAccess: true } : {}),
     ...(toolDownloads ? { toolDownloads: true } : {}),
     ...(useProfile ? { useProfile: true } : {}),
+    ...(depth === 'fast' ? { depth: 'fast' } : {}),
   });
   const onStarted = (operation: unknown): void => {
     const runId = (operation as { runId?: string }).runId;
@@ -510,6 +513,28 @@ export function ProjectDetail(): React.JSX.Element {
                       { value: 'targeted', label: 'Targeted QA' },
                     ]}
                   />
+                </div>
+                <div>
+                  <span className="metadata project-field-label">Run depth</span>
+                  <SegmentedControl
+                    label="Run depth"
+                    value={depth}
+                    onChange={(value) => setDepth(value as 'fast' | 'full')}
+                    options={[
+                      { value: 'fast', label: 'Fast' },
+                      { value: 'full', label: 'Full' },
+                    ]}
+                  />
+                  <InfoPopover title="Run depth">
+                    <p>
+                      Full plans up to 8 checks (about one per 25 minutes of the run time limit, 6
+                      for the default 3 hours). Fast plans at most 3, so a run is shorter. Both use
+                      the same time limit and the same extra passes after the checks: a second pass
+                      on undecided checks, a deepening round and a hazard sweep. A Fast run covers
+                      less of the project, so it can find fewer problems.
+                    </p>
+                    <p>The time limit is set in Settings → Runtime.</p>
+                  </InfoPopover>
                 </div>
                 <div>
                   <label htmlFor="run-revision" className="metadata project-field-label">
@@ -924,6 +949,9 @@ export function ProjectDetail(): React.JSX.Element {
               {t(
                 `Web access: ${webAccess ? 'on' : 'off'} · tool and SDK downloads: ${toolDownloads ? 'on' : 'off'} · package installs: on`,
               )}
+            </p>
+            <p className="metadata">
+              {t(depth === 'fast' ? 'Run depth: Fast' : 'Run depth: Full')}
             </p>
             {confirmStart === 'targeted' && targetPaths.trim() !== '' ? (
               <p className="mono metadata">

@@ -297,10 +297,11 @@ export async function executeCommand(
       input.retest !== undefined ||
       input.useProfile === true ||
       input.toolDownloads === true ||
+      input.depth !== undefined ||
       input.revisionId !== undefined
     )
       throw new CliUsageError(
-        '--retest, --profile, --tools and --revision need Sentry Desktop (the direct development transport does not support them).',
+        '--retest, --profile, --tools, --depth and --revision need Sentry Desktop (the direct development transport does not support them).',
       );
     const projectId = parseArgument(ProjectIdSchema, input.projectId, 'project-id');
     const registry = new HarnessAdapterRegistry()

@@ -26,6 +26,8 @@ export interface RetestOutcome {
 export interface RevisionAgentRun {
   readonly runId: string;
   readonly mode: string;
+  /** "fast" for a fast run; absent for the usual full depth. */
+  readonly depth?: 'fast';
   readonly runStatus: string;
   readonly agentStatus: string;
   readonly at: string;
@@ -112,6 +114,9 @@ export function findingsByRevision(
         ...(retest === undefined ? {} : { retest }),
         runId: run.id,
         mode: run.mode,
+        ...(run.configuration.executionSafeguards?.depth === 'fast'
+          ? { depth: 'fast' as const }
+          : {}),
         runStatus: run.status,
         agentStatus: agentRun.status,
         at: agentRun.startedAt ?? run.startedAt ?? run.createdAt,

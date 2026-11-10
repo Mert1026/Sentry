@@ -80,6 +80,8 @@ More detail: [getting started](docs/getting-started.md) and the
    Each agent card also has a **Reasoning effort** choice (how hard the model thinks; higher
    usually finds more but takes longer and costs more). The levels offered are the ones that
    agent's tool accepts, and **Default** leaves it to the provider.
+   **Settings → Runtime** sets the default **run time limit** for every run: 3 hours (default),
+   6 hours, No limit or a custom value.
 2. **Environment**: check readiness. Diagnostics never make paid calls, and a
    ready state does not guarantee account credit or provider acceptance.
 3. **Settings → Application**: theme, interface language (English or Bulgarian),
@@ -104,7 +106,8 @@ allow it for that run.
 1. Add a project. Sentry creates a managed copy and an immutable revision and leaves
    the original folder untouched. New imports skip common generated caches and
    environments; see [project imports](docs/setup/distribution.md#project-imports).
-2. Choose the agents, then start **Full QA**, or **Targeted QA** with project-relative paths.
+2. Choose the agents and the **run depth** (**Fast** plans fewer checks, **Full** is the usual
+   depth), then start **Full QA**, or **Targeted QA** with project-relative paths.
    Optionally use the project profile and choose the revision to run.
 3. Watch the run, open an agent to see its stages, findings and evidence, and export
    JSON or logs when it ends.

@@ -284,6 +284,7 @@ export async function executeFrontendCommand(
           runCancellation: true,
           targetedExecution: true,
           retest: true,
+          runDepth: true,
           findingsByRevision: true,
           projectProfile: true,
           toolchains: true,
@@ -484,6 +485,7 @@ export async function executeFrontendCommand(
         ...(input.webAccess === true ? { webAccess: true } : {}),
         ...(input.toolDownloads === true ? { toolDownloads: true } : {}),
         ...(input.useProfile === true ? { useProfile: true } : {}),
+        ...(input.depth === undefined ? {} : { depth: input.depth }),
         ...(input.revisionId === undefined ? {} : { revisionId: input.revisionId }),
         ...(input.retest === undefined ? {} : { retest: input.retest }),
       })) as { operationId?: string; runId?: string; status?: string } & Record<string, unknown>;

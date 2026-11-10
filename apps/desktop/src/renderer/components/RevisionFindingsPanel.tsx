@@ -204,6 +204,7 @@ export function RevisionFindingsPanel({
                       <span className="badge">
                         {run.retest === undefined ? run.mode.toUpperCase() : 'RETEST'}
                       </span>
+                      {run.depth === 'fast' ? <span className="badge">FAST</span> : null}
                       <StatusPill
                         status={
                           run.agentStatus === 'completed'

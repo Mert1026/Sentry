@@ -213,6 +213,35 @@ describe('truthful run workspace', () => {
     expect(container.textContent).not.toMatch(/total finding/);
     expect(container.textContent).not.toMatch(/\d+ evidence/);
   });
+  describe('run depth and time limit tiles', () => {
+    it('shows Fast and the window a run was given', () => {
+      const data = snapshot();
+      data.run.configuration = {
+        agentStackIds: stacks,
+        executionSafeguards: { depth: 'fast', runTimeoutMs: 10_800_000 },
+      } as never;
+      render(<RunSummaryPanel snapshot={data} />);
+      expect(screen.getByLabelText('Run depth: Fast')).toBeTruthy();
+      expect(screen.getByLabelText('Time limit: 3 hours')).toBeTruthy();
+    });
+
+    it('shows Full for a run with no depth recorded, and a custom window in words', () => {
+      const data = snapshot();
+      data.run.configuration = {
+        agentStackIds: stacks,
+        executionSafeguards: { runTimeoutMs: 9_000_000 },
+      } as never;
+      render(<RunSummaryPanel snapshot={data} />);
+      expect(screen.getByLabelText('Run depth: Full')).toBeTruthy();
+      expect(screen.getByLabelText('Time limit: 2 h 30 min')).toBeTruthy();
+    });
+
+    it('shows no time limit tile for an older run that never recorded one', () => {
+      render(<RunSummaryPanel snapshot={snapshot()} />);
+      expect(screen.getByLabelText('Run depth: Full')).toBeTruthy();
+      expect(screen.queryByLabelText(/Time limit/)).toBeNull();
+    });
+  });
   describe('summary tiles', () => {
     function mixed() {
       const data = snapshot();

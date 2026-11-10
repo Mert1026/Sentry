@@ -9,6 +9,7 @@ import { deriveRuntimeHostView } from '../lib/runtime-host-view.js';
 import { PageHeader, PageSection } from '../components/ui/PageHeader.js';
 import { StatusPill } from '../components/ui/StatusPill.js';
 import { ReclaimWslSpace } from '../components/ReclaimWslSpace.js';
+import { RunTimeLimitCard } from '../components/RunTimeLimitCard.js';
 
 interface WslDistros {
   distros: Array<{ name: string; state: string; version: number }>;
@@ -174,6 +175,9 @@ export function RuntimeSettings(): React.JSX.Element {
             </>
           ) : null}
         </div>
+      </PageSection>
+      <PageSection title="Runs">
+        <RunTimeLimitCard />
       </PageSection>
       {view.kind === 'windows' ? (
         <ReclaimWslSpace distro={statusInfo?.distro} connected={connected} />

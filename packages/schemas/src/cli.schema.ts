@@ -551,6 +551,7 @@ export const CapabilitiesResultSchema = z
         // Additive: present when the broker serves these (older consumers ignore them).
         retest: z.literal(true).optional(),
         findingsByRevision: z.literal(true).optional(),
+        runDepth: z.literal(true).optional(),
         projectProfile: z.literal(true).optional(),
         toolchains: z.literal(true).optional(),
       })

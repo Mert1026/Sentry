@@ -677,6 +677,64 @@ describe('cli frontend over the desktop broker', () => {
     }
   });
 
+  it('passes --depth fast to Desktop, and sends nothing for the default', async () => {
+    const broker = await startFakeBroker((command) => {
+      if (command === 'runs:start') return { operationId: 'dop_test', runId: RUN_ID };
+      throw new Error('unexpected ' + command);
+    });
+    try {
+      const start = (extra: string[]) =>
+        executeFrontendCommand(
+          parseCommand(['run', 'start', PROJECT_ID, '--mode', 'full', ...extra]),
+          {
+            createClient: () => clientFor(broker),
+          },
+        );
+      await start(['--depth', 'fast']);
+      expect(broker.seen[0]?.payload).toMatchObject({ mode: 'full', depth: 'fast' });
+      await start(['--depth', 'full']);
+      expect(broker.seen[1]?.payload).toMatchObject({ depth: 'full' });
+      await start([]);
+      expect(broker.seen[2]?.payload).not.toHaveProperty('depth');
+    } finally {
+      await broker.close();
+    }
+  });
+
+  it('refuses a bad --depth and one combined with --retest', () => {
+    expect(() =>
+      parseCommand(['run', 'start', PROJECT_ID, '--mode', 'full', '--depth', 'turbo']),
+    ).toThrow(/--depth must be fast or full/);
+    expect(() => parseCommand(['run', 'start', PROJECT_ID, '--mode', 'full', '--depth'])).toThrow(
+      /requires a value/,
+    );
+    expect(() =>
+      parseCommand([
+        'run',
+        'start',
+        PROJECT_ID,
+        '--retest',
+        'run_01K7777777777777777777A8W9:find_01K7777777777777777777A8WA',
+        '--depth',
+        'fast',
+      ]),
+    ).toThrow(/--depth does not apply/);
+    // Targeted QA can be fast too.
+    expect(
+      parseCommand([
+        'run',
+        'start',
+        PROJECT_ID,
+        '--mode',
+        'targeted',
+        '--paths',
+        'src',
+        '--depth',
+        'fast',
+      ]),
+    ).toMatchObject({ mode: 'targeted', depth: 'fast' });
+  });
+
   it('serves findings by revision, profiles and toolchains through the broker', async () => {
     const broker = await startFakeBroker((command) => {
       if (command === 'projects:findings-by-revision')
