@@ -1252,6 +1252,18 @@ textarea:focus {
     opacity: 0.45;
   }
 }
+/* The agent hit a warning or error: the same yellow blink as the active stage, in diagonal stripes.
+   Only yellow is used; the gaps are a faint yellow. */
+.flow-node .stage-dots i.warning {
+  background-color: rgba(212, 192, 11, 0.2);
+  background-image: repeating-linear-gradient(
+    45deg,
+    var(--running) 0 3px,
+    rgba(212, 192, 11, 0.2) 3px 6px
+  );
+  box-shadow: 0 0 10px rgba(212, 192, 11, 0.75);
+  animation: stage-breathe 1.6s ease-in-out infinite;
+}
 .flow-node .stage-dots i.failed {
   background: var(--danger);
   box-shadow: 0 0 10px rgba(185, 100, 98, 0.7);

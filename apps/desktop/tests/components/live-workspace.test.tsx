@@ -207,6 +207,12 @@ describe('truthful run workspace', () => {
       ).toHaveLength(count);
     },
   );
+  it('no longer prints the total findings and evidence line under the agents', () => {
+    const data = snapshot();
+    const { container } = render(<RunSummaryPanel snapshot={data} />);
+    expect(container.textContent).not.toMatch(/total finding/);
+    expect(container.textContent).not.toMatch(/\d+ evidence/);
+  });
   describe('summary tiles', () => {
     function mixed() {
       const data = snapshot();

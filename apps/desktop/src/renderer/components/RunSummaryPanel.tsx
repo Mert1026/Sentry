@@ -27,7 +27,6 @@ export function RunSummaryPanel({
   const revision = snapshot['revision'] as Record<string, unknown> | undefined;
   const agentRuns = (snapshot['agentRuns'] as Array<Record<string, unknown>>) ?? [];
   const findings = (snapshot['findings'] as unknown[]) ?? [];
-  const evidence = (snapshot['evidence'] as unknown[]) ?? [];
   const projectName =
     project !== undefined
       ? String(project['name'] ?? run['projectId'] ?? '')
@@ -241,14 +240,6 @@ export function RunSummaryPanel({
             })}
           </div>
         )}
-        <div className="metadata" style={{ marginTop: 8 }}>
-          {formatCount(findings.length) +
-            ' total ' +
-            (findings.length === 1 ? 'finding' : 'findings') +
-            ' · ' +
-            formatCount(evidence.length) +
-            ' evidence'}
-        </div>
         {['partial', 'failed', 'cancelled'].includes(String(run['status'])) ? (
           <p className="metadata">
             Incomplete analysis. Reported findings and evidence are retained independently for each

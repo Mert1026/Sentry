@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { ReactFlowProvider } from '@xyflow/react';
@@ -68,6 +70,46 @@ describe('canvas node components', () => {
     expect(footer.match(/metric-chip/g)).toHaveLength(2);
     // The time stays in the status line under the name.
     expect(html).toContain('01:42');
+  });
+
+  it('marks the stage where the agent hit a warning, so it can blink in yellow stripes', () => {
+    const base = makeAgentNodeView();
+    const view = {
+      ...base,
+      stages: base.stages.map((stage) =>
+        stage.id === 'investigation' ? { ...stage, state: 'warning' as const } : stage,
+      ),
+    };
+    const html = renderToStaticMarkup(
+      withFlow(
+        React.createElement(AgentCanvasNode, {
+          id: 'agent-x',
+          type: 'agentNode',
+          selected: false,
+          zIndex: 1,
+          isConnectable: false,
+          xPos: 0,
+          yPos: 0,
+          dragging: false,
+          data: {
+            label: view.displayName,
+            status: view.status,
+            kind: 'agent',
+            payload: { view, agentStackId: view.agentStackId },
+          },
+        } as never),
+      ),
+    );
+    expect(html).toMatch(/<i class="warning"[^>]*title="Investigation — Warning"/);
+  });
+
+  it('styles that stage as yellow diagonal stripes that blink, with no other colour', () => {
+    const css = readFileSync(resolve(process.cwd(), 'src/renderer/styles.css'), 'utf8');
+    const rule = /\.flow-node \.stage-dots i\.warning \{([^}]*)\}/.exec(css)?.[1] ?? '';
+    expect(rule).toContain('repeating-linear-gradient');
+    expect(rule).toContain('animation: stage-breathe');
+    expect(rule).toContain('var(--running)');
+    expect(rule).not.toMatch(/black|#000|rgba?\(0,\s*0,\s*0/);
   });
 
   it('renders waiting placeholders for unstarted agents', () => {

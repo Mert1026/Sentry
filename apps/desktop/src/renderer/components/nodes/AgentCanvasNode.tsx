@@ -24,6 +24,8 @@ function stageTone(state: string): string {
       return 'active';
     case 'failed':
       return 'failed';
+    case 'warning':
+      return 'warning';
     default:
       return '';
   }
