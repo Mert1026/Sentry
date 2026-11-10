@@ -1,8 +1,8 @@
 # Installing a pinned Sentry Windows distribution
 
-The Windows release version is **2.0.0**, runtime protocol **1**, for
+The Windows release version is **2.0.1**, runtime protocol **1**, for
 **Windows 11 x64 + WSL2** (Ubuntu preferred). Packages remain unsigned ZIPs.
-See the [release notes](../releases/v2.0.0.md); the public Release page records
+See the [release notes](../releases/v2.0.1.md); the public Release page records
 availability, exact source identity and download checksums. Historical
 [v1.0.0 preparation evidence](https://github.com/Mert1026/Sentry/blob/v1.0.0/docs/releases/v1-phase-6-6-stable-readiness.md) retains
 its original source and scope.
@@ -36,7 +36,7 @@ for the original security fixtures; the stable handoff records integration check
 ## Obtain, verify and extract
 
 The published Windows Stable archive is available on the
-[official Release page](https://github.com/Mert1026/Sentry/releases/tag/v2.0.0),
+[official Release page](https://github.com/Mert1026/Sentry/releases/tag/v2.0.1),
 including PowerShell commands that download both assets automatically.
 GitHub Actions artifacts are unsigned review candidates and expire after seven
 days; use those only when approved for testing. No GitHub token is embedded or
