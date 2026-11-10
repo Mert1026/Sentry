@@ -5,11 +5,12 @@ investigate the same immutable snapshot of your project on their own and report
 findings, evidence, token usage and a persistent run history. Findings are never
 merged or ranked across agents, so you can compare what each one found.
 
-**Stable release:** [Sentry v2.0.0 — Windows](https://github.com/Mert1026/Sentry/releases/tag/v2.0.0)
+**Stable release:** [Sentry v2.0.1 — Windows](https://github.com/Mert1026/Sentry/releases/tag/v2.0.1)
 for **Windows 11 x64 with WSL2** (Ubuntu preferred). The ZIP is unsigned and uses an
 online Linux runtime bootstrap. Native Linux Desktop is deferred.
-Version 2.0.0 removes the 1.x merge, verification and issue features and keeps your
-Full and Targeted runs; see [What's new in 2.0.0](#whats-new-in-200).
+Version 2.0 removes the 1.x merge, verification and issue features and keeps your
+Full and Targeted runs. Already on 2.0.0? See [Updating from 2.0.0](#updating-from-200).
+What changed: [What's new](#whats-new).
 
 ## Contents
 
@@ -22,7 +23,8 @@ Full and Targeted runs; see [What's new in 2.0.0](#whats-new-in-200).
 - [Toolchains](#toolchains)
 - [CLI automation](#cli-automation)
 - [Security and recovery](#security-and-recovery)
-- [What's new in 2.0.0](#whats-new-in-200)
+- [What's new](#whats-new)
+- [Updating from 2.0.0](#updating-from-200)
 - [Documentation and development](#documentation-and-development)
 
 ## Features
@@ -72,6 +74,16 @@ it, run `.\sentry.ps1 register-command` there.
 
 More detail: [getting started](docs/getting-started.md) and the
 [installation and maintenance guide](docs/setup/distribution.md).
+
+## Updating from 2.0.0
+
+There is no automatic updater. Finish or cancel active runs, stop Sentry (`sentry stop`) and back up
+your data, then run the **Update an existing installation** block on the
+[v2.0.1 Release page](https://github.com/Mert1026/Sentry/releases/tag/v2.0.1): it downloads and
+verifies the new ZIP, sets up the matching runtime and registers the new command. Your projects,
+runs, history and provider settings are kept (no database migration). Afterwards check
+`sentry version` shows 2.0.1 and `sentry cli capabilities --json` lists `runDepth` and `settings`.
+Full steps: [release notes](docs/releases/v2.0.1.md#updating-from-v200).
 
 ## Configuration
 
@@ -192,7 +204,24 @@ Read the [threat model](docs/security/V1_THREAT_MODEL.md), the
 [recovery policy](docs/releases/v1-recovery-policy-decision.md).
 The original beta executable is not an approved credential downgrade target.
 
-## What's new in 2.0.0
+## What's new
+
+### 2.0.1
+
+- **Run depth:** choose Fast (at most 3 planned checks) or Full when starting a run, in the app or
+  with `run start --depth fast|full`.
+- **Run time limit:** Settings → Runtime sets the window every run gets: 3 hours (default),
+  6 hours, No limit (7 days) or a custom value.
+- **Reasoning effort per agent** in Settings → Providers, shown on the Environment page and on
+  the project page's agent cards.
+- **CLI:** `settings show`, `settings effort` and `settings run-limit`; run output reports depth and
+  time limit; `capabilities` reports `settings` and `runDepth`; the help lists every command.
+- **Fixes:** symlink targets with a backslash are copied exactly on Linux and macOS; finding
+  titles can no longer forge lines in the log export; a malformed artifact path is refused
+  before its database row is deleted.
+- More Bulgarian translations and small run-page tweaks.
+
+### 2.0.0
 
 - Re-test of earlier findings with Passed / Not passed / Could not complete answers.
 - Findings by revision, and a project profile with per-agent notes.
@@ -211,7 +240,7 @@ The full list is in the [changelog](CHANGELOG.md).
 - [CLI reference and automation](docs/beta/cli.md)
 - [Contributing and development](CONTRIBUTING.md)
 - [Architecture](docs/architecture/README.md) and [decision records](docs/adr/0001-monorepo.md)
-- [Stable notes](docs/releases/v2.0.0.md) and [changelog](CHANGELOG.md)
+- [Stable notes](docs/releases/v2.0.1.md) and [changelog](CHANGELOG.md)
 - [Testing](docs/development/testing.md), [release procedure](docs/releases/RELEASE_CHECKLIST.md)
   and [branching policy](docs/development/branching.md)
 - [Historical reports and failed-test evidence](docs/history.md)

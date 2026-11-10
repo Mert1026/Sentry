@@ -392,7 +392,7 @@ function Invoke-SentryVersion {
 
 function Show-SentryHelp {
   Write-Host ''
-  Write-Host 'Sentry v2.0.0' -ForegroundColor Cyan
+  Write-Host 'Sentry v2.0.1' -ForegroundColor Cyan
   Write-Host ''
   Write-Host 'Usage:'
   Write-Host '  sentry <command>'

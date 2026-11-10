@@ -56,7 +56,7 @@ cmd_status() {
     return 0
   fi
   echo ""
-  echo "Sentry v2.0.0"
+  echo "Sentry v2.0.1"
   echo "Repository"
   echo "  Path        $repo"
   echo "  Branch      $branch"

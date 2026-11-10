@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-11-10
+
+Update from 2.0.0. It adds run depth (Fast / Full), a default run time limit, per-agent reasoning
+effort and new CLI settings commands, and fixes three bugs found by a QA run. No database
+migration, and the runtime protocol stays 1. See the [release notes](docs/releases/v2.0.1.md).
+
+- The Environment page and the project page's agent cards show each agent's selected reasoning
+  effort; the ChatGPT sign-in choice (API key or ChatGPT account) is a two-button control like Run
+  depth.
+- Bulgarian translations cover every run and agent status word, text built at run time and the run
+  graph labels. The Details page no longer shows elapsed time, the overview no longer prints the
+  total findings and evidence line, and the agent box footer has no clock. A stage where an agent
+  hit a warning blinks as calm yellow stripes instead of going plain.
+- The CLI help lists every command (it had listed the removed `issue` and `retest` commands).
 - CLI: `settings show`, `settings effort <agent> <level|default>` and `settings run-limit
 <default|3h|6h|none|90m|12h>` read and change an agent's reasoning effort and the default run time
   limit (the broker accepts only those two settings). `run list` and `run status` report each run's

@@ -1,7 +1,13 @@
 # Beta compatibility
 
-What changes for an existing 1.0.2 install when it moves to 2.0.0. The product version
-is `2.0.0`; the runtime protocol stays 1.
+What changes for an existing 1.0.2 install when it moves to 2.0.x, and what 2.0.1 changes for a 2.0.0
+install. The product version is `2.0.1`; the runtime protocol stays 1.
+
+**2.0.0 to 2.0.1:** no database migration, no change to credentials or provider pins, and the
+schemas change only by optional additions (a run's `depth`, the CLI's `settings` and `runDepth`
+flags). Existing projects, runs and settings are kept. A project whose symlinks have a literal
+backslash in the target gets a different revision hash on its next import (the copy is now
+faithful on Linux and macOS).
 
 | Area                             | Status                | Notes                                                                                                                                                                                                             |
 | -------------------------------- | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
