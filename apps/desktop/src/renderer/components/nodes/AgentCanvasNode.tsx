@@ -112,9 +112,6 @@ export function AgentCanvasNode({ data }: NodeProps): React.JSX.Element {
         <span className="metric-chip" title="Evidence records captured by this agent">
           {formatCount(view.evidenceCount) + ' evidence'}
         </span>
-        <span className="metric-chip" title="Elapsed time">
-          {formatElapsed(view.elapsedMs)}
-        </span>
       </div>
       <Handle type="source" position={Position.Bottom} />
     </div>

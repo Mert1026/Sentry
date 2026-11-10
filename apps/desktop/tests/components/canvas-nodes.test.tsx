@@ -41,6 +41,35 @@ describe('canvas node components', () => {
     expect(html).not.toContain('%');
   });
 
+  it('has no clock chip in the footer, only the counts', () => {
+    const view = makeAgentNodeView({ status: 'completed', elapsedMs: 102_000 });
+    const html = renderToStaticMarkup(
+      withFlow(
+        React.createElement(AgentCanvasNode, {
+          id: 'agent-x',
+          type: 'agentNode',
+          selected: false,
+          zIndex: 1,
+          isConnectable: false,
+          xPos: 0,
+          yPos: 0,
+          dragging: false,
+          data: {
+            label: view.displayName,
+            status: view.status,
+            kind: 'agent',
+            payload: { view, agentStackId: view.agentStackId },
+          },
+        } as never),
+      ),
+    );
+    const footer = html.slice(html.indexOf('class="metrics"'));
+    expect(footer).not.toContain('Elapsed time');
+    expect(footer.match(/metric-chip/g)).toHaveLength(2);
+    // The time stays in the status line under the name.
+    expect(html).toContain('01:42');
+  });
+
   it('renders waiting placeholders for unstarted agents', () => {
     const html = renderToStaticMarkup(
       withFlow(
