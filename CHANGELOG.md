@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+- Fix three findings from run `run_01M727R5E0B1H9Y2214H7FFS22`:
+  - A symlink whose target contains a backslash is now copied exactly on Linux and macOS (it was
+    rewritten to a forward slash, so the copy pointed at a different file). Windows still treats a
+    backslash as a path separator. A project with such a link gets a different revision hash on
+    its next import.
+  - The human-readable log keeps every entry on one line: line breaks and control characters in
+    finding titles and other free text become spaces, so a title can no longer forge a status line.
+    The JSON export is unchanged.
+  - A stored artifact whose path names the data root itself (for example `.`) is refused before its
+    database row is deleted.
 - Reasoning effort for every agent, in Settings → Providers: each agent card has its own
   "Reasoning effort" choice with the levels that agent's tool takes (OpenCode and ChatGPT: low,
   medium, high; GLM through Claude Code: low to maximum; DeepSeek: off, low, high, maximum).

@@ -1,4 +1,14 @@
-import { lstat, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises';
+import {
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  readlink,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -10,6 +20,7 @@ import {
   SentryRepository,
   assertNoSymlinkBelow,
   copyTree,
+  normalizeLinkTarget,
   walkTree,
 } from '../src/index.js';
 
@@ -148,6 +159,78 @@ describe('symbolic links planted below a trusted root', () => {
     expect(() => store.open(forged)).toThrow(/PATH_ESCAPE/);
     await expect(store.discard(forged)).rejects.toThrow(/PATH_ESCAPE/);
     expect(await readFile(join(outside, 'secret.txt'), 'utf8')).toBe('secret');
+    database.close();
+  });
+});
+
+const BACKSLASH = String.fromCharCode(92);
+
+describe('symlink targets that contain a backslash', () => {
+  it('are rewritten only where a backslash is a path separator (Windows)', () => {
+    const odd = 'foo' + BACKSLASH + 'bar';
+    expect(normalizeLinkTarget(odd, 'win32')).toBe('foo/bar');
+    expect(normalizeLinkTarget(odd, 'linux')).toBe(odd);
+    expect(normalizeLinkTarget(odd, 'darwin')).toBe(odd);
+    expect(normalizeLinkTarget('foo/bar', 'linux')).toBe('foo/bar');
+    expect(normalizeLinkTarget('foo/bar', 'win32')).toBe('foo/bar');
+  });
+
+  it.skipIf(posixOnly)('are copied exactly, so the copy points where the source did', async () => {
+    const root = await scratch();
+    if (!(await canLink(root))) return;
+    const source = join(root, 'source');
+    const destination = join(root, 'dest');
+    await mkdir(join(source, 'foo'), { recursive: true });
+    await writeFile(join(source, 'foo', 'bar'), 'a different file');
+    const odd = 'foo' + BACKSLASH + 'bar';
+    await symlink(odd, join(source, 'link'));
+    const seen: Array<{ relativePath: string; linkTarget?: string }> = [];
+    for await (const entry of walkTree(source))
+      if (entry.type === 'symlink')
+        seen.push({
+          relativePath: entry.relativePath,
+          ...(entry.linkTarget === undefined ? {} : { linkTarget: entry.linkTarget }),
+        });
+    expect(seen).toEqual([{ relativePath: 'link', linkTarget: odd }]);
+    await copyTree(source, destination);
+    // Not rewritten to foo/bar, which would resolve to a different file.
+    expect(await readlink(join(destination, 'link'))).toBe(odd);
+  });
+});
+
+describe('artifact paths that name the data root itself', () => {
+  it('are refused before any metadata or bytes are touched', async () => {
+    const dataRoot = await scratch();
+    await writeFile(join(dataRoot, 'keep.txt'), 'keep');
+    const database = new SentryDatabase({ dataRoot });
+    const repository = new SentryRepository(database);
+    const store = new FilesystemArtifactStore(dataRoot, repository);
+    const malformed = {
+      schemaVersion: 1 as const,
+      id: createArtifactId(),
+      type: 'other' as const,
+      relativeStoragePath: '.',
+      sizeBytes: 1,
+      sha256: 'b'.repeat(64),
+      createdAt: '2026-09-11T00:00:00.000Z',
+    };
+    repository.saveArtifact(malformed);
+    // Refused up front: the row is still there afterwards, not deleted before the rejection.
+    await expect(store.delete(malformed)).rejects.toThrow(/below the data root/);
+    expect(repository.getArtifact(malformed.id)).toBeDefined();
+    await expect(store.discard(malformed)).rejects.toThrow(/below the data root/);
+    expect(() => store.open(malformed)).toThrow(/below the data root/);
+    expect(await readFile(join(dataRoot, 'keep.txt'), 'utf8')).toBe('keep');
+    // A normal artifact still deletes.
+    const normal = await store.write({
+      relativePath: 'artifacts/normal.txt',
+      type: 'other',
+      source: (async function* () {
+        yield 'hello';
+      })(),
+    });
+    await store.delete(normal);
+    expect(repository.getArtifact(normal.id)).toBeUndefined();
     database.close();
   });
 });

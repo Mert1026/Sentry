@@ -25,6 +25,22 @@ export class FilesystemArtifactStore {
     private readonly repository: SentryRepository,
   ) {}
 
+  /**
+   * Where a stored artifact's bytes live. The path must name a file below the data root: a path
+   * that resolves to the data root itself (such as ".") is refused before anything is read,
+   * removed or deleted from the database.
+   */
+  private storedPath(artifact: Artifact): string {
+    const path = resolveInside(this.dataRoot, artifact.relativeStoragePath);
+    if (relative(this.dataRoot, path) === '') {
+      throw new RuntimePersistenceError(
+        'ARTIFACT_WRITE_FAILED',
+        'Artifact path must name a file below the data root: ' + artifact.relativeStoragePath,
+      );
+    }
+    return path;
+  }
+
   async write(input: WriteArtifactInput): Promise<Artifact> {
     const id = createArtifactId();
     // Stored paths use forward slashes only. A POSIX file name that contains a backslash cannot be
@@ -109,7 +125,7 @@ export class FilesystemArtifactStore {
 
   open(artifact: Artifact): ReadStream {
     const validated = ArtifactSchema.parse(artifact);
-    const path = resolveInside(this.dataRoot, validated.relativeStoragePath);
+    const path = this.storedPath(validated);
     assertNoSymlinkBelowSync(this.dataRoot, path);
     return createReadStream(path);
   }
@@ -120,7 +136,7 @@ export class FilesystemArtifactStore {
 
   async discard(artifact: Artifact): Promise<void> {
     const validated = ArtifactSchema.parse(artifact);
-    const path = resolveInside(this.dataRoot, validated.relativeStoragePath);
+    const path = this.storedPath(validated);
     await assertNoSymlinkBelow(this.dataRoot, path, { includeLeaf: false });
     await rm(path, { force: true });
   }
@@ -130,7 +146,7 @@ export class FilesystemArtifactStore {
     // Let SQLite reject deletion of a referenced artifact before touching its bytes.
     // If the file removal subsequently fails, the only residue is an unreferenced
     // file rather than live metadata pointing at missing data.
-    const path = resolveInside(this.dataRoot, validated.relativeStoragePath);
+    const path = this.storedPath(validated);
     await assertNoSymlinkBelow(this.dataRoot, path, { includeLeaf: false });
     this.repository.deleteArtifact(validated.id);
     await rm(path, { force: true });

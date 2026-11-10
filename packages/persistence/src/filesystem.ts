@@ -79,6 +79,19 @@ export interface WalkTreeOptions {
 }
 
 /** Deterministic lstat traversal. Symlinks are yielded and never followed. */
+/**
+ * A symlink target as Sentry stores, copies and hashes it. On Windows a backslash is a path
+ * separator, so it becomes "/" and the same project hashes the same on every platform. On POSIX a
+ * backslash is an ordinary character of a name: rewriting it would point the copy at a different
+ * file, so the target stays exactly as it is.
+ */
+export function normalizeLinkTarget(
+  target: string,
+  platform: NodeJS.Platform = process.platform,
+): string {
+  return platform === 'win32' ? target.replaceAll('\\', '/') : target;
+}
+
 export async function* walkTree(
   root: string,
   signalOrOptions?: AbortSignal | WalkTreeOptions,
@@ -109,14 +122,11 @@ export async function* walkTree(
         process.platform === 'win32' ? canonicalTarget.toLowerCase() : canonicalTarget,
       );
       return {
-        linkTarget: linkTarget.replaceAll('\\', '/'),
+        linkTarget: normalizeLinkTarget(linkTarget),
         linkScope: internal ? 'internal' : 'external',
         ...(internal
           ? {
-              linkTargetRelativePath: relative(canonicalRoot, canonicalTarget).replaceAll(
-                '\\',
-                '/',
-              ),
+              linkTargetRelativePath: normalizeLinkTarget(relative(canonicalRoot, canonicalTarget)),
             }
           : {}),
         ...(targetStat.isDirectory()
@@ -126,7 +136,7 @@ export async function* walkTree(
             : {}),
       };
     } catch {
-      return { linkTarget: linkTarget.replaceAll('\\', '/'), linkScope: 'broken' };
+      return { linkTarget: normalizeLinkTarget(linkTarget), linkScope: 'broken' };
     }
   };
 
@@ -201,7 +211,7 @@ export async function snapshotEntry(
   if (entry.type === 'file') {
     sha256 = await hashFile(entry.absolutePath, signal);
   } else if (entry.type === 'symlink') {
-    const target = entry.linkTarget ?? (await readlink(entry.absolutePath)).replaceAll('\\', '/');
+    const target = entry.linkTarget ?? normalizeLinkTarget(await readlink(entry.absolutePath));
     sha256 = createHash('sha256')
       .update((entry.linkScope ?? 'broken') + '\0' + target, 'utf8')
       .digest('hex');
@@ -233,7 +243,7 @@ async function copySymlink(
   blockedLinkMetadataRoot?: string,
 ): Promise<void> {
   const scope = entry.linkScope ?? 'broken';
-  const target = entry.linkTarget ?? (await readlink(entry.absolutePath)).replaceAll('\\', '/');
+  const target = entry.linkTarget ?? normalizeLinkTarget(await readlink(entry.absolutePath));
   await mkdir(dirname(destination), { recursive: true });
   if (scope !== 'internal' && policy === 'inert-unsafe') {
     if (blockedLinkMetadataRoot === undefined) {
