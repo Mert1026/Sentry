@@ -321,6 +321,26 @@ describe('independent partial agent reports', () => {
   );
 });
 
+describe('agent details overview', () => {
+  it('lists model, agent run and stage, with no elapsed time', () => {
+    render(
+      <AgentInspector
+        data={{
+          view: makeAgentNodeView({ status: 'completed', elapsedMs: 102_000 }),
+          findings: [],
+          evidence: [],
+        }}
+        initialTab="overview"
+      />,
+    );
+    expect(screen.getByText('Model')).toBeTruthy();
+    expect(screen.getByText('Agent run')).toBeTruthy();
+    expect(screen.getByText('Stage')).toBeTruthy();
+    expect(screen.queryByText('Elapsed')).toBeNull();
+    expect(screen.queryByText('01:42')).toBeNull();
+  });
+});
+
 describe('re-test tab', () => {
   it('lists each picked finding with resolved, not resolved or undetermined and a summary', () => {
     const message = (text: string) => ({

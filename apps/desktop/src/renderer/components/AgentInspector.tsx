@@ -17,7 +17,6 @@ import type { AgentNodeView, TimelineItem } from '../lib/types.js';
 import { retestRows, type RetestItemInfo } from '../lib/retest-results.js';
 import {
   formatCount,
-  formatElapsed,
   projectTimeline,
   stageLabel,
   stageStateLabel,
@@ -258,8 +257,6 @@ function OverviewTab({ view }: { view: AgentNodeView }): React.JSX.Element {
         <dd>
           <CopyId id={view.agentRunId} />
         </dd>
-        <dt>Elapsed</dt>
-        <dd>{formatElapsed(view.elapsedMs)}</dd>
         <dt>Stage</dt>
         <dd>{view.currentStage === 'working' ? 'Working' : stageLabel(view.currentStage)}</dd>
       </dl>
