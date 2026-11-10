@@ -158,6 +158,8 @@ export interface ClaudeSpawnSpec {
   readonly homeDir?: string;
   readonly environment: NodeJS.ProcessEnv;
   readonly modelId: string;
+  /** Reasoning effort for this agent's turns (`--effort`); absent keeps the provider default. */
+  readonly effort?: string;
   readonly settingsPath: string;
   readonly initializeTimeoutMs: number;
   readonly turnTimeoutMs: number;
@@ -239,6 +241,8 @@ export function buildClaudeSettings(
  */
 export function buildClaudeArgs(input: {
   readonly modelId: string;
+  /** Reasoning effort (`--effort`); absent keeps the provider default. */
+  readonly effort?: string;
   readonly settingsPath: string;
   readonly sessionId: string;
   readonly resume: boolean;
@@ -264,6 +268,7 @@ export function buildClaudeArgs(input: {
     'stream-json',
     '--model',
     input.modelId,
+    ...(input.effort === undefined ? [] : ['--effort', input.effort]),
     '--settings',
     input.settingsPath,
     '--setting-sources',
@@ -611,6 +616,7 @@ function spawnOwnedClaudeTurn(
   const resume = continued.has(sessionId);
   const args = buildClaudeArgs({
     modelId: spec.modelId,
+    ...(spec.effort === undefined ? {} : { effort: spec.effort }),
     settingsPath: spec.settingsPath,
     sessionId,
     resume,

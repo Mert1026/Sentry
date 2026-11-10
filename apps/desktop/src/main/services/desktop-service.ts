@@ -8,7 +8,13 @@
  * live-update fan-out. Secrets stay in main; renderer receives statuses.
  */
 import { z } from 'zod';
-import { RUN_TIMEOUT_MS_MAX, RUN_TIMEOUT_MS_MIN } from '@qa/shared';
+import {
+  AGENT_EFFORT_SETTING,
+  EFFORT_AGENTS,
+  RUN_TIMEOUT_MS_MAX,
+  RUN_TIMEOUT_MS_MIN,
+  parseAgentEffort,
+} from '@qa/shared';
 import type { AgentStackDefinition } from '@qa/schemas';
 import type { DesktopOperation, RunSnapshot } from '../../shared/ipc-contract.js';
 import { toSafeError } from '../desktop-command-router.js';
@@ -475,11 +481,12 @@ export class DesktopApplicationService {
       binaries,
       ...provider,
       openAiAuth,
-      reasoningEffort: {
-        chatgpt: ['low', 'medium', 'high'].includes(get('SENTRY_CHATGPT_REASONING') ?? '')
-          ? (get('SENTRY_CHATGPT_REASONING') as 'low' | 'medium' | 'high')
-          : 'default',
-      },
+      reasoningEffort: Object.fromEntries(
+        EFFORT_AGENTS.map((agent) => [
+          agent,
+          parseAgentEffort(agent, get(AGENT_EFFORT_SETTING[agent])) ?? 'default',
+        ]),
+      ),
     });
   }
 

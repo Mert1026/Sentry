@@ -221,7 +221,12 @@ export const RuntimeConfigureParamsSchema = z
     openAiAuth: z.enum(['key', 'account']).optional(),
     // Reasoning effort per agent (provider default when 'default'). Full-state like openAiAuth.
     reasoningEffort: z
-      .object({ chatgpt: z.enum(['default', 'low', 'medium', 'high']).optional() })
+      .object({
+        chatgpt: z.enum(['default', 'low', 'medium', 'high']).optional(),
+        opencode: z.enum(['default', 'low', 'medium', 'high']).optional(),
+        glm: z.enum(['default', 'low', 'medium', 'high', 'xhigh', 'max']).optional(),
+        deepseek: z.enum(['default', 'off', 'low', 'high', 'max']).optional(),
+      })
       .strict()
       .optional(),
     // Harness executable overrides (non-secret absolute paths inside the

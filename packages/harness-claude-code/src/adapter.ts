@@ -18,6 +18,7 @@ import {
   type ToolchainSetup,
   describePlanRejection,
   describeSchemaIssues,
+  parseAgentEffort,
 } from '@qa/shared';
 import {
   limitPhase,
@@ -152,6 +153,12 @@ export interface ClaudeCodeHarnessAdapterOptions {
     readonly harnessVersion?: string;
     readonly executableVersion?: string;
   }) => void;
+}
+
+/** The GLM agent's reasoning-effort setting as a spawn-spec fragment (nothing when unset). */
+function effortOption(environment: NodeJS.ProcessEnv): { effort: string } | Record<string, never> {
+  const effort = parseAgentEffort('glm', environment['SENTRY_GLM_REASONING']);
+  return effort === undefined ? {} : { effort };
 }
 
 export class ClaudeInitTimeoutError extends ClaudeCodeHarnessError {
@@ -1515,6 +1522,7 @@ export class ClaudeCodeHarnessAdapter implements HarnessAdapter {
         ),
         webAccess: webAccessEnabled(request.executionSafeguards),
         modelId: this.runtime.modelId,
+        ...effortOption(this.hostEnvironment),
         settingsPath,
         initializeTimeoutMs: this.initializeTimeoutMs,
         turnTimeoutMs: this.turnTimeoutMs,

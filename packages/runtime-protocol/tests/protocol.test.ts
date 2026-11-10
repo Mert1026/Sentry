@@ -141,3 +141,23 @@ describe('runtime protocol framing', () => {
     expect(buffer.droppedOversizeLines).toBeGreaterThan(0);
   });
 });
+
+describe('reasoning effort per agent in runtime.configure', () => {
+  const parse = (reasoningEffort: unknown) =>
+    RuntimeConfigureParamsSchema.parse({ models: {}, providers: {}, reasoningEffort });
+
+  it('takes each agent its own levels', () => {
+    expect(
+      parse({ glm: 'max', deepseek: 'off', opencode: 'low', chatgpt: 'default' }),
+    ).toMatchObject({
+      reasoningEffort: { glm: 'max', deepseek: 'off', opencode: 'low', chatgpt: 'default' },
+    });
+  });
+
+  it('refuses a level the agent does not take', () => {
+    expect(() => parse({ deepseek: 'medium' })).toThrow();
+    expect(() => parse({ opencode: 'max' })).toThrow();
+    expect(() => parse({ glm: 'ludicrous' })).toThrow();
+    expect(() => parse({ unknown: 'low' })).toThrow();
+  });
+});
