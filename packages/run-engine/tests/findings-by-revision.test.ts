@@ -242,3 +242,26 @@ describe('retest runs', () => {
     f.database.close();
   });
 });
+
+describe('run depth in the findings list', () => {
+  it('lists depth fast for a fast run and nothing for the usual depth', async () => {
+    const f = await fixture();
+    const fast = await f.runs.run(f.added.project.id, {
+      executionKind: 'simulation',
+      depth: 'fast',
+    });
+    const full = await f.runs.run(f.added.project.id, { executionKind: 'simulation' });
+    expect(fast.run.configuration.executionSafeguards?.depth).toBe('fast');
+    const runs = findingsByRevision(f.repository, f.added.project.id, { includeSimulation: true })
+      .flatMap((revision) => revision.agents)
+      .flatMap((agent) => agent.runs);
+    expect(
+      runs.filter((run) => run.runId === fast.run.id).every((run) => run.depth === 'fast'),
+    ).toBe(true);
+    expect(runs.some((run) => run.runId === fast.run.id)).toBe(true);
+    expect(
+      runs.filter((run) => run.runId === full.run.id).every((run) => run.depth === undefined),
+    ).toBe(true);
+    f.database.close();
+  });
+});

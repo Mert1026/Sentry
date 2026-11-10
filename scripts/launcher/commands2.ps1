@@ -335,7 +335,7 @@ function Show-SentryCliHelp {
   Write-Host '  project doctor <project-id> [--json]'
   Write-Host '  agent list [--json]'
   Write-Host '  agent doctor opencode|deepseek|glm|chatgpt [--json]'
-  Write-Host '  run start <project-id> --mode full|targeted [--agents opencode,deepseek,glm,chatgpt] [--paths a,b] [--wait] [--timeout-ms <ms>] [--web] [--tools] [--profile] [--revision <rev-id>] [--json]'
+  Write-Host '  run start <project-id> --mode full|targeted [--agents opencode,deepseek,glm,chatgpt] [--paths a,b] [--depth fast|full] [--wait] [--timeout-ms <ms>] [--web] [--tools] [--profile] [--revision <rev-id>] [--json]'
   Write-Host '  run start <project-id> --retest <run-id>:<finding-id>,... [--retest-with reporter|all] [--agents ...] [--wait] [--json]'
   Write-Host '  run list <project-id> [--json]'
   Write-Host '  run show <run-id> [--json]'

@@ -846,4 +846,40 @@ describe('private preparation and unconditional teardown', () => {
       f.database.close();
     }
   });
+  it('passes a fast depth profile to the agents, and records it on the run', async () => {
+    const f = await fixture();
+    const registry = new HarnessAdapterRegistry();
+    registry.register({
+      stack: INITIAL_AGENT_STACKS[0]!,
+      createAdapter: () => new FakeHarnessAdapter(),
+    });
+    const prepare = async () => ({
+      status: 'limited' as const,
+      reason: 'fixture',
+      removedBuildCaches: 0,
+      needsFreshCopy: true,
+    });
+    const coordinator = new RunCoordinator(f.dataRoot, f.repository, f.lease, registry, prepare);
+    const seen: unknown[] = [];
+    try {
+      const fast = await coordinator.run(f.added.project.id, {
+        executionKind: 'production',
+        depth: 'fast',
+        onHarnessRequest: (request) => seen.push(request.task.context?.['qaDepth']),
+      });
+      expect(fast.run.configuration.executionSafeguards?.depth).toBe('fast');
+      expect(seen[0]).toMatchObject({ version: 1, profile: 'fast' });
+      // The default (and an explicit "full") is the usual depth: nothing is passed or recorded.
+      seen.length = 0;
+      const full = await coordinator.run(f.added.project.id, {
+        executionKind: 'production',
+        onHarnessRequest: (request) => seen.push(request.task.context?.['qaDepth']),
+      });
+      expect(full.run.configuration.executionSafeguards?.depth).toBeUndefined();
+      expect(seen[0]).not.toHaveProperty('profile');
+    } finally {
+      f.lease.release();
+      f.database.close();
+    }
+  });
 });

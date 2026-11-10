@@ -56,6 +56,8 @@ export type ParsedCliCommand =
       readonly webAccess?: boolean;
       readonly paths?: string;
       readonly toolDownloads?: boolean;
+      /** How deep the run investigates; omitted means full. */
+      readonly depth?: 'fast' | 'full';
       readonly useProfile?: boolean;
       readonly revisionId?: string;
       /** Re-test findings from earlier runs on the current revision. */
@@ -257,6 +259,7 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
       '--web',
       '--tools',
       '--profile',
+      '--depth',
       '--revision',
       '--retest',
       '--retest-with',
@@ -322,6 +325,11 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
           '--agents',
         );
     }
+    const depth = option(tail, '--depth');
+    if (depth !== undefined && depth !== 'fast' && depth !== 'full')
+      fail('--depth must be fast or full', '--depth');
+    if (isRetest && depth !== undefined)
+      fail('--retest has its own fixed checks; --depth does not apply', '--depth');
     const revisionId = option(tail, '--revision');
     if (revisionId !== undefined && !/^rev_[0-9A-HJKMNP-TV-Z]{26}$/.test(revisionId))
       fail('--revision must be a revision id (rev_...)', '--revision');
@@ -369,6 +377,7 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
       ...(tail.includes('--web') ? { webAccess: true } : {}),
       ...(tail.includes('--tools') ? { toolDownloads: true } : {}),
       ...(tail.includes('--profile') ? { useProfile: true } : {}),
+      ...(depth === undefined ? {} : { depth }),
       ...(revisionId === undefined ? {} : { revisionId }),
       ...(retest === undefined ? {} : { retest }),
       ...(paths === undefined ? {} : { paths }),

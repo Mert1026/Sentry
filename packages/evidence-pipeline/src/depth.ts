@@ -6,7 +6,7 @@ import type { ObservedOperation } from './pipeline.js';
 /** Versioned per-run policy, passed by the coordinator, never by project files. */
 export function depthPolicy(
   context: Readonly<Record<string, unknown>> | undefined,
-): { version: 1; deadlineAt: number } | undefined {
+): { version: 1; deadlineAt: number; profile: 'fast' | 'full' } | undefined {
   const value = context?.['qaDepth'] as Record<string, unknown> | undefined;
   if (
     value?.['version'] !== 1 ||
@@ -14,7 +14,11 @@ export function depthPolicy(
     !Number.isFinite(value['deadlineAt'])
   )
     return undefined;
-  return { version: 1, deadlineAt: value['deadlineAt'] };
+  return {
+    version: 1,
+    deadlineAt: value['deadlineAt'],
+    profile: value['profile'] === 'fast' ? 'fast' : 'full',
+  };
 }
 
 export const DEPTH_PREPARATION_GUIDANCE =
@@ -27,6 +31,8 @@ export const DEPTH_PREPARATION_GUIDANCE =
 export const MINUTES_PER_PLANNED_CHECK = 25;
 export const MAX_PLANNED_CHECKS = 8;
 export const MIN_PLANNED_CHECKS = 2;
+/** A fast run plans at most this many checks. The extra passes after them are unchanged. */
+export const FAST_MAX_PLANNED_CHECKS = 3;
 
 /**
  * How many checks to plan for this run. A slow model on a deep project cannot
@@ -42,7 +48,7 @@ export function maxPlannedChecks(
   if (depth === undefined) return MAX_PLANNED_CHECKS;
   const minutes = (investigationDeadline(depth.deadlineAt, now) - now) / 60_000;
   return Math.min(
-    MAX_PLANNED_CHECKS,
+    depth.profile === 'fast' ? FAST_MAX_PLANNED_CHECKS : MAX_PLANNED_CHECKS,
     Math.max(MIN_PLANNED_CHECKS, Math.floor(minutes / MINUTES_PER_PLANNED_CHECK)),
   );
 }

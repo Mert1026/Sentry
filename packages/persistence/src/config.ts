@@ -16,8 +16,8 @@ export const SENTRY_DEFAULT_AGENTS = ['opencode', 'deepseek', 'glm'] as const;
 // Safety fuse only (owner decision, option b): it bounds runaway cost and
 // stuck providers. It is NOT an investigation target and must never be
 // divided into phase budgets that decide when research is "done".
-// 3h default for large projects; owners may set up to the 12h protocol max
-// per run.
+// 3h default for large projects; the default can be changed in Settings and a run can set its own,
+// up to the 7 day protocol max.
 export const SENTRY_PRODUCTION_RUN_TIMEOUT_MS = 10_800_000;
 export const SENTRY_SIMULATION_RUN_TIMEOUT_MS = 2_000;
 export const SENTRY_SANDBOX_BACKEND = 'systemd' as const;

@@ -28,7 +28,7 @@ sentry_cli_help() {
   echo "  project doctor <project-id> [--json]"
   echo "  agent list [--json]"
   echo "  agent doctor opencode|deepseek|glm|chatgpt [--json]"
-  echo "  run start <project-id> --mode full|targeted [--agents opencode,deepseek,glm,chatgpt] [--paths a,b] [--wait] [--timeout-ms <ms>] [--web] [--tools] [--profile] [--revision <rev-id>] [--json]"
+  echo "  run start <project-id> --mode full|targeted [--agents opencode,deepseek,glm,chatgpt] [--paths a,b] [--depth fast|full] [--wait] [--timeout-ms <ms>] [--web] [--tools] [--profile] [--revision <rev-id>] [--json]"
   echo "  run start <project-id> --retest <run-id>:<finding-id>,... [--retest-with reporter|all] [--agents ...] [--wait] [--json]"
   echo "  run list <project-id> [--json]"
   echo "  run show <run-id> [--json]"
