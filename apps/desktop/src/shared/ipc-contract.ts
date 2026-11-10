@@ -39,6 +39,7 @@ export const IPC_CHANNELS = [
   'providers:forget-file',
   'providers:forget-all',
   'providers:detect-binaries',
+  'settings:set',
   'production:readiness',
   'system:info',
   'toolchains:status',

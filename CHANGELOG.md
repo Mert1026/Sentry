@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- CLI: `settings show`, `settings effort <agent> <level|default>` and `settings run-limit
+<default|3h|6h|none|90m|12h>` read and change an agent's reasoning effort and the default run time
+  limit (the broker accepts only those two settings). `run list` and `run status` report each run's
+  `depth` and `timeLimitMs`, fast runs are marked `FAST`, and `capabilities` reports `settings` and
+  `runDepth`.
 - Run depth: choose **Fast** or **Full** when starting a run (project page, or
   `run start --depth fast|full`). Full (the default) plans as before, one check per 25 minutes of
   the window up to 8 (6 for the default 3 hours); Fast plans at most 3. Both use the same time window and the same extra passes. The depth is recorded on the run.

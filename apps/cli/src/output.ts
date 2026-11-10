@@ -35,6 +35,8 @@ export function emitHumanSuccess(response: CliSuccessEnvelope, io: CliIo): void 
           'Findings by revision: yes (project findings)',
           'Project profile: yes (project profile, project profile-build)',
           'Toolchains: yes (toolchain status|install|remove)',
+          'Run depth: yes (run start --depth fast|full)',
+          'Settings: yes (settings show|effort|run-limit)',
           'Run cancellation: yes',
           'Run result export: yes (run result)',
           'Async run start: yes (default; pass --wait to observe)',
@@ -134,7 +136,14 @@ export function emitHumanSuccess(response: CliSuccessEnvelope, io: CliIo): void 
         response.data.runs
           .map(
             (run: RunListResult['runs'][number]) =>
-              run.runId + '  ' + run.status + '  ' + run.mode + '  ' + run.createdAt,
+              run.runId +
+              '  ' +
+              run.status +
+              '  ' +
+              run.mode +
+              (run.depth === 'fast' ? '  FAST' : '') +
+              '  ' +
+              run.createdAt,
           )
           .join('\n'),
       );
@@ -150,6 +159,30 @@ export function emitHumanSuccess(response: CliSuccessEnvelope, io: CliIo): void 
       return;
     case 'project.findings':
       io.stdout(formatFindingsByRevision(response.data.revisions));
+      return;
+    case 'settings.show':
+      io.stdout(
+        [
+          'Reasoning effort',
+          ...Object.entries(response.data.reasoningEffort).map(
+            ([agent, level]) => '  ' + agent + '  ' + level,
+          ),
+          '',
+          'Run time limit: ' +
+            describeRunLimit(response.data.runTimeLimit.ms) +
+            (response.data.runTimeLimit.isDefault ? ' (the default)' : ''),
+        ].join('\n'),
+      );
+      return;
+    case 'settings.set-effort':
+      io.stdout(response.data.agent + ' reasoning effort: ' + response.data.reasoningEffort);
+      return;
+    case 'settings.set-run-limit':
+      io.stdout(
+        'Run time limit: ' +
+          describeRunLimit(response.data.ms) +
+          (response.data.isDefault ? ' (the default)' : ''),
+      );
       return;
     case 'run.export':
       io.stdout(response.data.path);
@@ -177,6 +210,7 @@ export function successExitCode(response: CliSuccessEnvelope): number {
 
 interface RevisionRunView {
   readonly runId?: string;
+  readonly depth?: string;
   readonly at?: string;
   readonly findings?: ReadonlyArray<{ id?: string; severity?: string; title?: string }>;
   readonly retest?: ReadonlyArray<{
@@ -204,7 +238,13 @@ export function formatFindingsByRevision(revisions: readonly unknown[]): string 
     lines.push('Revision ' + (revision.revisionId ?? '?'));
     for (const agent of revision.agents ?? []) {
       for (const run of agent.runs ?? []) {
-        lines.push('  ' + (agent.agentStackId ?? '?') + '  run ' + (run.runId ?? '?'));
+        lines.push(
+          '  ' +
+            (agent.agentStackId ?? '?') +
+            '  run ' +
+            (run.runId ?? '?') +
+            (run.depth === 'fast' ? '  FAST' : ''),
+        );
         if (run.retest !== undefined) {
           for (const outcome of run.retest) {
             lines.push(
@@ -232,4 +272,15 @@ export function formatFindingsByRevision(revisions: readonly unknown[]): string 
     lines.push('');
   }
   return lines.length === 0 ? 'No revisions with runs yet.' : lines.join('\n').trimEnd();
+}
+
+/** A run window in plain words: "3 hours", "2 h 30 min", "45 minutes", "No limit (7 days)". */
+export function describeRunLimit(ms: number): string {
+  if (ms >= 604_800_000) return 'No limit (7 days)';
+  const totalMinutes = Math.round(ms / 60_000);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours === 0) return minutes + (minutes === 1 ? ' minute' : ' minutes');
+  if (minutes === 0) return hours + (hours === 1 ? ' hour' : ' hours');
+  return hours + ' h ' + minutes + ' min';
 }

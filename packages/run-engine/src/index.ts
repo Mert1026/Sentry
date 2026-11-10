@@ -156,6 +156,10 @@ export interface RunStatus {
   readonly createdAt: string;
   readonly startedAt?: string;
   readonly completedAt: string | null;
+  /** "fast" or "full" (a run that recorded no depth is full). */
+  readonly depth: 'fast' | 'full';
+  /** The time window the run was given, in milliseconds, when it recorded one. */
+  readonly timeLimitMs?: number;
   readonly agents: {
     readonly configured: number;
     readonly queued: number;
@@ -1493,6 +1497,10 @@ export class RunCoordinator {
       createdAt: run.createdAt,
       ...(run.startedAt === undefined ? {} : { startedAt: run.startedAt }),
       completedAt: run.completedAt ?? null,
+      depth: run.configuration.executionSafeguards?.depth === 'fast' ? 'fast' : 'full',
+      ...(run.configuration.executionSafeguards?.runTimeoutMs === undefined
+        ? {}
+        : { timeLimitMs: run.configuration.executionSafeguards.runTimeoutMs }),
       agents: {
         configured: run.configuration.agentStackIds.length,
         queued: counts.get('queued') ?? 0,

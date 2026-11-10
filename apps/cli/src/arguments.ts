@@ -1,6 +1,13 @@
 import type { CliCommand } from '@qa/schemas';
 import type { SimulationScenario } from '@qa/run-engine';
-import { RUN_TIMEOUT_MS_MAX, RUN_TIMEOUT_MS_MIN } from '@qa/shared';
+import {
+  AGENT_EFFORT_LEVELS,
+  RUN_TIME_LIMIT_CUSTOM_MIN_MS,
+  RUN_TIME_LIMIT_DEFAULT_MS,
+  RUN_TIME_LIMIT_UNLIMITED_MS,
+  RUN_TIMEOUT_MS_MAX,
+  RUN_TIMEOUT_MS_MIN,
+} from '@qa/shared';
 
 export class CliUsageError extends Error {
   readonly code = 'INVALID_ARGUMENT';
@@ -83,6 +90,9 @@ export type ParsedCliCommand =
       readonly projectId: string;
       readonly agents?: readonly AgentName[];
     })
+  | BaseCommand<'settings.show'>
+  | (BaseCommand<'settings.set-effort'> & { readonly agent: AgentName; readonly value: string })
+  | (BaseCommand<'settings.set-run-limit'> & { readonly value: string })
   | BaseCommand<'toolchain.status'>
   | (BaseCommand<'toolchain.install'> & { readonly packId: string; readonly version: string })
   | (BaseCommand<'toolchain.remove'> & { readonly packId: string; readonly version: string })
@@ -99,6 +109,25 @@ const SIMULATION_SCENARIOS = new Set<SimulationScenario>([
   'timeout',
   'protocol-error',
 ]);
+
+/**
+ * A run time limit as the broker takes it: "default" (3 hours; removes the saved choice) or a number of
+ * milliseconds. Written as 3h, 6h, none (the longest window, 7 days), 90m or 2h.
+ */
+export function parseRunLimit(text: string): string {
+  const value = text.trim().toLowerCase();
+  if (value === 'default' || value === '3h') return 'default';
+  if (value === '6h') return '21600000';
+  if (value === 'none') return String(RUN_TIME_LIMIT_UNLIMITED_MS);
+  const match = /^(\d{1,5})(m|h)$/.exec(value);
+  const ms = match === null ? NaN : Number(match[1]) * (match[2] === 'h' ? 3_600_000 : 60_000);
+  if (!(ms >= RUN_TIME_LIMIT_CUSTOM_MIN_MS && ms <= RUN_TIME_LIMIT_UNLIMITED_MS))
+    fail(
+      'The run time limit is default, 3h, 6h, none, or 10m to 168h (for example 90m or 12h)',
+      text,
+    );
+  return ms === RUN_TIME_LIMIT_DEFAULT_MS ? 'default' : String(ms);
+}
 
 function fail(message: string, argument?: string): never {
   throw new CliUsageError(message, argument === undefined ? undefined : { argument });
@@ -150,6 +179,9 @@ export function commandHint(args: readonly string[]): CliCommand | 'unknown' {
     'toolchain.status',
     'toolchain.install',
     'toolchain.remove',
+    'settings.show',
+    'settings.set-effort',
+    'settings.set-run-limit',
     'agent.list',
     'agent.doctor',
     'run.simulate',
@@ -435,6 +467,44 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
       projectId,
       ...(agents === undefined ? {} : { agents: agents as AgentName[] }),
     };
+  }
+  if (area === 'settings' && action === 'show') {
+    assertFlags(tail, []);
+    assertPositionals(tail, 0, 'qa settings show');
+    return { command: 'settings.show' };
+  }
+  if (area === 'settings' && action === 'effort') {
+    assertFlags(tail, []);
+    const [agent, level] = assertPositionals(
+      tail,
+      2,
+      'qa settings effort <opencode|deepseek|glm|chatgpt> <level|default>',
+    );
+    if (agent === undefined || !isAgentName(agent))
+      fail('Unknown agent: ' + agent + ' (expected opencode, deepseek, glm, or chatgpt)', agent);
+    const value = (level ?? '').toLowerCase();
+    const allowed = AGENT_EFFORT_LEVELS[agent] as readonly string[];
+    if (value !== 'default' && !allowed.includes(value))
+      fail(
+        'The ' +
+          agent +
+          ' agent takes: ' +
+          [...allowed, 'default'].join(', ') +
+          ' (not "' +
+          level +
+          '")',
+        level,
+      );
+    return { command: 'settings.set-effort', agent, value };
+  }
+  if (area === 'settings' && action === 'run-limit') {
+    assertFlags(tail, []);
+    const [text] = assertPositionals(
+      tail,
+      1,
+      'qa settings run-limit <default|3h|6h|none|<number>m|<number>h>',
+    );
+    return { command: 'settings.set-run-limit', value: parseRunLimit(text as string) };
   }
   if (area === 'toolchain' && action === 'status') {
     assertFlags(tail, []);

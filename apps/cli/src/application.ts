@@ -477,6 +477,9 @@ export async function executeCommand(
     input.command === 'project.findings' ||
     input.command === 'project.profile' ||
     input.command === 'project.profile-build' ||
+    input.command === 'settings.show' ||
+    input.command === 'settings.set-effort' ||
+    input.command === 'settings.set-run-limit' ||
     input.command === 'toolchain.status' ||
     input.command === 'toolchain.install' ||
     input.command === 'toolchain.remove'

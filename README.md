@@ -168,6 +168,10 @@ sentry cli run start proj_ID --retest run_ID:finding_ID --wait --json
 sentry cli run start proj_ID --mode full --agents chatgpt --profile --tools --json
 sentry cli project profile proj_ID --json
 sentry cli toolchain status --json
+sentry cli run start proj_ID --mode full --depth fast --json
+sentry cli settings show --json
+sentry cli settings run-limit 6h --json
+sentry cli settings effort glm high --json
 ```
 
 Replace `proj_ID`, `run_ID` and `finding_ID` with real IDs. See the

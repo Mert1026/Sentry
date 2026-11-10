@@ -54,6 +54,9 @@ export const CLI_COMMANDS = [
   'toolchain.status',
   'toolchain.install',
   'toolchain.remove',
+  'settings.show',
+  'settings.set-effort',
+  'settings.set-run-limit',
 ] as const;
 export const CliCommandSchema = z.enum(CLI_COMMANDS);
 export type CliCommand = z.infer<typeof CliCommandSchema>;
@@ -231,6 +234,9 @@ export const RunListItemSchema = z
     createdAt: IsoTimestampSchema,
     startedAt: IsoTimestampSchema.optional(),
     completedAt: IsoTimestampSchema.optional(),
+    // Additive: how deep the run was and the window it was given.
+    depth: z.enum(['fast', 'full']).optional(),
+    timeLimitMs: NonNegativeIntSchema.optional(),
   })
   .strict();
 export const RunListResultSchema = z.object({ runs: z.array(RunListItemSchema) }).strict();
@@ -289,6 +295,8 @@ export const RunStatusResultSchema = z
     createdAt: IsoTimestampSchema,
     startedAt: IsoTimestampSchema.optional(),
     completedAt: IsoTimestampSchema.nullable(),
+    depth: z.enum(['fast', 'full']).optional(),
+    timeLimitMs: NonNegativeIntSchema.optional(),
     agents: RunAgentStatusCountsSchema,
     findings: z.object({ total: NonNegativeIntSchema }).strict(),
     tokens: RunTokenTotalsSchema.optional(),
@@ -552,6 +560,7 @@ export const CapabilitiesResultSchema = z
         retest: z.literal(true).optional(),
         findingsByRevision: z.literal(true).optional(),
         runDepth: z.literal(true).optional(),
+        settings: z.literal(true).optional(),
         projectProfile: z.literal(true).optional(),
         toolchains: z.literal(true).optional(),
       })
@@ -614,6 +623,30 @@ export const ToolchainChangeResultSchema = z
   })
   .strict();
 
+/** The reasoning effort chosen for each agent and the default run time limit. */
+export const SettingsShowResultSchema = z
+  .object({
+    reasoningEffort: z
+      .object({
+        opencode: z.string().min(1).max(20),
+        deepseek: z.string().min(1).max(20),
+        glm: z.string().min(1).max(20),
+        chatgpt: z.string().min(1).max(20),
+      })
+      .strict(),
+    runTimeLimit: z.object({ ms: NonNegativeIntSchema, isDefault: z.boolean() }).strict(),
+  })
+  .strict();
+export const SettingsSetEffortResultSchema = z
+  .object({
+    agent: z.enum(['opencode', 'deepseek', 'glm', 'chatgpt']),
+    reasoningEffort: z.string().min(1).max(20),
+  })
+  .strict();
+export const SettingsSetRunLimitResultSchema = z
+  .object({ ms: NonNegativeIntSchema, isDefault: z.boolean() })
+  .strict();
+
 export const CliResultSchemas = {
   capabilities: CapabilitiesResultSchema,
   'agent.list': AgentListResultSchema,
@@ -642,6 +675,9 @@ export const CliResultSchemas = {
   'toolchain.status': ToolchainStatusResultSchema,
   'toolchain.install': ToolchainChangeResultSchema,
   'toolchain.remove': ToolchainChangeResultSchema,
+  'settings.show': SettingsShowResultSchema,
+  'settings.set-effort': SettingsSetEffortResultSchema,
+  'settings.set-run-limit': SettingsSetRunLimitResultSchema,
 } as const;
 
 function successEnvelope<C extends CliCommand>(

@@ -103,10 +103,35 @@ connection never cancels a run; cancel explicitly with `run cancel`.
 capabilities [--json]
 project list/add/show/update/delete/revisions/doctor
 project findings | profile | profile-build
+settings show | effort | run-limit
 agent list | agent doctor opencode|deepseek|glm|chatgpt
 run start/list/show/status/cancel/result/export
 toolchain status | install | remove
 ```
+
+### Settings: reasoning effort and the run time limit
+
+```text
+sentry cli settings show
+sentry cli settings effort <opencode|deepseek|glm|chatgpt> <level|default>
+sentry cli settings run-limit <default|3h|6h|none|90m|12h>
+```
+
+These read and change the same two settings as Desktop (Settings → Providers → Reasoning effort and
+Settings → Runtime → Run time limit); a change made here shows up in Desktop at once and the other way
+round. `settings show` lists each agent's reasoning effort (`default` when none is saved) and the
+default run time limit with `isDefault`.
+
+- `settings effort` takes the levels that agent's tool accepts: OpenCode and ChatGPT `low`, `medium`,
+  `high`; GLM `low`, `medium`, `high`, `xhigh`, `max`; DeepSeek `off`, `low`, `high`, `max`.
+  `default` removes the setting. Any other level is refused with `INVALID_ARGUMENT`.
+- `settings run-limit` takes `3h` (the default, same as `default`), `6h`, `none` (the longest window,
+  7 days) or a custom window from `10m` to `168h`, such as `90m` or `12h`.
+- Only these two settings can be changed this way. Credentials, models and every other setting stay
+  in Desktop; the broker refuses them (`settings:set` accepts nothing else).
+- `run list` and `run status` report each run's `depth` (`fast` or `full`) and `timeLimitMs`, and
+  `run list` and `project findings` mark fast runs with `FAST`.
+- `capabilities` reports `features.settings: true` and `features.runDepth: true`.
 
 ### Re-testing earlier findings, profiles, toolchains
 

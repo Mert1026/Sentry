@@ -11,6 +11,7 @@ import { z } from 'zod';
 import {
   AGENT_EFFORT_SETTING,
   EFFORT_AGENTS,
+  RUN_TIME_LIMIT_DEFAULT_MS,
   RUN_TIME_LIMIT_SETTING,
   RUN_TIMEOUT_MS_MAX,
   RUN_TIMEOUT_MS_MIN,
@@ -397,6 +398,56 @@ export class DesktopApplicationService {
     const status = await this.deps.credentials.clearKey(parsed);
     const runtimeSynced = await this.pushRuntimeConfigurationBestEffort();
     return { ...(status as unknown as Record<string, unknown>), runtimeSynced };
+  }
+
+  /**
+   * Change one of the two run settings the CLI may set (the same values Settings → Providers and
+   * Settings → Runtime save). "default" removes the setting. A value the agent's tool does not take,
+   * or a window outside the allowed range, is refused rather than saved.
+   */
+  async setRunSetting(input: unknown): Promise<unknown> {
+    const parsed = z
+      .discriminatedUnion('setting', [
+        z
+          .object({
+            setting: z.literal('reasoning-effort'),
+            agent: z.enum(EFFORT_AGENTS as [string, ...string[]]),
+            value: z.string().min(1).max(20),
+          })
+          .strict(),
+        z
+          .object({ setting: z.literal('run-time-limit'), value: z.string().min(1).max(20) })
+          .strict(),
+      ])
+      .parse(input);
+    if (parsed.setting === 'reasoning-effort') {
+      const agent = parsed.agent as (typeof EFFORT_AGENTS)[number];
+      const name = AGENT_EFFORT_SETTING[agent];
+      if (parsed.value === 'default') {
+        await this.providerClearKey(name);
+        return { agent, reasoningEffort: 'default' };
+      }
+      const level = parseAgentEffort(agent, parsed.value);
+      if (level === undefined)
+        throw toError(
+          'INVALID_ARGUMENT',
+          'The ' + agent + ' agent does not take reasoning effort "' + parsed.value + '"',
+        );
+      await this.providerSaveKey(name, level);
+      return { agent, reasoningEffort: level };
+    }
+    if (parsed.value === 'default') {
+      await this.providerClearKey(RUN_TIME_LIMIT_SETTING);
+      return { ms: RUN_TIME_LIMIT_DEFAULT_MS, isDefault: true };
+    }
+    const ms = parseRunTimeLimit(parsed.value);
+    if (ms === undefined)
+      throw toError(
+        'INVALID_ARGUMENT',
+        'The run time limit must be between 10 minutes and 7 days (in milliseconds)',
+      );
+    await this.providerSaveKey(RUN_TIME_LIMIT_SETTING, String(ms));
+    return { ms, isDefault: ms === RUN_TIME_LIMIT_DEFAULT_MS };
   }
 
   providerPersist(): Promise<unknown> {
