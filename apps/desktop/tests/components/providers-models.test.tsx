@@ -479,3 +479,52 @@ describe('Reasoning effort for every agent', () => {
     });
   }
 });
+
+describe('ChatGPT sign-in switch', () => {
+  async function mountWith(auth: string | undefined) {
+    const save = vi.fn().mockResolvedValue({});
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: Infinity }, mutations: { retry: false } },
+    });
+    clients.push(client);
+    Object.defineProperty(window, 'sentry', {
+      configurable: true,
+      value: {
+        providers: {
+          status: vi
+            .fn()
+            .mockResolvedValue(auth === undefined ? [] : [statusRow('SENTRY_OPENAI_AUTH', auth)]),
+          save,
+          clearKey: vi.fn().mockResolvedValue({}),
+          forgetAll: vi.fn(),
+        },
+      },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <Providers />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    const card = within(await screen.findByRole('region', { name: 'ChatGPT provider settings' }));
+    return {
+      save,
+      toggle: await card.findByRole('switch', { name: 'Sign in with ChatGPT account' }),
+    };
+  }
+
+  it('is off (API key) by default and switches to the ChatGPT account', async () => {
+    const { save, toggle } = await mountWith(undefined);
+    expect(toggle.getAttribute('aria-checked')).toBe('false');
+    fireEvent.click(toggle);
+    await waitFor(() => expect(save).toHaveBeenCalledWith('SENTRY_OPENAI_AUTH', 'account'));
+  });
+
+  it('is on when the account is saved and switches back to the API key', async () => {
+    const { save, toggle } = await mountWith('account');
+    await waitFor(() => expect(toggle.getAttribute('aria-checked')).toBe('true'));
+    fireEvent.click(toggle);
+    await waitFor(() => expect(save).toHaveBeenCalledWith('SENTRY_OPENAI_AUTH', 'key'));
+  });
+});

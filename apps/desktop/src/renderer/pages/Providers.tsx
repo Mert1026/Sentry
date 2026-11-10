@@ -22,6 +22,7 @@ import {
 } from '../lib/provider-models.js';
 import { PageHeader } from '../components/ui/PageHeader.js';
 import { OpenAiAccountPanel } from '../components/OpenAiAccountPanel.js';
+import { SwitchButton } from '../components/SwitchButton.js';
 
 interface ProviderStatus {
   name: string;
@@ -1221,26 +1222,16 @@ function ChatGptCard(props: {
           Sign in with
         </span>
         <div
-          role="group"
-          aria-labelledby="openai-auth-label"
-          style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}
+          style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 6 }}
         >
-          <button
-            className={account ? 'compact ghost' : 'primary compact'}
-            aria-pressed={!account}
+          <span style={{ fontWeight: account ? 400 : 600 }}>API key</span>
+          <SwitchButton
+            checked={account}
+            label="Sign in with ChatGPT account"
             disabled={props.savePending}
-            onClick={() => props.onSave('SENTRY_OPENAI_AUTH', 'key')}
-          >
-            API key
-          </button>
-          <button
-            className={account ? 'primary compact' : 'compact ghost'}
-            aria-pressed={account}
-            disabled={props.savePending}
-            onClick={() => props.onSave('SENTRY_OPENAI_AUTH', 'account')}
-          >
-            ChatGPT account
-          </button>
+            onToggle={() => props.onSave('SENTRY_OPENAI_AUTH', account ? 'key' : 'account')}
+          />
+          <span style={{ fontWeight: account ? 600 : 400 }}>ChatGPT account</span>
         </div>
       </div>
       {account ? (
