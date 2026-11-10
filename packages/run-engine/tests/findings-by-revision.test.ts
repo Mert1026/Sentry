@@ -242,3 +242,45 @@ describe('retest runs', () => {
     f.database.close();
   });
 });
+
+describe('run depth in the findings list', () => {
+  it('lists depth fast for a fast run and nothing for the usual depth', async () => {
+    const f = await fixture();
+    const fast = await f.runs.run(f.added.project.id, {
+      executionKind: 'simulation',
+      depth: 'fast',
+    });
+    const full = await f.runs.run(f.added.project.id, { executionKind: 'simulation' });
+    expect(fast.run.configuration.executionSafeguards?.depth).toBe('fast');
+    const runs = findingsByRevision(f.repository, f.added.project.id, { includeSimulation: true })
+      .flatMap((revision) => revision.agents)
+      .flatMap((agent) => agent.runs);
+    expect(
+      runs.filter((run) => run.runId === fast.run.id).every((run) => run.depth === 'fast'),
+    ).toBe(true);
+    expect(runs.some((run) => run.runId === fast.run.id)).toBe(true);
+    expect(
+      runs.filter((run) => run.runId === full.run.id).every((run) => run.depth === undefined),
+    ).toBe(true);
+    f.database.close();
+  });
+});
+
+describe('run status says how deep a run is and its window', () => {
+  it('reports fast or full and the time limit the run was given', async () => {
+    const f = await fixture();
+    const fast = await f.runs.run(f.added.project.id, {
+      executionKind: 'simulation',
+      depth: 'fast',
+      runTimeoutMs: 9_000_000,
+    });
+    const full = await f.runs.run(f.added.project.id, { executionKind: 'simulation' });
+    expect(f.runs.getRunStatus(fast.run.id)).toMatchObject({
+      depth: 'fast',
+      timeLimitMs: 9_000_000,
+    });
+    expect(f.runs.getRunStatus(full.run.id)).toMatchObject({ depth: 'full' });
+    expect(f.runs.getRunStatus(full.run.id).timeLimitMs).toBeGreaterThan(0);
+    f.database.close();
+  });
+});

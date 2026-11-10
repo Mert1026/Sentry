@@ -56,6 +56,7 @@ export const DesktopChannelSchemas: Record<string, z.ZodTypeAny> = {
       runTimeoutMs: z.number().int().min(RUN_TIMEOUT_MS_MIN).max(RUN_TIMEOUT_MS_MAX).optional(),
       webAccess: z.boolean().optional(),
       toolDownloads: z.boolean().optional(),
+      depth: z.enum(['fast', 'full']).optional(),
       useProfile: z.boolean().optional(),
       retest: z
         .object({
@@ -90,6 +91,7 @@ export const DesktopChannelSchemas: Record<string, z.ZodTypeAny> = {
       runTimeoutMs: z.number().int().min(RUN_TIMEOUT_MS_MIN).max(RUN_TIMEOUT_MS_MAX).optional(),
       webAccess: z.boolean().optional(),
       toolDownloads: z.boolean().optional(),
+      depth: z.enum(['fast', 'full']).optional(),
       useProfile: z.boolean().optional(),
       retest: z
         .object({
@@ -131,6 +133,18 @@ export const DesktopChannelSchemas: Record<string, z.ZodTypeAny> = {
   'providers:forget-file': z.object({}).strict(),
   'providers:forget-all': z.object({}).strict(),
   'providers:detect-binaries': z.object({}).strict(),
+  // The two non-secret run settings the CLI may change: an agent's reasoning effort and the
+  // default run time limit. Nothing else, and never a credential.
+  'settings:set': z.discriminatedUnion('setting', [
+    z
+      .object({
+        setting: z.literal('reasoning-effort'),
+        agent: z.enum(['opencode', 'deepseek', 'glm', 'chatgpt']),
+        value: z.string().min(1).max(20),
+      })
+      .strict(),
+    z.object({ setting: z.literal('run-time-limit'), value: z.string().min(1).max(20) }).strict(),
+  ]),
   'production:readiness': z
     .object({ agentStackIds: z.array(z.string().min(1).max(200)).max(10).optional() })
     .strict(),
@@ -347,6 +361,7 @@ export async function dispatchDesktopCommand(
         runTimeoutMs: parsed['runTimeoutMs'],
         webAccess: parsed['webAccess'],
         toolDownloads: parsed['toolDownloads'],
+        depth: parsed['depth'],
         useProfile: parsed['useProfile'],
         retest: parsed['retest'],
         revisionId: parsed['revisionId'],
@@ -392,6 +407,8 @@ export async function dispatchDesktopCommand(
       return service.providerForgetAll();
     case 'providers:detect-binaries':
       return service.detectHarnessBinaries();
+    case 'settings:set':
+      return service.setRunSetting(parsed);
     case 'production:readiness':
       return service.productionReadiness(
         parsed['agentStackIds'] === undefined

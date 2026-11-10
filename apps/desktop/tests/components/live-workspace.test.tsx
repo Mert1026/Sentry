@@ -207,6 +207,41 @@ describe('truthful run workspace', () => {
       ).toHaveLength(count);
     },
   );
+  it('no longer prints the total findings and evidence line under the agents', () => {
+    const data = snapshot();
+    const { container } = render(<RunSummaryPanel snapshot={data} />);
+    expect(container.textContent).not.toMatch(/total finding/);
+    expect(container.textContent).not.toMatch(/\d+ evidence/);
+  });
+  describe('run depth and time limit tiles', () => {
+    it('shows Fast and the window a run was given', () => {
+      const data = snapshot();
+      data.run.configuration = {
+        agentStackIds: stacks,
+        executionSafeguards: { depth: 'fast', runTimeoutMs: 10_800_000 },
+      } as never;
+      render(<RunSummaryPanel snapshot={data} />);
+      expect(screen.getByLabelText('Run depth: Fast')).toBeTruthy();
+      expect(screen.getByLabelText('Time limit: 3 hours')).toBeTruthy();
+    });
+
+    it('shows Full for a run with no depth recorded, and a custom window in words', () => {
+      const data = snapshot();
+      data.run.configuration = {
+        agentStackIds: stacks,
+        executionSafeguards: { runTimeoutMs: 9_000_000 },
+      } as never;
+      render(<RunSummaryPanel snapshot={data} />);
+      expect(screen.getByLabelText('Run depth: Full')).toBeTruthy();
+      expect(screen.getByLabelText('Time limit: 2 h 30 min')).toBeTruthy();
+    });
+
+    it('shows no time limit tile for an older run that never recorded one', () => {
+      render(<RunSummaryPanel snapshot={snapshot()} />);
+      expect(screen.getByLabelText('Run depth: Full')).toBeTruthy();
+      expect(screen.queryByLabelText(/Time limit/)).toBeNull();
+    });
+  });
   describe('summary tiles', () => {
     function mixed() {
       const data = snapshot();
@@ -313,6 +348,26 @@ describe('independent partial agent reports', () => {
       expect(screen.getByText(/Partial report/)).toBeTruthy();
     },
   );
+});
+
+describe('agent details overview', () => {
+  it('lists model, agent run and stage, with no elapsed time', () => {
+    render(
+      <AgentInspector
+        data={{
+          view: makeAgentNodeView({ status: 'completed', elapsedMs: 102_000 }),
+          findings: [],
+          evidence: [],
+        }}
+        initialTab="overview"
+      />,
+    );
+    expect(screen.getByText('Model')).toBeTruthy();
+    expect(screen.getByText('Agent run')).toBeTruthy();
+    expect(screen.getByText('Stage')).toBeTruthy();
+    expect(screen.queryByText('Elapsed')).toBeNull();
+    expect(screen.queryByText('01:42')).toBeNull();
+  });
 });
 
 describe('re-test tab', () => {

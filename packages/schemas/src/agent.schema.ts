@@ -52,6 +52,8 @@ export const ExecutionSafeguardsSchema = z
     /** Per-run opt-in to general web access; omitted means off. Package installs are always allowed. */
     webAccess: z.boolean().optional(),
     toolDownloads: z.boolean().optional(),
+    /** How deep the run investigates: fast plans fewer checks. Omitted means full. */
+    depth: z.enum(['fast', 'full']).optional(),
   })
   .strict();
 export type ExecutionSafeguards = z.infer<typeof ExecutionSafeguardsSchema>;

@@ -279,6 +279,17 @@ function translateCore(trimmed: string): string {
     };
     return `${modes[modeRunStatus[1] ?? ''] ?? ''} изпълнение: ${translateCore(modeRunStatus[2] ?? '')}`;
   }
+  const runWindow = /^Every run gets a window of (.+?)( \(the default\))?\.$/.exec(trimmed);
+  if (runWindow !== null)
+    return `Всяко изпълнение получава прозорец от ${translateCore(runWindow[1] ?? '')}${runWindow[2] === undefined ? '' : ' (по подразбиране)'}.`;
+  const hoursOnly = /^(\d+) hours?$/.exec(trimmed);
+  if (hoursOnly !== null) return hoursOnly[1] === '1' ? '1 час' : `${hoursOnly[1]} часа`;
+  const minutesOnly = /^(\d+) minutes?$/.exec(trimmed);
+  if (minutesOnly !== null) return minutesOnly[1] === '1' ? '1 минута' : `${minutesOnly[1]} минути`;
+  const hoursMinutes = /^(\d+) h (\d+) min$/.exec(trimmed);
+  if (hoursMinutes !== null) return `${hoursMinutes[1]} ч ${hoursMinutes[2]} мин`;
+  const effortLabel = /^Reasoning effort: (.+)$/.exec(trimmed);
+  if (effortLabel !== null) return `Усилие при разсъждение: ${translateCore(effortLabel[1] ?? '')}`;
   const readiness = /^(.+) readiness$/.exec(trimmed);
   if (readiness !== null) return `Готовност на ${readiness[1]}`;
   const installOne = /^Install (.+)\? About (\d+) MB\.$/.exec(trimmed);

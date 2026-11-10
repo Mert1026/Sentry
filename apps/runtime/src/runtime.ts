@@ -672,10 +672,19 @@ export class SentryRuntimeHost {
 
   configure(params: unknown): unknown {
     const parsed = RuntimeConfigureParamsSchema.parse(params ?? {});
-    if (parsed.reasoningEffort?.chatgpt !== undefined) {
-      if (parsed.reasoningEffort.chatgpt === 'default')
-        delete process.env['SENTRY_CHATGPT_REASONING'];
-      else process.env['SENTRY_CHATGPT_REASONING'] = parsed.reasoningEffort.chatgpt;
+    // Each agent has its own reasoning effort; "default" removes it so the provider decides.
+    // (The OpenCode agent's effort reaches its harness as SENTRY_OPENCODE_VARIANT.)
+    const effortVariables = {
+      chatgpt: 'SENTRY_CHATGPT_REASONING',
+      opencode: 'SENTRY_OPENCODE_VARIANT',
+      glm: 'SENTRY_GLM_REASONING',
+      deepseek: 'SENTRY_DEEPSEEK_REASONING',
+    } as const;
+    for (const [agent, variable] of Object.entries(effortVariables)) {
+      const level = parsed.reasoningEffort?.[agent as keyof typeof effortVariables];
+      if (level === undefined) continue;
+      if (level === 'default') delete process.env[variable];
+      else process.env[variable] = level;
     }
     if (parsed.openAiAuth !== undefined) {
       process.env['SENTRY_OPENAI_AUTH'] = parsed.openAiAuth;
@@ -1122,6 +1131,7 @@ export class SentryRuntimeHost {
       ...(parsed.runTimeoutMs === undefined ? {} : { runTimeoutMs: parsed.runTimeoutMs }),
       ...(parsed.webAccess === true ? { webAccess: true } : {}),
       ...(parsed.toolDownloads === true ? { toolDownloads: true } : {}),
+      ...(parsed.depth === undefined ? {} : { depth: parsed.depth }),
       ...(parsed.revisionId === undefined ? {} : { revisionId: parsed.revisionId }),
       ...(parsed.useProfile === true ? { useProfile: true } : {}),
       ...(parsed.retest === undefined
@@ -1765,6 +1775,7 @@ const StartRunParamsSchema = z
     runTimeoutMs: z.number().int().min(RUN_TIMEOUT_MS_MIN).max(RUN_TIMEOUT_MS_MAX).optional(),
     webAccess: z.boolean().optional(),
     toolDownloads: z.boolean().optional(),
+    depth: z.enum(['fast', 'full']).optional(),
     useProfile: z.boolean().optional(),
     retest: z
       .object({

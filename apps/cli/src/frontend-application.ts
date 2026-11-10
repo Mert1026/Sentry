@@ -13,7 +13,15 @@ import {
   type CliErrorEnvelope,
   type CliSuccessEnvelope,
 } from '@qa/schemas';
-import { CLI_IPC_PROTOCOL_VERSION } from '@qa/shared';
+import {
+  AGENT_EFFORT_SETTING,
+  CLI_IPC_PROTOCOL_VERSION,
+  EFFORT_AGENTS,
+  RUN_TIME_LIMIT_DEFAULT_MS,
+  RUN_TIME_LIMIT_SETTING,
+  parseAgentEffort,
+  parseRunTimeLimit,
+} from '@qa/shared';
 import type { ParsedCliCommand } from './arguments.js';
 import { CliUsageError } from './arguments.js';
 import { summarizeRunStartAgents } from './run-summary.js';
@@ -178,6 +186,19 @@ function adaptRunListItem(row: Record<string, unknown>): Record<string, unknown>
     mode: row['mode'],
     status: row['status'],
     createdAt: row['createdAt'],
+    depth:
+      (row['configuration'] as { executionSafeguards?: { depth?: string } } | undefined)
+        ?.executionSafeguards?.depth === 'fast'
+        ? 'fast'
+        : 'full',
+    ...(typeof (
+      row['configuration'] as { executionSafeguards?: { runTimeoutMs?: number } } | undefined
+    )?.executionSafeguards?.runTimeoutMs === 'number'
+      ? {
+          timeLimitMs: (row['configuration'] as { executionSafeguards: { runTimeoutMs: number } })
+            .executionSafeguards.runTimeoutMs,
+        }
+      : {}),
     ...(row['startedAt'] === undefined ? {} : { startedAt: row['startedAt'] }),
     ...(row['completedAt'] === undefined ? {} : { completedAt: row['completedAt'] }),
   };
@@ -284,6 +305,8 @@ export async function executeFrontendCommand(
           runCancellation: true,
           targetedExecution: true,
           retest: true,
+          runDepth: true,
+          settings: true,
           findingsByRevision: true,
           projectProfile: true,
           toolchains: true,
@@ -420,6 +443,52 @@ export async function executeFrontendCommand(
         }),
       });
     }
+    if (input.command === 'settings.show') {
+      const rows = (await broker.request('providers:status', {})) as ReadonlyArray<{
+        name?: string;
+        configured?: boolean;
+        hint?: string;
+      }>;
+      const saved = (name: string): string | undefined => {
+        const row = Array.isArray(rows) ? rows.find((item) => item.name === name) : undefined;
+        return row?.configured === true ? row.hint : undefined;
+      };
+      const effort = Object.fromEntries(
+        EFFORT_AGENTS.map((agent) => [
+          agent,
+          parseAgentEffort(agent, saved(AGENT_EFFORT_SETTING[agent])) ?? 'default',
+        ]),
+      ) as Record<(typeof EFFORT_AGENTS)[number], string>;
+      const ms = parseRunTimeLimit(saved(RUN_TIME_LIMIT_SETTING));
+      return success(input.command, {
+        reasoningEffort: effort,
+        runTimeLimit: {
+          ms: ms ?? RUN_TIME_LIMIT_DEFAULT_MS,
+          isDefault: ms === undefined || ms === RUN_TIME_LIMIT_DEFAULT_MS,
+        },
+      });
+    }
+    if (input.command === 'settings.set-effort') {
+      const result = (await broker.request('settings:set', {
+        setting: 'reasoning-effort',
+        agent: input.agent,
+        value: input.value,
+      })) as { agent?: string; reasoningEffort?: string };
+      return success(input.command, {
+        agent: input.agent,
+        reasoningEffort: result.reasoningEffort ?? input.value,
+      });
+    }
+    if (input.command === 'settings.set-run-limit') {
+      const result = (await broker.request('settings:set', {
+        setting: 'run-time-limit',
+        value: input.value,
+      })) as { ms?: number; isDefault?: boolean };
+      return success(input.command, {
+        ms: result.ms ?? RUN_TIME_LIMIT_DEFAULT_MS,
+        isDefault: result.isDefault === true,
+      });
+    }
     if (input.command === 'toolchain.status') {
       return success(input.command, { toolchains: await broker.request('toolchains:status', {}) });
     }
@@ -484,6 +553,7 @@ export async function executeFrontendCommand(
         ...(input.webAccess === true ? { webAccess: true } : {}),
         ...(input.toolDownloads === true ? { toolDownloads: true } : {}),
         ...(input.useProfile === true ? { useProfile: true } : {}),
+        ...(input.depth === undefined ? {} : { depth: input.depth }),
         ...(input.revisionId === undefined ? {} : { revisionId: input.revisionId }),
         ...(input.retest === undefined ? {} : { retest: input.retest }),
       })) as { operationId?: string; runId?: string; status?: string } & Record<string, unknown>;

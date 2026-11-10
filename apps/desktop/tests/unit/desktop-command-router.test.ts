@@ -337,3 +337,70 @@ describe('shared desktop command router', () => {
     expect(h.seen.filter((c) => c.method === 'runtime.configure')).toHaveLength(2);
   });
 });
+
+describe('settings:set for external clients', () => {
+  const set = (h: Awaited<ReturnType<typeof harness>>, payload: unknown) =>
+    dispatchDesktopCommand(h.service, 'settings:set', payload, {}, { external: true });
+
+  it('is allowed, and changes an agent effort and the run time limit', async () => {
+    const h = await harness(true);
+    expect(isCliAllowed('settings:set')).toBe(true);
+    expect(
+      await set(h, { setting: 'reasoning-effort', agent: 'glm', value: 'xhigh' }),
+    ).toMatchObject({ agent: 'glm', reasoningEffort: 'xhigh' });
+    expect(await set(h, { setting: 'run-time-limit', value: '21600000' })).toMatchObject({
+      ms: 21_600_000,
+      isDefault: false,
+    });
+    const statuses = h.service.providerStatuses() as Array<{
+      name: string;
+      configured: boolean;
+      hint: string;
+    }>;
+    const row = (name: string) => statuses.find((status) => status.name === name);
+    expect(row('SENTRY_GLM_REASONING')).toMatchObject({ configured: true, hint: 'xhigh' });
+    expect(row('SENTRY_RUN_TIME_LIMIT_MS')).toMatchObject({ configured: true, hint: '21600000' });
+    // "default" removes the setting again.
+    expect(
+      await set(h, { setting: 'reasoning-effort', agent: 'glm', value: 'default' }),
+    ).toMatchObject({ reasoningEffort: 'default' });
+    expect(await set(h, { setting: 'run-time-limit', value: 'default' })).toMatchObject({
+      isDefault: true,
+    });
+    const after = h.service.providerStatuses() as Array<{ name: string; configured: boolean }>;
+    expect(after.find((s) => s.name === 'SENTRY_GLM_REASONING')?.configured).not.toBe(true);
+    expect(after.find((s) => s.name === 'SENTRY_RUN_TIME_LIMIT_MS')?.configured).not.toBe(true);
+  });
+
+  it('refuses a level the agent does not take and a window out of range', async () => {
+    const h = await harness(true);
+    await expect(
+      set(h, { setting: 'reasoning-effort', agent: 'deepseek', value: 'medium' }),
+    ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
+    await expect(
+      set(h, { setting: 'reasoning-effort', agent: 'opencode', value: 'max' }),
+    ).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
+    await expect(set(h, { setting: 'run-time-limit', value: '1000' })).rejects.toMatchObject({
+      code: 'INVALID_ARGUMENT',
+    });
+    await expect(set(h, { setting: 'run-time-limit', value: '604800001' })).rejects.toMatchObject({
+      code: 'INVALID_ARGUMENT',
+    });
+  });
+
+  it('cannot be used to save a credential or any other setting', async () => {
+    const h = await harness(true);
+    for (const payload of [
+      { setting: 'OPENAI_API_KEY', value: 'sk-secret' },
+      { setting: 'reasoning-effort', agent: 'glm', value: 'max', name: 'OPENAI_API_KEY' },
+      { setting: 'reasoning-effort', agent: 'bash', value: 'max' },
+      { setting: 'run-time-limit', value: 'default', extra: true },
+      { setting: 'run-time-limit' },
+    ])
+      await expect(set(h, payload)).rejects.toThrow();
+    const saved = (h.service.providerStatuses() as Array<{ name: string; configured: boolean }>)
+      .filter((status) => status.configured)
+      .map((status) => status.name);
+    expect(saved).not.toContain('OPENAI_API_KEY');
+  });
+});

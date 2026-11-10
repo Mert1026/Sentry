@@ -90,6 +90,8 @@ export interface RunOptions {
   readonly webAccess?: boolean;
   /** Opt in to the official download hosts of language toolchains and SDKs. Omitted means off. */
   readonly toolDownloads?: boolean;
+  /** How deep the run investigates: "fast" plans fewer checks, "full" (or omitted) is the usual depth. */
+  readonly depth?: 'fast' | 'full';
   /** Phase 7 (§8-§13): TARGETED QA. Same independent agent architecture
    *  and FULL-strength responsibility class, focused on a narrower scope.
    *  Omitted (or mode 'full') preserves FULL semantics unchanged (§7). */
@@ -154,6 +156,10 @@ export interface RunStatus {
   readonly createdAt: string;
   readonly startedAt?: string;
   readonly completedAt: string | null;
+  /** "fast" or "full" (a run that recorded no depth is full). */
+  readonly depth: 'fast' | 'full';
+  /** The time window the run was given, in milliseconds, when it recorded one. */
+  readonly timeLimitMs?: number;
   readonly agents: {
     readonly configured: number;
     readonly queued: number;
@@ -401,6 +407,10 @@ export class RunCoordinator {
                 : SENTRY_SIMULATION_RUN_TIMEOUT_MS),
             ...(options.webAccess === true ? { webAccess: true } : {}),
             ...(options.toolDownloads === true ? { toolDownloads: true } : {}),
+            // A retest has its own fixed checks, so depth does not apply to it.
+            ...(options.depth === undefined || retest !== undefined
+              ? {}
+              : { depth: options.depth }),
           },
           profileUsage,
           ...(retest === undefined ? {} : { retest: retest.spec }),
@@ -1003,7 +1013,16 @@ export class RunCoordinator {
               : { [PROFILE_CONTEXT_KEY]: profileContextEntry(input.profileText) }),
             ...(input.preparationPolicy === undefined
               ? {}
-              : { qaDepth: { version: 1, deadlineAt }, workspacePreparation }),
+              : {
+                  qaDepth: {
+                    version: 1,
+                    deadlineAt,
+                    ...(input.run.configuration.executionSafeguards?.depth === 'fast'
+                      ? { profile: 'fast' }
+                      : {}),
+                  },
+                  workspacePreparation,
+                }),
             agentStack: stack,
           },
         },
@@ -1478,6 +1497,10 @@ export class RunCoordinator {
       createdAt: run.createdAt,
       ...(run.startedAt === undefined ? {} : { startedAt: run.startedAt }),
       completedAt: run.completedAt ?? null,
+      depth: run.configuration.executionSafeguards?.depth === 'fast' ? 'fast' : 'full',
+      ...(run.configuration.executionSafeguards?.runTimeoutMs === undefined
+        ? {}
+        : { timeLimitMs: run.configuration.executionSafeguards.runTimeoutMs }),
       agents: {
         configured: run.configuration.agentStackIds.length,
         queued: counts.get('queued') ?? 0,

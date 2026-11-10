@@ -3,12 +3,13 @@ import { InfoPopover } from '../components/InfoPopover.js';
 import { LoadingOverlay } from '../components/BlockingOverlay.js';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Bot, Cpu, Info, KeyRound, PackageCheck, ShieldCheck, Terminal } from 'lucide-react';
+import { Bot, Brain, Cpu, Info, KeyRound, PackageCheck, ShieldCheck, Terminal } from 'lucide-react';
 import { sentryApi } from '../lib/sentry-api.js';
 import { runtimeConnectionState, useRuntimeStatus } from '../lib/use-runtime-status.js';
 import { PageHeader, PageSection } from '../components/ui/PageHeader.js';
 import { StatusPill } from '../components/ui/StatusPill.js';
 import { InfoTile } from '../components/InfoTile.js';
+import { selectedEffort } from '../lib/agent-effort.js';
 
 interface RuntimeStatus {
   connected: boolean;
@@ -48,6 +49,14 @@ export function Environment(): React.JSX.Element {
     queryFn: () => sentryApi().doctors.environment(),
   });
   const runtime = useRuntimeStatus();
+  // Same query (and cache) as Settings → Providers, so a change there shows here at once.
+  const providers = useQuery({
+    queryKey: ['providers'],
+    queryFn: () => sentryApi().providers.status(),
+  });
+  const providerRows = Array.isArray(providers.data)
+    ? (providers.data as ReadonlyArray<{ name: string; configured: boolean; hint: string }>)
+    : undefined;
   const cli = useQuery({
     queryKey: ['cli-status'],
     queryFn: () => sentryApi().cli.status(),
@@ -216,6 +225,14 @@ export function Environment(): React.JSX.Element {
                   wide
                   compact
                 />
+                {selectedEffort(stack.id, providerRows) === undefined ? null : (
+                  <InfoTile
+                    icon={Brain}
+                    label="Reasoning effort"
+                    value={selectedEffort(stack.id, providerRows) as string}
+                    compact
+                  />
+                )}
                 <InfoTile
                   icon={KeyRound}
                   label="Credential"

@@ -2,6 +2,36 @@
 
 ## [Unreleased]
 
+- CLI: `settings show`, `settings effort <agent> <level|default>` and `settings run-limit
+<default|3h|6h|none|90m|12h>` read and change an agent's reasoning effort and the default run time
+  limit (the broker accepts only those two settings). `run list` and `run status` report each run's
+  `depth` and `timeLimitMs`, fast runs are marked `FAST`, and `capabilities` reports `settings` and
+  `runDepth`.
+- Run depth: choose **Fast** or **Full** when starting a run (project page, or
+  `run start --depth fast|full`). Full (the default) plans as before, one check per 25 minutes of
+  the window up to 8 (6 for the default 3 hours); Fast plans at most 3. Both use the same time window and the same extra passes. The depth is recorded on the run.
+- Default run time limit in Settings → Runtime: 3 hours (default), 6 hours, No limit or a custom
+  value. It is the window every run gets unless `--timeout-ms` names its own. The window is a
+  ceiling, and it also decides which extra passes have time to run. "No limit" is 7 days, and the
+  longest window a run can now be given is 7 days (it was 12 hours). The CLI help and CLI docs said
+  the default window was 30 minutes; it has been 3 hours.
+- Fix three findings from run `run_01M727R5E0B1H9Y2214H7FFS22`:
+  - A symlink whose target contains a backslash is now copied exactly on Linux and macOS (it was
+    rewritten to a forward slash, so the copy pointed at a different file). Windows still treats a
+    backslash as a path separator. A project with such a link gets a different revision hash on
+    its next import.
+  - The human-readable log keeps every entry on one line: line breaks and control characters in
+    finding titles and other free text become spaces, so a title can no longer forge a status line.
+    The JSON export is unchanged.
+  - A stored artifact whose path names the data root itself (for example `.`) is refused before its
+    database row is deleted.
+- Reasoning effort for every agent, in Settings → Providers: each agent card has its own
+  "Reasoning effort" choice with the levels that agent's tool takes (OpenCode and ChatGPT: low,
+  medium, high; GLM through Claude Code: low to maximum; DeepSeek: off, low, high, maximum).
+  "Default" passes nothing and the provider decides. The setting applies to every run of that
+  agent. It is not yet recorded on the run, and GLM and DeepSeek effort has not been exercised
+  against the live providers.
+
 ## [2.0.0] - 2026-11-09
 
 Major release. It removes the merge, verification, issue and retest features of 1.x

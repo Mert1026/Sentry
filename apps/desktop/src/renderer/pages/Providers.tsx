@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check } from 'lucide-react';
 import { sentryApi } from '../lib/sentry-api.js';
+import { AGENT_EFFORT_SETTING, effortOptions, type EffortAgent } from '../lib/agent-effort.js';
 import {
   CUSTOM_MODEL_VALUE,
   CHATGPT_MODELS,
@@ -21,6 +22,7 @@ import {
 } from '../lib/provider-models.js';
 import { PageHeader } from '../components/ui/PageHeader.js';
 import { OpenAiAccountPanel } from '../components/OpenAiAccountPanel.js';
+import { SegmentedControl } from '../components/ui/Tabs.js';
 
 interface ProviderStatus {
   name: string;
@@ -59,6 +61,12 @@ const DESCRIPTIONS: Record<string, string> = {
     'How hard the ChatGPT agent thinks (non-secret): low, medium or high. Higher effort usually finds more but takes longer and costs more. Unset uses the provider default.',
   SENTRY_CHATGPT_MODEL:
     'ChatGPT agent model id (non-secret), an OpenAI model such as gpt-5.5. The ChatGPT agent runs the OpenCode harness against OpenAI.',
+  SENTRY_OPENCODE_REASONING:
+    'How hard the OpenCode agent thinks (non-secret): low, medium or high. Higher effort usually finds more but takes longer and costs more. Some models ignore it. Unset uses the provider default.',
+  SENTRY_GLM_REASONING:
+    'How hard the GLM agent thinks (non-secret): low, medium, high, extra high or maximum. It is passed to Claude Code as its effort level; the Z.AI endpoint decides whether it applies. Higher effort usually finds more but takes longer and costs more. Unset uses the provider default.',
+  SENTRY_DEEPSEEK_REASONING:
+    'How hard the DeepSeek agent thinks (non-secret): off, low, high or maximum. Off turns extra thinking off. Higher effort usually finds more but takes longer and costs more. Unset uses the provider default.',
 };
 
 const SECRET_NAMES: ReadonlySet<string> = new Set([
@@ -412,6 +420,15 @@ export function Providers(): React.JSX.Element {
                 ),
               )
             )}
+            {card.title === 'DeepSeek' || card.title === 'GLM' ? (
+              <ReasoningEffortField
+                agent={card.title === 'GLM' ? 'glm' : 'deepseek'}
+                byName={byName}
+                pending={save.isPending || clear.isPending}
+                onSave={fieldProps.onSave}
+                onClear={fieldProps.onClear}
+              />
+            ) : null}
           </section>
         ))}
       </div>
@@ -1100,43 +1117,49 @@ function OpenCodeCard(props: {
         detailsLabel="Explanation"
         {...common}
       />
+      <ReasoningEffortField
+        agent="opencode"
+        byName={props.byName}
+        pending={props.savePending || props.clearPending}
+        onSave={props.onSave}
+        onClear={props.onClear}
+      />
     </div>
   );
 }
-const REASONING_EFFORTS: ReadonlyArray<{ value: string; label: string }> = [
-  { value: '', label: 'Default (provider setting)' },
-  { value: 'low', label: 'Low' },
-  { value: 'medium', label: 'Medium' },
-  { value: 'high', label: 'High' },
-];
-
-/** How hard the ChatGPT agent thinks. Saving applies at once; "Default" removes the setting. */
+/** How hard one agent thinks. Saving applies at once; "Default" removes the setting. */
 function ReasoningEffortField(props: {
-  readonly value: string;
+  readonly agent: EffortAgent;
+  readonly byName: Map<string, ProviderStatus>;
   readonly pending: boolean;
-  readonly onChange: (value: string) => void;
+  readonly onSave: (name: string, value: string) => void;
+  readonly onClear: (name: string) => void;
 }): React.JSX.Element {
-  const known = REASONING_EFFORTS.some((option) => option.value === props.value);
+  const name = AGENT_EFFORT_SETTING[props.agent];
+  const status = props.byName.get(name);
+  const value = status?.configured === true ? status.hint : '';
+  const options = effortOptions(props.agent);
+  const known = options.some((option) => option.value === value);
   return (
     <div style={{ marginBottom: 12 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <label htmlFor="provider-SENTRY_CHATGPT_REASONING" className="card-title">
+        <label htmlFor={'provider-' + name} className="card-title">
           Reasoning effort
         </label>
         <span className="info-row-spacer" />
-        <InfoPopover title="Reasoning effort">
-          {DESCRIPTIONS['SENTRY_CHATGPT_REASONING'] ?? ''}
-        </InfoPopover>
+        <InfoPopover title="Reasoning effort">{DESCRIPTIONS[name] ?? ''}</InfoPopover>
       </div>
       <select
-        id="provider-SENTRY_CHATGPT_REASONING"
-        aria-label="Value for SENTRY_CHATGPT_REASONING"
-        value={known ? props.value : ''}
+        id={'provider-' + name}
+        aria-label={'Value for ' + name}
+        value={known ? value : ''}
         disabled={props.pending}
-        onChange={(event) => props.onChange(event.target.value)}
+        onChange={(event) =>
+          event.target.value === '' ? props.onClear(name) : props.onSave(name, event.target.value)
+        }
         style={{ minWidth: 200, width: '100%', marginTop: 4 }}
       >
-        {REASONING_EFFORTS.map((option) => (
+        {options.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
           </option>
@@ -1187,44 +1210,23 @@ function ChatGptCard(props: {
         optionNote={chatGptModelNote}
         {...common}
       />
-      <ReasoningEffortField
-        value={
-          props.byName.get('SENTRY_CHATGPT_REASONING')?.configured === true
-            ? (props.byName.get('SENTRY_CHATGPT_REASONING')?.hint ?? '')
-            : ''
-        }
-        pending={props.savePending || props.clearPending}
-        onChange={(next) =>
-          next === ''
-            ? props.onClear('SENTRY_CHATGPT_REASONING')
-            : props.onSave('SENTRY_CHATGPT_REASONING', next)
-        }
-      />
       <div style={{ marginBottom: 12 }}>
         <span id="openai-auth-label" className="metadata">
           Sign in with
         </span>
-        <div
-          role="group"
-          aria-labelledby="openai-auth-label"
-          style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}
-        >
-          <button
-            className={account ? 'compact ghost' : 'primary compact'}
-            aria-pressed={!account}
-            disabled={props.savePending}
-            onClick={() => props.onSave('SENTRY_OPENAI_AUTH', 'key')}
-          >
-            API key
-          </button>
-          <button
-            className={account ? 'primary compact' : 'compact ghost'}
-            aria-pressed={account}
-            disabled={props.savePending}
-            onClick={() => props.onSave('SENTRY_OPENAI_AUTH', 'account')}
-          >
-            ChatGPT account
-          </button>
+        <div style={{ marginTop: 6 }}>
+          <SegmentedControl
+            label="Sign in with"
+            value={account ? 'account' : 'key'}
+            onChange={(value) => {
+              if (props.savePending || (value === 'account') === account) return;
+              props.onSave('SENTRY_OPENAI_AUTH', value);
+            }}
+            options={[
+              { value: 'key', label: 'API key' },
+              { value: 'account', label: 'ChatGPT account' },
+            ]}
+          />
         </div>
       </div>
       {account ? (
@@ -1237,6 +1239,13 @@ function ChatGptCard(props: {
           {...common}
         />
       )}
+      <ReasoningEffortField
+        agent="chatgpt"
+        byName={props.byName}
+        pending={props.savePending || props.clearPending}
+        onSave={props.onSave}
+        onClear={props.onClear}
+      />
     </div>
   );
 }

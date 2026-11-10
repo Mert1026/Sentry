@@ -5,8 +5,10 @@ import {
   CheckCircle2,
   Crosshair,
   Download,
+  Gauge,
   Globe,
   Layers,
+  Timer,
   Users,
   XCircle,
 } from 'lucide-react';
@@ -14,6 +16,7 @@ import { CopyId } from './CopyId.js';
 import { StatusPill, dotClassForStatus } from './ui/StatusPill.js';
 import { AGENT_DISPLAY_NAMES, formatCount } from '../lib/agent-telemetry.js';
 import { InfoTile as Tile } from './InfoTile.js';
+import { describeRunLimit } from '../lib/run-time-limit.js';
 
 export function RunSummaryPanel({
   snapshot,
@@ -27,7 +30,6 @@ export function RunSummaryPanel({
   const revision = snapshot['revision'] as Record<string, unknown> | undefined;
   const agentRuns = (snapshot['agentRuns'] as Array<Record<string, unknown>>) ?? [];
   const findings = (snapshot['findings'] as unknown[]) ?? [];
-  const evidence = (snapshot['evidence'] as unknown[]) ?? [];
   const projectName =
     project !== undefined
       ? String(project['name'] ?? run['projectId'] ?? '')
@@ -43,7 +45,12 @@ export function RunSummaryPanel({
   const configuration = run['configuration'] as
     | {
         agentStackIds?: string[];
-        executionSafeguards?: { webAccess?: boolean; toolDownloads?: boolean };
+        executionSafeguards?: {
+          webAccess?: boolean;
+          toolDownloads?: boolean;
+          depth?: 'fast' | 'full';
+          runTimeoutMs?: number;
+        };
         profileUsage?: {
           requested: boolean;
           usedAgentStackIds: string[];
@@ -65,6 +72,8 @@ export function RunSummaryPanel({
   const failedCount = agentRuns.filter((agent) =>
     ['failed', 'timed_out', 'interrupted'].includes(String(agent['status'])),
   ).length;
+  const fastRun = configuration?.executionSafeguards?.depth === 'fast';
+  const timeLimitMs = configuration?.executionSafeguards?.runTimeoutMs;
   const webOn = configuration?.executionSafeguards?.webAccess === true;
   const downloadsOn = configuration?.executionSafeguards?.toolDownloads === true;
   const profileWithout =
@@ -92,6 +101,10 @@ export function RunSummaryPanel({
             tone={run['executionKind'] === 'production' ? 'on' : 'warn'}
             wide
           />
+          <Tile icon={Gauge} label="Run depth" value={fastRun ? 'Fast' : 'Full'} compact />
+          {timeLimitMs === undefined || timeLimitMs <= 0 ? null : (
+            <Tile icon={Timer} label="Time limit" value={describeRunLimit(timeLimitMs)} compact />
+          )}
           <Tile
             icon={Globe}
             label="Web access"
@@ -241,14 +254,6 @@ export function RunSummaryPanel({
             })}
           </div>
         )}
-        <div className="metadata" style={{ marginTop: 8 }}>
-          {formatCount(findings.length) +
-            ' total ' +
-            (findings.length === 1 ? 'finding' : 'findings') +
-            ' · ' +
-            formatCount(evidence.length) +
-            ' evidence'}
-        </div>
         {['partial', 'failed', 'cancelled'].includes(String(run['status'])) ? (
           <p className="metadata">
             Incomplete analysis. Reported findings and evidence are retained independently for each

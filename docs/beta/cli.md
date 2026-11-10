@@ -103,10 +103,35 @@ connection never cancels a run; cancel explicitly with `run cancel`.
 capabilities [--json]
 project list/add/show/update/delete/revisions/doctor
 project findings | profile | profile-build
+settings show | effort | run-limit
 agent list | agent doctor opencode|deepseek|glm|chatgpt
 run start/list/show/status/cancel/result/export
 toolchain status | install | remove
 ```
+
+### Settings: reasoning effort and the run time limit
+
+```text
+sentry cli settings show
+sentry cli settings effort <opencode|deepseek|glm|chatgpt> <level|default>
+sentry cli settings run-limit <default|3h|6h|none|90m|12h>
+```
+
+These read and change the same two settings as Desktop (Settings → Providers → Reasoning effort and
+Settings → Runtime → Run time limit); a change made here shows up in Desktop at once and the other way
+round. `settings show` lists each agent's reasoning effort (`default` when none is saved) and the
+default run time limit with `isDefault`.
+
+- `settings effort` takes the levels that agent's tool accepts: OpenCode and ChatGPT `low`, `medium`,
+  `high`; GLM `low`, `medium`, `high`, `xhigh`, `max`; DeepSeek `off`, `low`, `high`, `max`.
+  `default` removes the setting. Any other level is refused with `INVALID_ARGUMENT`.
+- `settings run-limit` takes `3h` (the default, same as `default`), `6h`, `none` (the longest window,
+  7 days) or a custom window from `10m` to `168h`, such as `90m` or `12h`.
+- Only these two settings can be changed this way. Credentials, models and every other setting stay
+  in Desktop; the broker refuses them (`settings:set` accepts nothing else).
+- `run list` and `run status` report each run's `depth` (`fast` or `full`) and `timeLimitMs`, and
+  `run list` and `project findings` mark fast runs with `FAST`.
+- `capabilities` reports `features.settings: true` and `features.runDepth: true`.
 
 ### Re-testing earlier findings, profiles, toolchains
 
@@ -281,12 +306,29 @@ The CLI contract version stays 1; all new fields are additive and optional.
 
 ## Run timeouts
 
-`run start --timeout-ms <ms>` (integer, 1000–43200000) overrides the engine
-run timeout for that run and propagates canonically:
+`run start --timeout-ms <ms>` (integer, 1000–604800000) sets the run's time
+window for that run and propagates canonically:
 CLI parser → frontend → Desktop `runs:start` → WSL `runs.start` →
-RunCoordinator execution safeguards. Omitted keeps the 30-minute production
-default, so UI-started runs are unaffected. Out-of-range values fail with
+RunCoordinator execution safeguards. Omitted uses the default chosen in
+Settings → Runtime (3 hours, 6 hours, No limit or a custom value); with nothing
+chosen that is **3 hours**. The window is a ceiling, not a target: a run ends
+when its work is done. It also decides which extra passes still have time (a
+second pass needs 40% of the window left, deepening 50% and the hazard sweep
+30%), so a window shorter than about an hour quietly drops some of them.
+"No limit" is the longest window, 7 days. Out-of-range values fail with
 `INVALID_ARGUMENT` at the parser; nothing is silently ignored.
+
+## Run depth
+
+`run start --depth fast|full` chooses how many checks the agents plan. **Full**
+(the default, and what runs did before) plans about one check per 25 minutes of the
+time window, up to 8 (6 in the default 3-hour window); **fast** plans at most 3.
+Both use the same time window and the same extra passes (second pass, deepening
+and hazard sweep), so a fast run is shorter but not minimal: in one measured
+run the first pass was about 60% of the time and the extra passes about 35%.
+The depth is recorded on the run and shown next to it in Desktop. `--depth`
+does not apply to `--retest` runs, which have their own fixed checks.
+`capabilities` reports `features.runDepth: true` when the broker supports it.
 
 ## Client identity
 

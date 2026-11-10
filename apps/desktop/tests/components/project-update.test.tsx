@@ -308,3 +308,43 @@ describe('run revision selection', () => {
     expect(items[0]!.textContent).not.toContain('2026-10-25T12:00');
   });
 });
+
+describe('run depth selector', () => {
+  it('starts a Full run by default, without sending a depth', async () => {
+    const f = fixture();
+    const start = await screen.findByRole('button', { name: 'Start Full QA' });
+    await waitFor(() => expect((start as HTMLButtonElement).disabled).toBe(false));
+    const group = screen.getByRole('group', { name: 'Run depth' });
+    expect(within(group).getByRole('button', { name: 'Full' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
+    fireEvent.click(start);
+    const dialog = await screen.findByRole('dialog', { name: 'Confirm start full QA' });
+    expect(within(dialog).getByText('Run depth: Full')).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Start QA' }));
+    await waitFor(() => expect(f.api.runs.start).toHaveBeenCalled());
+    const options = f.api.runs.start.mock.calls[0]?.[1] as unknown as Record<string, unknown>;
+    expect(options).not.toHaveProperty('depth');
+  });
+
+  it('sends depth fast when Fast is chosen', async () => {
+    const f = fixture();
+    const start = await screen.findByRole('button', { name: 'Start Full QA' });
+    await waitFor(() => expect((start as HTMLButtonElement).disabled).toBe(false));
+    const group = screen.getByRole('group', { name: 'Run depth' });
+    fireEvent.click(within(group).getByRole('button', { name: 'Fast' }));
+    expect(within(group).getByRole('button', { name: 'Fast' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
+    fireEvent.click(start);
+    const dialog = await screen.findByRole('dialog', { name: 'Confirm start full QA' });
+    expect(within(dialog).getByText('Run depth: Fast')).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Start QA' }));
+    await waitFor(() =>
+      expect(f.api.runs.start).toHaveBeenCalledWith(
+        'proj_alpha',
+        expect.objectContaining({ mode: 'full', depth: 'fast' }),
+      ),
+    );
+  });
+});

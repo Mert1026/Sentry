@@ -24,6 +24,8 @@ function stageTone(state: string): string {
       return 'active';
     case 'failed':
       return 'failed';
+    case 'warning':
+      return 'warning';
     default:
       return '';
   }
@@ -111,9 +113,6 @@ export function AgentCanvasNode({ data }: NodeProps): React.JSX.Element {
         </span>
         <span className="metric-chip" title="Evidence records captured by this agent">
           {formatCount(view.evidenceCount) + ' evidence'}
-        </span>
-        <span className="metric-chip" title="Elapsed time">
-          {formatElapsed(view.elapsedMs)}
         </span>
       </div>
       <Handle type="source" position={Position.Bottom} />

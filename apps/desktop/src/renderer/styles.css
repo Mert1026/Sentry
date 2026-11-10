@@ -1252,6 +1252,27 @@ textarea:focus {
     opacity: 0.45;
   }
 }
+/* The agent hit a warning or error: a calm yellow blink in diagonal stripes. Only yellow is used
+   (the gaps are a faint yellow), with a faint glow and a shallow blink so it never shines. */
+.flow-node .stage-dots i.warning {
+  background-color: rgba(212, 192, 11, 0.14);
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(212, 192, 11, 0.78) 0 3px,
+    rgba(212, 192, 11, 0.14) 3px 6px
+  );
+  box-shadow: 0 0 3px rgba(212, 192, 11, 0.25);
+  animation: stage-breathe-soft 2.4s ease-in-out infinite;
+}
+@keyframes stage-breathe-soft {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.72;
+  }
+}
 .flow-node .stage-dots i.failed {
   background: var(--danger);
   box-shadow: 0 0 10px rgba(185, 100, 98, 0.7);

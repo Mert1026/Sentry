@@ -41,6 +41,7 @@ export const CLI_BROKER_COMMANDS: readonly string[] = [
   'doctors:environment',
   'providers:status',
   'providers:detect-binaries',
+  'settings:set',
   'production:readiness',
   'system:info',
   'system:active-runs',

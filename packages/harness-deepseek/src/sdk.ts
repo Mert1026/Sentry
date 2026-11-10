@@ -27,6 +27,8 @@ export type DeepSeekClientFactory = (input: {
   readonly environment: NodeJS.ProcessEnv;
   readonly modelId: string;
   readonly provider: string;
+  /** Reasoning effort for the model (`off`, `low`, `high`, `max`); absent keeps the provider default. */
+  readonly reasoningEffort?: string;
   readonly profilePatches: readonly string[];
   readonly initializeTimeoutMs: number;
   readonly shutdownTimeoutMs: number;
@@ -119,6 +121,14 @@ export const createProductionDeepSeekClient: DeepSeekClientFactory = async (inpu
     patches: [...input.profilePatches],
     provider: input.provider,
     model: input.modelId,
+    // An adapter-owned id the SDK validates for the chosen model; only a level Sentry accepts gets here.
+    ...(input.reasoningEffort === undefined
+      ? {}
+      : {
+          reasoningEffort: input.reasoningEffort as NonNullable<
+            DeepSeekHarnessOptions['reasoningEffort']
+          >,
+        }),
     cwd: input.cwd,
     dshHome: input.dshHome,
     processCwd: input.cwd,

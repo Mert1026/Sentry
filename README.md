@@ -77,6 +77,11 @@ More detail: [getting started](docs/getting-started.md) and the
 
 1. **Settings → Providers**: add the credentials for the agents you will use.
    Credentials use OS-backed encryption; there is no plaintext fallback.
+   Each agent card also has a **Reasoning effort** choice (how hard the model thinks; higher
+   usually finds more but takes longer and costs more). The levels offered are the ones that
+   agent's tool accepts, and **Default** leaves it to the provider.
+   **Settings → Runtime** sets the default **run time limit** for every run: 3 hours (default),
+   6 hours, No limit or a custom value.
 2. **Environment**: check readiness. Diagnostics never make paid calls, and a
    ready state does not guarantee account credit or provider acceptance.
 3. **Settings → Application**: theme, interface language (English or Bulgarian),
@@ -101,7 +106,8 @@ allow it for that run.
 1. Add a project. Sentry creates a managed copy and an immutable revision and leaves
    the original folder untouched. New imports skip common generated caches and
    environments; see [project imports](docs/setup/distribution.md#project-imports).
-2. Choose the agents, then start **Full QA**, or **Targeted QA** with project-relative paths.
+2. Choose the agents and the **run depth** (**Fast** plans fewer checks, **Full** is the usual
+   depth), then start **Full QA**, or **Targeted QA** with project-relative paths.
    Optionally use the project profile and choose the revision to run.
 3. Watch the run, open an agent to see its stages, findings and evidence, and export
    JSON or logs when it ends.
@@ -162,6 +168,10 @@ sentry cli run start proj_ID --retest run_ID:finding_ID --wait --json
 sentry cli run start proj_ID --mode full --agents chatgpt --profile --tools --json
 sentry cli project profile proj_ID --json
 sentry cli toolchain status --json
+sentry cli run start proj_ID --mode full --depth fast --json
+sentry cli settings show --json
+sentry cli settings run-limit 6h --json
+sentry cli settings effort glm high --json
 ```
 
 Replace `proj_ID`, `run_ID` and `finding_ID` with real IDs. See the

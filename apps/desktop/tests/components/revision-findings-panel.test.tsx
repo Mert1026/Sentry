@@ -257,3 +257,33 @@ describe('re-testing findings from an older revision', () => {
     expect(screen.queryByText('No findings from this agent in this run.')).toBeNull();
   });
 });
+
+describe('fast runs in findings by revision', () => {
+  it('marks a fast run with a FAST label and leaves the others alone', () => {
+    const base = data.revisions[0]!;
+    const fastData: FindingsByRevision = {
+      ...data,
+      revisions: [
+        {
+          ...base,
+          agents: [
+            {
+              agentStackId: 'stack_a',
+              runs: [
+                { ...base.agents[0]!.runs[0]!, runId: 'run_fast', depth: 'fast' },
+                { ...base.agents[0]!.runs[1]!, runId: 'run_full' },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+    render(
+      <MemoryRouter>
+        <RevisionFindingsPanel stacks={stacks} data={fastData} loading={false} />
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByText('Agent A'));
+    expect(screen.getAllByText('FAST')).toHaveLength(1);
+  });
+});

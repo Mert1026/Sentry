@@ -28,7 +28,7 @@ sentry_cli_help() {
   echo "  project doctor <project-id> [--json]"
   echo "  agent list [--json]"
   echo "  agent doctor opencode|deepseek|glm|chatgpt [--json]"
-  echo "  run start <project-id> --mode full|targeted [--agents opencode,deepseek,glm,chatgpt] [--paths a,b] [--wait] [--timeout-ms <ms>] [--web] [--tools] [--profile] [--revision <rev-id>] [--json]"
+  echo "  run start <project-id> --mode full|targeted [--agents opencode,deepseek,glm,chatgpt] [--paths a,b] [--depth fast|full] [--wait] [--timeout-ms <ms>] [--web] [--tools] [--profile] [--revision <rev-id>] [--json]"
   echo "  run start <project-id> --retest <run-id>:<finding-id>,... [--retest-with reporter|all] [--agents ...] [--wait] [--json]"
   echo "  run list <project-id> [--json]"
   echo "  run show <run-id> [--json]"
@@ -38,6 +38,9 @@ sentry_cli_help() {
   echo "  run export <run-id> --format log|json --out <path> [--json]"
   echo "  toolchain status [--json]"
   echo "  toolchain install|remove <pack-id> <version> [--json]"
+  echo "  settings show [--json]"
+  echo "  settings effort <opencode|deepseek|glm|chatgpt> <level|default> [--json]"
+  echo "  settings run-limit <default|3h|6h|none|90m|12h> [--json]"
   echo ""
   echo "Automation: always pass --json and parse stdout with JSON.parse."
   return 0

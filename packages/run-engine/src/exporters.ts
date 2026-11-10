@@ -7,6 +7,16 @@ import {
   type StoredHarnessEvent,
 } from '@qa/persistence';
 
+/**
+ * Free text (a finding title, a tool name, an error message) in the human-readable log. Every log
+ * entry is exactly one line: a line break inside the text would start a new, forged entry such as
+ * a fake run status. Line breaks, other control characters and runs of whitespace become a single
+ * space; the JSON export keeps the text exactly as stored.
+ */
+export function logText(value: string): string {
+  return value.replace(/[\p{Cc}\s]+/gu, ' ').trim();
+}
+
 function eventLogLine(stored: StoredHarnessEvent): string {
   const event = stored.event;
   let message: string;
@@ -55,7 +65,7 @@ function eventLogLine(stored: StoredHarnessEvent): string {
     '] [' +
     stored.sequence +
     '] ' +
-    message +
+    logText(message) +
     '\n'
   );
 }
@@ -177,7 +187,7 @@ export class RunExporter {
       );
       yield `[${logAt}] [SENTRY] Agent ${agentRun.agentStackId} (${agentRun.status}): ${agentFindings.length} finding${agentFindings.length === 1 ? '' : 's'}\n`;
       for (const finding of agentFindings) {
-        yield `[${logAt}] [SENTRY] Finding [${finding.severity.toUpperCase()}] ${finding.title}\n`;
+        yield `[${logAt}] [SENTRY] Finding [${finding.severity.toUpperCase()}] ${logText(finding.title)}\n`;
       }
     }
     yield '[' +

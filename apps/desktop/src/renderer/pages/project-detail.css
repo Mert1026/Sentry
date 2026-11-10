@@ -266,6 +266,16 @@
   grid-column: 2;
   grid-row: 1/3;
   align-self: center;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+.project-agent-effort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
 }
 .project-agent-status .status-pill {
   text-transform: capitalize;

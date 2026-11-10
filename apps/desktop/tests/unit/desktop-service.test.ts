@@ -208,3 +208,53 @@ describe('desktop RPC adapter', () => {
     expect(h.seen.some((c) => c.method === 'production.preRunGate')).toBe(true);
   });
 });
+
+describe('reasoning effort reaches the runtime for every agent', () => {
+  it('pushes each agent its own level and "default" for the rest', async () => {
+    const h = await harness();
+    await h.service.providerSaveKey('SENTRY_GLM_REASONING', 'xhigh');
+    await h.service.providerSaveKey('SENTRY_DEEPSEEK_REASONING', 'off');
+    await h.service.providerSaveKey('SENTRY_CHATGPT_REASONING', 'high');
+    await h.service.pushRuntimeConfiguration();
+    const pushed = h.seen.filter((c) => c.method === 'runtime.configure').at(-1);
+    expect(pushed?.params).toMatchObject({
+      reasoningEffort: { glm: 'xhigh', deepseek: 'off', chatgpt: 'high', opencode: 'default' },
+    });
+    // A level that agent's tool does not take is never passed on.
+    await h.service.providerSaveKey('SENTRY_DEEPSEEK_REASONING', 'medium');
+    await h.service.pushRuntimeConfiguration();
+    const again = h.seen.filter((c) => c.method === 'runtime.configure').at(-1);
+    expect(again?.params).toMatchObject({ reasoningEffort: { deepseek: 'default' } });
+  });
+});
+
+describe('run time limit and depth reach the runtime', () => {
+  it('gives a run the window chosen in Settings, and a run with its own window keeps it', async () => {
+    const h = await harness();
+    const id = 'proj_01K7777777777777777777A8W1';
+    const started = () => h.seen.filter((c) => c.method === 'runs.start').at(-1)?.params;
+    // Nothing chosen: no window is sent, so the runtime applies its 3 hour default.
+    await h.service.startRun(id, { mode: 'full' });
+    expect(started()).not.toHaveProperty('runTimeoutMs');
+    await h.service.providerSaveKey('SENTRY_RUN_TIME_LIMIT_MS', '21600000');
+    await h.service.startRun(id, { mode: 'full' });
+    expect(started()).toMatchObject({ runTimeoutMs: 21_600_000 });
+    await h.service.startRun(id, { mode: 'full', runTimeoutMs: 1_800_000 });
+    expect(started()).toMatchObject({ runTimeoutMs: 1_800_000 });
+    // A saved value that is out of range is ignored.
+    await h.service.providerSaveKey('SENTRY_RUN_TIME_LIMIT_MS', '1000');
+    await h.service.startRun(id, { mode: 'full' });
+    expect(started()).not.toHaveProperty('runTimeoutMs');
+  });
+
+  it('forwards the run depth', async () => {
+    const h = await harness();
+    const id = 'proj_01K7777777777777777777A8W1';
+    const started = () => h.seen.filter((c) => c.method === 'runs.start').at(-1)?.params;
+    await h.service.startRun(id, { mode: 'full', depth: 'fast' });
+    expect(started()).toMatchObject({ depth: 'fast' });
+    await h.service.startRun(id, { mode: 'full' });
+    expect(started()).not.toHaveProperty('depth');
+    await expect(h.service.startRun(id, { mode: 'full', depth: 'turbo' })).rejects.toThrow();
+  });
+});

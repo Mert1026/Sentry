@@ -79,3 +79,87 @@ describe('Environment agent health tiles', () => {
     expect(translateText('Source: managed', 'bg')).toBe('Източник: управляван');
   });
 });
+
+describe('Environment shows the reasoning effort chosen in Settings', () => {
+  function showWith(
+    stacks: Array<Record<string, unknown>>,
+    providers: Array<{ name: string; configured: boolean; hint: string }> | undefined,
+  ) {
+    vi.stubGlobal('sentry', {
+      doctors: { environment: async () => ({ runtime: undefined, agentStacks: stacks }) },
+      providers:
+        providers === undefined
+          ? undefined
+          : {
+              status: async () =>
+                providers.map((row) => ({ ...row, source: 'persisted', persistence: 'persisted' })),
+            },
+      runtime: { status: async () => ({ connected: true, distro: 'Ubuntu', hello: undefined }) },
+      cli: { status: async () => ({ started: true, pipePath: 'x', connectedClients: [] }) },
+    });
+    render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <MemoryRouter>
+          <Environment />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+  }
+
+  const stack = (id: string, displayName: string) => ({
+    id,
+    displayName,
+    modelId: 'some-model',
+    configured: true,
+    binaryAvailable: true,
+    runtimeVerified: true,
+    readiness: 'ready',
+  });
+
+  it('gives each agent its own selected level, and Default when none is saved', async () => {
+    showWith(
+      [
+        stack('stack_glm_main', 'GLM QA Agent'),
+        stack('stack_deepseek_main', 'DeepSeek QA Agent'),
+        stack('stack_chatgpt_main', 'ChatGPT QA Agent'),
+        stack('stack_opencode_main', 'OpenCode QA Agent'),
+      ],
+      [
+        { name: 'SENTRY_GLM_REASONING', configured: true, hint: 'xhigh' },
+        { name: 'SENTRY_DEEPSEEK_REASONING', configured: true, hint: 'off' },
+        { name: 'SENTRY_CHATGPT_REASONING', configured: true, hint: 'high' },
+      ],
+    );
+    const tile = async (agent: string) =>
+      within((await screen.findByText(agent)).closest('.card') as HTMLElement);
+    expect((await tile('GLM QA Agent')).getByLabelText(/Reasoning effort/).textContent).toContain(
+      'Extra high effort',
+    );
+    expect(
+      (await tile('DeepSeek QA Agent')).getByLabelText(/Reasoning effort/).textContent,
+    ).toContain('Off (no extra thinking)');
+    expect(
+      (await tile('ChatGPT QA Agent')).getByLabelText(/Reasoning effort/).textContent,
+    ).toContain('High effort');
+    expect(
+      (await tile('OpenCode QA Agent')).getByLabelText(/Reasoning effort/).textContent,
+    ).toContain('Default');
+  });
+
+  it('shows no effort tile when the settings cannot be read', async () => {
+    showWith([stack('stack_glm_main', 'GLM QA Agent')], undefined);
+    const card = (await screen.findByText('GLM QA Agent')).closest('.card') as HTMLElement;
+    expect(within(card).queryByLabelText(/Reasoning effort/)).toBeNull();
+    // The rest of the card is unaffected.
+    expect(within(card).getByLabelText('Model: some-model')).toBeTruthy();
+  });
+
+  it('is translated to Bulgarian, with its own wording for each level', () => {
+    expect(translateText('Reasoning effort', 'bg')).toBe('Усилие при разсъждение');
+    expect(translateText('High effort', 'bg')).toBe('Високо усилие');
+    expect(translateText('Maximum effort', 'bg')).toBe('Максимално усилие');
+    expect(translateText('Default', 'bg')).toBe('По подразбиране');
+  });
+});

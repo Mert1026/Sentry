@@ -8,7 +8,7 @@ import { executeFrontendCommand, frontendErrorEnvelope } from '../src/frontend-a
 import { SentryDesktopClient } from '../src/desktop-client.js';
 import { runCli } from '../src/index.js';
 import { errorExitCode } from '../src/errors.js';
-import { formatFindingsByRevision, successExitCode } from '../src/output.js';
+import { emitHumanSuccess, formatFindingsByRevision, successExitCode } from '../src/output.js';
 
 const RUN_ID = 'run_01K7777777777777777777A8W3';
 const PROJECT_ID = 'proj_01K7777777777777777777A8W1';
@@ -677,6 +677,64 @@ describe('cli frontend over the desktop broker', () => {
     }
   });
 
+  it('passes --depth fast to Desktop, and sends nothing for the default', async () => {
+    const broker = await startFakeBroker((command) => {
+      if (command === 'runs:start') return { operationId: 'dop_test', runId: RUN_ID };
+      throw new Error('unexpected ' + command);
+    });
+    try {
+      const start = (extra: string[]) =>
+        executeFrontendCommand(
+          parseCommand(['run', 'start', PROJECT_ID, '--mode', 'full', ...extra]),
+          {
+            createClient: () => clientFor(broker),
+          },
+        );
+      await start(['--depth', 'fast']);
+      expect(broker.seen[0]?.payload).toMatchObject({ mode: 'full', depth: 'fast' });
+      await start(['--depth', 'full']);
+      expect(broker.seen[1]?.payload).toMatchObject({ depth: 'full' });
+      await start([]);
+      expect(broker.seen[2]?.payload).not.toHaveProperty('depth');
+    } finally {
+      await broker.close();
+    }
+  });
+
+  it('refuses a bad --depth and one combined with --retest', () => {
+    expect(() =>
+      parseCommand(['run', 'start', PROJECT_ID, '--mode', 'full', '--depth', 'turbo']),
+    ).toThrow(/--depth must be fast or full/);
+    expect(() => parseCommand(['run', 'start', PROJECT_ID, '--mode', 'full', '--depth'])).toThrow(
+      /requires a value/,
+    );
+    expect(() =>
+      parseCommand([
+        'run',
+        'start',
+        PROJECT_ID,
+        '--retest',
+        'run_01K7777777777777777777A8W9:find_01K7777777777777777777A8WA',
+        '--depth',
+        'fast',
+      ]),
+    ).toThrow(/--depth does not apply/);
+    // Targeted QA can be fast too.
+    expect(
+      parseCommand([
+        'run',
+        'start',
+        PROJECT_ID,
+        '--mode',
+        'targeted',
+        '--paths',
+        'src',
+        '--depth',
+        'fast',
+      ]),
+    ).toMatchObject({ mode: 'targeted', depth: 'fast' });
+  });
+
   it('serves findings by revision, profiles and toolchains through the broker', async () => {
     const broker = await startFakeBroker((command) => {
       if (command === 'projects:findings-by-revision')
@@ -782,5 +840,206 @@ describe('cli frontend over the desktop broker', () => {
     } finally {
       await broker.close();
     }
+  });
+});
+
+describe('settings and run depth through the CLI', () => {
+  it("parses settings commands with each agent's own effort levels", () => {
+    expect(parseCommand(['settings', 'show'])).toEqual({ command: 'settings.show' });
+    expect(parseCommand(['settings', 'effort', 'glm', 'MAX'])).toEqual({
+      command: 'settings.set-effort',
+      agent: 'glm',
+      value: 'max',
+    });
+    expect(parseCommand(['settings', 'effort', 'deepseek', 'off'])).toMatchObject({ value: 'off' });
+    expect(parseCommand(['settings', 'effort', 'chatgpt', 'default'])).toMatchObject({
+      value: 'default',
+    });
+    // "medium" is not a DeepSeek level and "max" is not an OpenCode one.
+    expect(() => parseCommand(['settings', 'effort', 'deepseek', 'medium'])).toThrow(
+      /deepseek agent takes/,
+    );
+    expect(() => parseCommand(['settings', 'effort', 'opencode', 'max'])).toThrow(/takes/);
+    expect(() => parseCommand(['settings', 'effort', 'bash', 'low'])).toThrow(/Unknown agent/);
+    expect(() => parseCommand(['settings', 'effort', 'glm'])).toThrow(/Usage/);
+  });
+
+  it('parses a run time limit in the forms people type', () => {
+    const limit = (text: string) =>
+      (parseCommand(['settings', 'run-limit', text]) as { value: string }).value;
+    expect(limit('default')).toBe('default');
+    expect(limit('3h')).toBe('default');
+    expect(limit('6h')).toBe('21600000');
+    expect(limit('none')).toBe('604800000');
+    expect(limit('90m')).toBe('5400000');
+    expect(limit('12h')).toBe('43200000');
+    expect(limit('168h')).toBe('604800000');
+    for (const bad of ['5m', '169h', 'soon', '-1h', '1.5h', ''])
+      expect(() => parseCommand(['settings', 'run-limit', bad]), bad).toThrow(/run time limit/);
+  });
+
+  it('shows the settings from what Desktop reports, with defaults where nothing is saved', async () => {
+    const broker = await startFakeBroker((command) => {
+      if (command === 'providers:status')
+        return [
+          { name: 'SENTRY_GLM_REASONING', configured: true, hint: 'xhigh' },
+          { name: 'SENTRY_DEEPSEEK_REASONING', configured: true, hint: 'medium' },
+          { name: 'SENTRY_RUN_TIME_LIMIT_MS', configured: true, hint: '21600000' },
+          { name: 'OPENAI_API_KEY', configured: true, hint: 'Configured' },
+        ];
+      throw new Error('unexpected ' + command);
+    });
+    try {
+      const shown = await executeFrontendCommand(parseCommand(['settings', 'show']), {
+        createClient: () => clientFor(broker),
+      });
+      expect(shown).toMatchObject({
+        command: 'settings.show',
+        data: {
+          // DeepSeek has no "medium", so an unusable saved value reads as the default.
+          reasoningEffort: {
+            glm: 'xhigh',
+            deepseek: 'default',
+            opencode: 'default',
+            chatgpt: 'default',
+          },
+          runTimeLimit: { ms: 21_600_000, isDefault: false },
+        },
+      });
+      // Only the status channel is read, and no credential value is in the answer.
+      expect(broker.seen.map((call) => call.command)).toEqual(['providers:status']);
+      expect(JSON.stringify(shown)).not.toContain('OPENAI');
+    } finally {
+      await broker.close();
+    }
+  });
+
+  it('shows the 3 hour default when nothing is saved', async () => {
+    const broker = await startFakeBroker(() => []);
+    try {
+      expect(
+        await executeFrontendCommand(parseCommand(['settings', 'show']), {
+          createClient: () => clientFor(broker),
+        }),
+      ).toMatchObject({ data: { runTimeLimit: { ms: 10_800_000, isDefault: true } } });
+    } finally {
+      await broker.close();
+    }
+  });
+
+  it('sends only the two settings through settings:set', async () => {
+    const broker = await startFakeBroker((command, payload) => {
+      if (command !== 'settings:set') throw new Error('unexpected ' + command);
+      const body = payload as { setting: string; value: string };
+      return body.setting === 'run-time-limit'
+        ? { ms: Number(body.value) || 10_800_000, isDefault: body.value === 'default' }
+        : { agent: 'glm', reasoningEffort: body.value };
+    });
+    try {
+      const run = (args: string[]) =>
+        executeFrontendCommand(parseCommand(args), { createClient: () => clientFor(broker) });
+      expect(await run(['settings', 'effort', 'glm', 'xhigh'])).toMatchObject({
+        command: 'settings.set-effort',
+        data: { agent: 'glm', reasoningEffort: 'xhigh' },
+      });
+      expect(await run(['settings', 'run-limit', '6h'])).toMatchObject({
+        command: 'settings.set-run-limit',
+        data: { ms: 21_600_000, isDefault: false },
+      });
+      expect(await run(['settings', 'run-limit', 'default'])).toMatchObject({
+        data: { ms: 10_800_000, isDefault: true },
+      });
+      expect(broker.seen.map((call) => call.payload)).toEqual([
+        { setting: 'reasoning-effort', agent: 'glm', value: 'xhigh' },
+        { setting: 'run-time-limit', value: '21600000' },
+        { setting: 'run-time-limit', value: 'default' },
+      ]);
+    } finally {
+      await broker.close();
+    }
+  });
+
+  it('says it supports settings and run depth', async () => {
+    const broker = await startFakeBroker(() => ({}));
+    try {
+      const result = await executeFrontendCommand(parseCommand(['capabilities']), {
+        createClient: () => clientFor(broker),
+      });
+      expect(result).toMatchObject({ data: { features: { runDepth: true, settings: true } } });
+    } finally {
+      await broker.close();
+    }
+  });
+
+  it('lists the depth and window of runs, and marks fast runs', async () => {
+    const row = (id: string, depth?: string, timeout?: number) => ({
+      id,
+      projectId: PROJECT_ID,
+      mode: 'full',
+      status: 'completed',
+      createdAt: '2026-11-10T08:00:00.000Z',
+      configuration: {
+        executionSafeguards: {
+          ...(depth === undefined ? {} : { depth }),
+          ...(timeout === undefined ? {} : { runTimeoutMs: timeout }),
+        },
+      },
+    });
+    const broker = await startFakeBroker((command) => {
+      if (command === 'runs:list')
+        return [
+          row('run_01K7777777777777777777A8W1', 'fast', 10_800_000),
+          row('run_01K7777777777777777777A8W2'),
+        ];
+      throw new Error('unexpected ' + command);
+    });
+    try {
+      const listed = await executeFrontendCommand(parseCommand(['run', 'list', PROJECT_ID]), {
+        createClient: () => clientFor(broker),
+      });
+      expect(listed).toMatchObject({
+        data: {
+          runs: [{ depth: 'fast', timeLimitMs: 10_800_000 }, { depth: 'full' }],
+        },
+      });
+    } finally {
+      await broker.close();
+    }
+  });
+
+  it('prints settings and FAST markers for people', () => {
+    const lines: string[] = [];
+    const io = { stdout: (text: string) => lines.push(text), stderr: () => undefined };
+    emitHumanSuccess(
+      {
+        schemaVersion: 1,
+        command: 'settings.show',
+        ok: true,
+        data: {
+          reasoningEffort: { opencode: 'default', deepseek: 'off', glm: 'max', chatgpt: 'high' },
+          runTimeLimit: { ms: 9_000_000, isDefault: false },
+        },
+      } as never,
+      io,
+    );
+    expect(lines[0]).toContain('deepseek  off');
+    expect(lines[0]).toContain('Run time limit: 2 h 30 min');
+    expect(lines[0]).not.toContain('(the default)');
+    expect(
+      formatFindingsByRevision([
+        {
+          revisionId: 'rev_x',
+          agents: [
+            {
+              agentStackId: 'stack_a',
+              runs: [
+                { runId: 'run_fast', depth: 'fast', findings: [] },
+                { runId: 'run_full', findings: [] },
+              ],
+            },
+          ],
+        },
+      ]),
+    ).toMatch(/run_fast {2}FAST[\s\S]*run run_full$/);
   });
 });

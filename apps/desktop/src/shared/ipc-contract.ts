@@ -39,6 +39,7 @@ export const IPC_CHANNELS = [
   'providers:forget-file',
   'providers:forget-all',
   'providers:detect-binaries',
+  'settings:set',
   'production:readiness',
   'system:info',
   'toolchains:status',
@@ -162,6 +163,8 @@ export interface RevisionRetestOutcome {
 export interface RevisionAgentRunItem {
   readonly runId: string;
   readonly mode: string;
+  /** "fast" for a fast run; absent for the usual full depth. */
+  readonly depth?: 'fast';
   readonly runStatus: string;
   readonly agentStatus: string;
   readonly at: string;
@@ -296,6 +299,8 @@ export interface SentryDesktopApi {
         revisionId?: string;
         webAccess?: boolean;
         toolDownloads?: boolean;
+        /** How deep the run investigates; fast plans fewer checks. Omitted means full. */
+        depth?: 'fast' | 'full';
         useProfile?: boolean;
         /** Re-test findings from earlier revisions on this one; replaces the agents' own planning. */
         retest?: {
@@ -315,6 +320,8 @@ export interface SentryDesktopApi {
         revisionId?: string;
         webAccess?: boolean;
         toolDownloads?: boolean;
+        /** How deep the run investigates; fast plans fewer checks. Omitted means full. */
+        depth?: 'fast' | 'full';
         useProfile?: boolean;
         /** Re-test findings from earlier revisions on this one; replaces the agents' own planning. */
         retest?: {

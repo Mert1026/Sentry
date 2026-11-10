@@ -17,6 +17,7 @@ import {
   Clock,
   History,
   Tag,
+  Brain,
 } from 'lucide-react';
 import { CopyId } from '../components/CopyId.js';
 import { InfoTile } from '../components/InfoTile.js';
@@ -25,6 +26,7 @@ import { PageHeader, PageSection } from '../components/ui/PageHeader.js';
 import { StatusPill, dotClassForStatus } from '../components/ui/StatusPill.js';
 import { SegmentedControl } from '../components/ui/Tabs.js';
 import { sentryApi } from '../lib/sentry-api.js';
+import { selectedEffort } from '../lib/agent-effort.js';
 import { RemoveProjectButton } from '../components/RemoveProjectButton.js';
 import { isConfirmPaidRunsEnabled } from '../lib/app-preferences.js';
 import { useI18n } from '../lib/i18n.js';
@@ -107,6 +109,8 @@ export function ProjectDetail(): React.JSX.Element {
   const queryClient = useQueryClient();
   const [error, setError] = React.useState<string | undefined>(undefined);
   const [mode, setMode] = React.useState<'full' | 'targeted'>('full');
+  // How deep the agents investigate: Fast plans fewer checks. Full is the usual depth.
+  const [depth, setDepth] = React.useState<'fast' | 'full'>('full');
   const [targetPaths, setTargetPaths] = React.useState('');
   const [webAccess, setWebAccess] = React.useState(false);
   const [toolDownloads, setToolDownloads] = React.useState(false);
@@ -130,6 +134,14 @@ export function ProjectDetail(): React.JSX.Element {
     queryKey: ['environment'],
     queryFn: () => sentryApi().doctors.environment(),
   });
+  // Same query (and cache) as Settings → Providers, so a change there shows here at once.
+  const providers = useQuery({
+    queryKey: ['providers'],
+    queryFn: () => sentryApi().providers.status(),
+  });
+  const providerRows = Array.isArray(providers.data)
+    ? (providers.data as ReadonlyArray<{ name: string; configured: boolean; hint: string }>)
+    : undefined;
   const stacks = (
     (
       environment.data as
@@ -194,6 +206,7 @@ export function ProjectDetail(): React.JSX.Element {
     ...(webAccess ? { webAccess: true } : {}),
     ...(toolDownloads ? { toolDownloads: true } : {}),
     ...(useProfile ? { useProfile: true } : {}),
+    ...(depth === 'fast' ? { depth: 'fast' } : {}),
   });
   const onStarted = (operation: unknown): void => {
     const runId = (operation as { runId?: string }).runId;
@@ -502,6 +515,28 @@ export function ProjectDetail(): React.JSX.Element {
                   />
                 </div>
                 <div>
+                  <span className="metadata project-field-label">Run depth</span>
+                  <SegmentedControl
+                    label="Run depth"
+                    value={depth}
+                    onChange={(value) => setDepth(value as 'fast' | 'full')}
+                    options={[
+                      { value: 'fast', label: 'Fast' },
+                      { value: 'full', label: 'Full' },
+                    ]}
+                  />
+                  <InfoPopover title="Run depth">
+                    <p>
+                      Full plans up to 8 checks (about one per 25 minutes of the run time limit, 6
+                      for the default 3 hours). Fast plans at most 3, so a run is shorter. Both use
+                      the same time limit and the same extra passes after the checks: a second pass
+                      on undecided checks, a deepening round and a hazard sweep. A Fast run covers
+                      less of the project, so it can find fewer problems.
+                    </p>
+                    <p>The time limit is set in Settings → Runtime.</p>
+                  </InfoPopover>
+                </div>
+                <div>
                   <label htmlFor="run-revision" className="metadata project-field-label">
                     Revision
                   </label>
@@ -611,6 +646,18 @@ export function ProjectDetail(): React.JSX.Element {
                               status={stack.readiness ?? 'unknown'}
                               label={stack.readiness?.replace(/_/g, ' ') ?? 'Unknown'}
                             />
+                            {selectedEffort(stack.id, providerRows) === undefined ? null : (
+                              <span
+                                className="badge project-agent-effort"
+                                title="Reasoning effort"
+                                aria-label={
+                                  'Reasoning effort: ' + selectedEffort(stack.id, providerRows)
+                                }
+                              >
+                                <Brain size={12} aria-hidden="true" />{' '}
+                                {selectedEffort(stack.id, providerRows)}
+                              </span>
+                            )}
                           </span>
                         </span>
                       </button>
@@ -902,6 +949,9 @@ export function ProjectDetail(): React.JSX.Element {
               {t(
                 `Web access: ${webAccess ? 'on' : 'off'} · tool and SDK downloads: ${toolDownloads ? 'on' : 'off'} · package installs: on`,
               )}
+            </p>
+            <p className="metadata">
+              {t(depth === 'fast' ? 'Run depth: Fast' : 'Run depth: Full')}
             </p>
             {confirmStart === 'targeted' && targetPaths.trim() !== '' ? (
               <p className="mono metadata">

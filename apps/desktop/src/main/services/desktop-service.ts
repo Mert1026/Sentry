@@ -8,7 +8,16 @@
  * live-update fan-out. Secrets stay in main; renderer receives statuses.
  */
 import { z } from 'zod';
-import { RUN_TIMEOUT_MS_MAX, RUN_TIMEOUT_MS_MIN } from '@qa/shared';
+import {
+  AGENT_EFFORT_SETTING,
+  EFFORT_AGENTS,
+  RUN_TIME_LIMIT_DEFAULT_MS,
+  RUN_TIME_LIMIT_SETTING,
+  RUN_TIMEOUT_MS_MAX,
+  RUN_TIMEOUT_MS_MIN,
+  parseAgentEffort,
+  parseRunTimeLimit,
+} from '@qa/shared';
 import type { AgentStackDefinition } from '@qa/schemas';
 import type { DesktopOperation, RunSnapshot } from '../../shared/ipc-contract.js';
 import { toSafeError } from '../desktop-command-router.js';
@@ -39,6 +48,7 @@ const StartRunOptions = z
     runTimeoutMs: z.number().int().min(RUN_TIMEOUT_MS_MIN).max(RUN_TIMEOUT_MS_MAX).optional(),
     webAccess: z.boolean().optional(),
     toolDownloads: z.boolean().optional(),
+    depth: z.enum(['fast', 'full']).optional(),
     useProfile: z.boolean().optional(),
     retest: z
       .object({
@@ -274,6 +284,10 @@ export class DesktopApplicationService {
   async startRun(projectId: string, options: unknown): Promise<DesktopOperation> {
     const id = ProjectIdInput.parse(projectId);
     const parsed = StartRunOptions.parse(options);
+    // A run that does not name its own window gets the default chosen in Settings (3 hours if none).
+    const runTimeoutMs =
+      parsed.runTimeoutMs ??
+      parseRunTimeLimit(this.deps.credentials.getValue(RUN_TIME_LIMIT_SETTING));
     try {
       return (await this.call('runs.start', {
         projectId: id,
@@ -282,9 +296,10 @@ export class DesktopApplicationService {
         ...(parsed.includePaths === undefined ? {} : { includePaths: [...parsed.includePaths] }),
         ...(parsed.instructions === undefined ? {} : { instructions: parsed.instructions }),
         ...(parsed.agentStackIds === undefined ? {} : { agentStackIds: [...parsed.agentStackIds] }),
-        ...(parsed.runTimeoutMs === undefined ? {} : { runTimeoutMs: parsed.runTimeoutMs }),
+        ...(runTimeoutMs === undefined ? {} : { runTimeoutMs }),
         ...(parsed.webAccess === true ? { webAccess: true } : {}),
         ...(parsed.toolDownloads === true ? { toolDownloads: true } : {}),
+        ...(parsed.depth === undefined ? {} : { depth: parsed.depth }),
         ...(parsed.useProfile === true ? { useProfile: true } : {}),
         ...(parsed.retest === undefined ? {} : { retest: parsed.retest }),
       })) as DesktopOperation;
@@ -385,6 +400,56 @@ export class DesktopApplicationService {
     return { ...(status as unknown as Record<string, unknown>), runtimeSynced };
   }
 
+  /**
+   * Change one of the two run settings the CLI may set (the same values Settings → Providers and
+   * Settings → Runtime save). "default" removes the setting. A value the agent's tool does not take,
+   * or a window outside the allowed range, is refused rather than saved.
+   */
+  async setRunSetting(input: unknown): Promise<unknown> {
+    const parsed = z
+      .discriminatedUnion('setting', [
+        z
+          .object({
+            setting: z.literal('reasoning-effort'),
+            agent: z.enum(EFFORT_AGENTS as [string, ...string[]]),
+            value: z.string().min(1).max(20),
+          })
+          .strict(),
+        z
+          .object({ setting: z.literal('run-time-limit'), value: z.string().min(1).max(20) })
+          .strict(),
+      ])
+      .parse(input);
+    if (parsed.setting === 'reasoning-effort') {
+      const agent = parsed.agent as (typeof EFFORT_AGENTS)[number];
+      const name = AGENT_EFFORT_SETTING[agent];
+      if (parsed.value === 'default') {
+        await this.providerClearKey(name);
+        return { agent, reasoningEffort: 'default' };
+      }
+      const level = parseAgentEffort(agent, parsed.value);
+      if (level === undefined)
+        throw toError(
+          'INVALID_ARGUMENT',
+          'The ' + agent + ' agent does not take reasoning effort "' + parsed.value + '"',
+        );
+      await this.providerSaveKey(name, level);
+      return { agent, reasoningEffort: level };
+    }
+    if (parsed.value === 'default') {
+      await this.providerClearKey(RUN_TIME_LIMIT_SETTING);
+      return { ms: RUN_TIME_LIMIT_DEFAULT_MS, isDefault: true };
+    }
+    const ms = parseRunTimeLimit(parsed.value);
+    if (ms === undefined)
+      throw toError(
+        'INVALID_ARGUMENT',
+        'The run time limit must be between 10 minutes and 7 days (in milliseconds)',
+      );
+    await this.providerSaveKey(RUN_TIME_LIMIT_SETTING, String(ms));
+    return { ms, isDefault: ms === RUN_TIME_LIMIT_DEFAULT_MS };
+  }
+
   providerPersist(): Promise<unknown> {
     return this.deps.credentials.persist();
   }
@@ -475,11 +540,12 @@ export class DesktopApplicationService {
       binaries,
       ...provider,
       openAiAuth,
-      reasoningEffort: {
-        chatgpt: ['low', 'medium', 'high'].includes(get('SENTRY_CHATGPT_REASONING') ?? '')
-          ? (get('SENTRY_CHATGPT_REASONING') as 'low' | 'medium' | 'high')
-          : 'default',
-      },
+      reasoningEffort: Object.fromEntries(
+        EFFORT_AGENTS.map((agent) => [
+          agent,
+          parseAgentEffort(agent, get(AGENT_EFFORT_SETTING[agent])) ?? 'default',
+        ]),
+      ),
     });
   }
 
