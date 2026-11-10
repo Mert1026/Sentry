@@ -1098,13 +1098,6 @@ function OpenCodeCard(props: {
           ))}
         </datalist>
       ) : null}
-      <ReasoningEffortField
-        agent="opencode"
-        byName={props.byName}
-        pending={props.savePending || props.clearPending}
-        onSave={props.onSave}
-        onClear={props.onClear}
-      />
       <CredentialSourceSelector
         values={props.values}
         byName={props.byName}
@@ -1123,6 +1116,13 @@ function OpenCodeCard(props: {
         name="OPENROUTER_API_KEY"
         detailsLabel="Explanation"
         {...common}
+      />
+      <ReasoningEffortField
+        agent="opencode"
+        byName={props.byName}
+        pending={props.savePending || props.clearPending}
+        onSave={props.onSave}
+        onClear={props.onClear}
       />
     </div>
   );
@@ -1210,13 +1210,6 @@ function ChatGptCard(props: {
         optionNote={chatGptModelNote}
         {...common}
       />
-      <ReasoningEffortField
-        agent="chatgpt"
-        byName={props.byName}
-        pending={props.savePending || props.clearPending}
-        onSave={props.onSave}
-        onClear={props.onClear}
-      />
       <div style={{ marginBottom: 12 }}>
         <span id="openai-auth-label" className="metadata">
           Sign in with
@@ -1244,6 +1237,13 @@ function ChatGptCard(props: {
           {...common}
         />
       )}
+      <ReasoningEffortField
+        agent="chatgpt"
+        byName={props.byName}
+        pending={props.savePending || props.clearPending}
+        onSave={props.onSave}
+        onClear={props.onClear}
+      />
     </div>
   );
 }

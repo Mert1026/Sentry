@@ -528,3 +528,50 @@ describe('ChatGPT sign-in switch', () => {
     await waitFor(() => expect(save).toHaveBeenCalledWith('SENTRY_OPENAI_AUTH', 'key'));
   });
 });
+
+describe('Reasoning effort sits at the end of each agent card', () => {
+  for (const [card, setting] of [
+    ['OpenCode', 'SENTRY_OPENCODE_REASONING'],
+    ['DeepSeek', 'SENTRY_DEEPSEEK_REASONING'],
+    ['GLM', 'SENTRY_GLM_REASONING'],
+    ['ChatGPT', 'SENTRY_CHATGPT_REASONING'],
+  ] as const) {
+    it(`${card}: every other setting comes before it`, async () => {
+      const client = new QueryClient({
+        defaultOptions: {
+          queries: { retry: false, gcTime: Infinity },
+          mutations: { retry: false },
+        },
+      });
+      clients.push(client);
+      Object.defineProperty(window, 'sentry', {
+        configurable: true,
+        value: {
+          providers: {
+            status: vi.fn().mockResolvedValue([]),
+            save: vi.fn(),
+            clearKey: vi.fn(),
+            forgetAll: vi.fn(),
+          },
+        },
+      });
+      render(
+        <QueryClientProvider client={client}>
+          <MemoryRouter>
+            <Providers />
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+      const region = await screen.findByRole('region', { name: `${card} provider settings` });
+      const effort = await within(region).findByLabelText(`Value for ${setting}`);
+      const controls = Array.from(region.querySelectorAll('select, input, [role="switch"]')).filter(
+        (element) => element !== effort,
+      );
+      expect(controls.length).toBeGreaterThan(0);
+      for (const control of controls) {
+        // DOCUMENT_POSITION_FOLLOWING (4): the effort select comes after this control.
+        expect(control.compareDocumentPosition(effort) & 4, control.outerHTML.slice(0, 80)).toBe(4);
+      }
+    });
+  }
+});
