@@ -1,6 +1,7 @@
 import React from 'react';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { translateText } from '../../src/renderer/lib/i18n.js';
 import {
   ToolchainRequestsPanel,
   requestSummary,
@@ -120,5 +121,47 @@ describe('ToolchainRequestsPanel', () => {
       state: 'fallback',
     };
     expect(requestSummary(withoutOffer)).toContain('the library has no such version');
+  });
+});
+
+describe('the explanation sits in an info button, and the panel is translated', () => {
+  const explanation =
+    "Read from the project's own version files, such as .nvmrc, .python-version, global.json, go.mod and the packageManager line of package.json. A run uses the requested version when it is installed, otherwise it falls back to another one, and this list says so.";
+
+  it('keeps the title visible and moves the explanation into the info popover', () => {
+    show();
+    expect(screen.getByRole('heading', { name: "What this project's files ask for" })).toBeTruthy();
+    const text = screen.getByText(explanation);
+    // Inside the popover next to the title, not a paragraph on the card.
+    expect(text.closest('[popover]')).not.toBeNull();
+    expect(text.closest('.body-secondary')).toBeNull();
+    expect(document.querySelector('.project-info-title .project-info-button')).not.toBeNull();
+  });
+
+  it('translates the title, the explanation and the rest of the panel to Bulgarian', () => {
+    expect(translateText("What this project's files ask for", 'bg')).toBe(
+      'Какво искат файловете на този проект',
+    );
+    expect(translateText(explanation, 'bg')).toContain('Прочетено от собствените файлове');
+    for (const text of [
+      'Match',
+      'Version mismatch',
+      'Not installed',
+      'Not offered',
+      "The project's files name no toolchain versions.",
+      'Not installed, and no version of it is installed: the run has none of it.',
+      'The library does not offer this version.',
+      'Installed: a run uses 24.',
+      'Installed: 24, 22.',
+      'Install 22',
+    ])
+      expect(translateText(text, 'bg'), text).not.toBe(text);
+    expect(translateText('Install 22', 'bg')).toBe('Инсталирай 22');
+    expect(translateText('Installed: 24, 22.', 'bg')).toBe('Инсталирани: 24, 22.');
+    // Every status sentence the panel can show for these items.
+    for (const item of items)
+      expect(translateText(requestSummary(item), 'bg'), requestSummary(item)).not.toBe(
+        requestSummary(item),
+      );
   });
 });

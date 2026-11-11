@@ -1,4 +1,5 @@
 import React from 'react';
+import { InfoPopover } from './InfoPopover.js';
 import { StatusPill } from './ui/StatusPill.js';
 import type { ToolchainPackStatus, ToolchainRequestItem } from '../../shared/ipc-contract.js';
 
@@ -48,12 +49,15 @@ export function ToolchainRequestsPanel({
   };
   return (
     <div className="card" style={{ marginBottom: 12 }}>
-      <h3 className="card-title">What this project&apos;s files ask for</h3>
-      <p className="body-secondary" style={{ marginTop: 0 }}>
-        Read from the project&apos;s own version files, such as .nvmrc, .python-version,
-        global.json, go.mod and the packageManager line of package.json. A run uses the requested
-        version when it is installed, otherwise it falls back to another one, and this list says so.
-      </p>
+      <div className="project-info-title">
+        <h3 className="card-title">What this project&apos;s files ask for</h3>
+        <InfoPopover title="What this project's files ask for">
+          Read from the project&apos;s own version files, such as .nvmrc, .python-version,
+          global.json, go.mod and the packageManager line of package.json. A run uses the requested
+          version when it is installed, otherwise it falls back to another one, and this list says
+          so.
+        </InfoPopover>
+      </div>
       {loading ? <span className="muted">Loading…</span> : null}
       {!loading && items.length === 0 ? (
         <p className="metadata">The project&apos;s files name no toolchain versions.</p>

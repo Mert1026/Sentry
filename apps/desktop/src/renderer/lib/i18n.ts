@@ -296,6 +296,11 @@ function translateCore(trimmed: string): string {
   if (installOne !== null) return `Инсталиране на ${installOne[1]}? Около ${installOne[2]} MB.`;
   const usesInstalled = /^Installed: a run uses (.+)\.$/.exec(trimmed);
   if (usesInstalled !== null) return `Инсталирана: изпълнението използва ${usesInstalled[1]}.`;
+  // The versions of a toolchain that are installed, listed after its status sentence.
+  const installedList = /^Installed: (.+)\.$/.exec(trimmed);
+  if (installedList !== null) return `Инсталирани: ${installedList[1]}.`;
+  const installVersion = /^Install (\d[\w.+-]*)$/.exec(trimmed);
+  if (installVersion !== null) return `Инсталирай ${installVersion[1]}`;
   const wouldUse =
     /^Not installed\. A run would use (.+) instead(; the library has no such version)?\.$/.exec(
       trimmed,
