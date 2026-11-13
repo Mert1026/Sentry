@@ -101,6 +101,7 @@ function helpText(): string {
     '  qa project delete <project-id> --yes [--json]',
     '  qa project revisions <project-id> [--json]',
     '  qa project findings <project-id> [--json]   findings per revision; re-test results with PASSED / NOT PASSED / COULD NOT COMPLETE',
+    '  qa project export-findings <project-id> --format markdown|github-issues|sarif (--findings <run-id>:<finding-id>,... | --run <run-id> | --revision <rev-id>,...) --out <path> [--json]   saves a report; github-issues writes a folder',
     '  qa project profile <project-id> [--json]',
     '  qa project profile-build <project-id> [--agents opencode,deepseek,glm,chatgpt] [--json]   uses provider budget',
     '  qa toolchain status [--json]',

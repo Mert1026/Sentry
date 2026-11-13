@@ -254,6 +254,11 @@ function translateCore(trimmed: string): string {
     return `Изберете до ${retestInfo[1]} констатации от по-стара ревизия и ги проверете повторно в текущата ревизия на проекта. ${translateCore(retestInfo[2] ?? '')}`;
   const retestSelected = /^Re-test (\d+) selected$/.exec(trimmed);
   if (retestSelected !== null) return `Повторна проверка на ${retestSelected[1]} избрани`;
+  const exportSelected = /^Export (\d+) selected$/.exec(trimmed);
+  if (exportSelected !== null) return `Експортирай ${exportSelected[1]} избрани`;
+  const savedFindings = /^Saved (\d+) findings? to (.+)$/.exec(trimmed);
+  if (savedFindings !== null)
+    return `Запазени ${savedFindings[1]} ${savedFindings[1] === '1' ? 'констатация' : 'констатации'} в ${savedFindings[2]}`;
   const pickAtMost = /^Pick at most (\d+)\.$/.exec(trimmed);
   if (pickAtMost !== null) return `Изберете най-много ${pickAtMost[1]}.`;
   const agentRunsFindings = /^(\d+) runs?, (\d+) findings?$/.exec(trimmed);

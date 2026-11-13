@@ -23,3 +23,4 @@ export * from './event.schema.js';
 export * from './activity.schema.js';
 export * from './runtime.schema.js';
 export * from './cli.schema.js';
+export * from './finding-export.schema.js';

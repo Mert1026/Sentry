@@ -287,3 +287,56 @@ describe('fast runs in findings by revision', () => {
     expect(screen.getAllByText('FAST')).toHaveLength(1);
   });
 });
+
+describe('exporting findings', () => {
+  const withExport = (onExport = vi.fn(), extra: Partial<{ exportNote: string }> = {}) =>
+    render(
+      <MemoryRouter>
+        <RevisionFindingsPanel
+          stacks={stacks}
+          data={data}
+          loading={false}
+          onExport={onExport}
+          {...extra}
+        />
+      </MemoryRouter>,
+    );
+
+  it('offers ticks on the current revision and exports the ticked findings in the chosen format', () => {
+    const onExport = vi.fn();
+    withExport(onExport);
+    fireEvent.click(screen.getByText('Agent A'));
+    expect(screen.getByRole('button', { name: 'Export 0 selected' }).hasAttribute('disabled')).toBe(
+      true,
+    );
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select: Wrong status' }));
+    fireEvent.change(screen.getByLabelText('Export as'), { target: { value: 'sarif' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Export 1 selected' }));
+    expect(onExport).toHaveBeenCalledWith({
+      format: 'sarif',
+      selection: { findings: [{ runId: 'run_2', findingId: 'f2' }] },
+    });
+  });
+
+  it('selects everything shown, clears it, and exports a whole revision by id', () => {
+    const onExport = vi.fn();
+    withExport(onExport);
+    fireEvent.click(screen.getByRole('button', { name: 'Select all' }));
+    expect(screen.getByRole('button', { name: 'Export 2 selected' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+    expect(screen.getByRole('button', { name: 'Export 0 selected' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Export all in this revision' }));
+    expect(onExport).toHaveBeenCalledWith({
+      format: 'markdown',
+      selection: { revisionIds: ['rev_new'] },
+    });
+  });
+
+  it('shows what was saved, and shows no export controls without a handler', () => {
+    withExport(vi.fn(), { exportNote: 'Saved 2 findings to /tmp/x.md' });
+    expect(screen.getByRole('status').textContent).toContain('Saved 2 findings');
+    cleanup();
+    show(data);
+    expect(screen.queryByLabelText('Export as')).toBeNull();
+  });
+});

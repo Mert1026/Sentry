@@ -23,6 +23,7 @@ export function productionHelp(): string {
     '  project delete <project-id> --yes [--json]',
     '  project revisions <project-id> [--json]',
     '  project findings <project-id> [--json]',
+    '  project export-findings <project-id> --format markdown|github-issues|sarif (--findings <run-id>:<finding-id>,... | --run <run-id> | --revision <rev-id>,...) --out <path> [--json]',
     '  project profile <project-id> [--json]',
     '  project profile-build <project-id> [--agents opencode,deepseek,glm,chatgpt] [--json]',
     '  project doctor <project-id> [--json]',

@@ -18,7 +18,11 @@ import {
   parseAgentEffort,
   parseRunTimeLimit,
 } from '@qa/shared';
-import type { AgentStackDefinition } from '@qa/schemas';
+import {
+  FindingExportRequestSchema,
+  type AgentStackDefinition,
+  type FindingExportResultDto,
+} from '@qa/schemas';
 import type { DesktopOperation, RunSnapshot } from '../../shared/ipc-contract.js';
 import { toSafeError } from '../desktop-command-router.js';
 import type { ProviderCredentialService } from './provider-credentials.js';
@@ -228,6 +232,16 @@ export class DesktopApplicationService {
   toolchainSelection(projectId: string): Promise<unknown> {
     const id = ProjectIdInput.parse(projectId);
     return this.call('projects.toolchainSelection', { projectId: id });
+  }
+
+  /** The selected findings as files, built by the runtime from what the agents reported. */
+  async exportFindings(projectId: string, request: unknown): Promise<FindingExportResultDto> {
+    const id = ProjectIdInput.parse(projectId);
+    const parsed = FindingExportRequestSchema.parse(request);
+    return this.call('projects.exportFindings', {
+      projectId: id,
+      ...parsed,
+    }) as Promise<FindingExportResultDto>;
   }
 
   findingsByRevision(projectId: string): Promise<unknown> {

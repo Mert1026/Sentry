@@ -330,6 +330,7 @@ function Show-SentryCliHelp {
   Write-Host '  project delete <project-id> --yes [--json]'
   Write-Host '  project revisions <project-id> [--json]'
   Write-Host '  project findings <project-id> [--json]'
+  Write-Host '  project export-findings <project-id> --format markdown|github-issues|sarif (--findings <run-id>:<finding-id>,... | --run <run-id> | --revision <rev-id>,...) --out <path> [--json]'
   Write-Host '  project profile <project-id> [--json]'
   Write-Host '  project profile-build <project-id> [--agents opencode,deepseek,glm,chatgpt] [--json]'
   Write-Host '  project doctor <project-id> [--json]'

@@ -27,6 +27,7 @@ export const CLI_BROKER_COMMANDS: readonly string[] = [
   'projects:profile',
   'projects:build-profile',
   'projects:findings-by-revision',
+  'projects:export-findings',
   'toolchains:status',
   'toolchains:install',
   'toolchains:remove',

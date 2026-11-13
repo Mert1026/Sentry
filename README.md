@@ -29,18 +29,19 @@ What changed: [What's new](#whats-new).
 
 ## Features
 
-| Area                 | What it does                                                                                                                 |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Independent agents   | OpenCode, DeepSeek and GLM (through Claude Code) by default; ChatGPT is opt-in. Each agent works alone on the same snapshot. |
-| Run modes            | Full QA for the whole project, or Targeted QA for chosen paths.                                                              |
-| Evidence             | Findings with evidence, token usage and exports as JSON or log files.                                                        |
-| Findings by revision | Browse what every agent reported in every run, per project revision. Nothing is merged or matched between runs.              |
-| Re-test              | Pick findings from an older revision and check, on the current one, whether each is resolved and why not if it is not.       |
-| Project profile      | Optional per-agent orientation notes for a project, labelled unverified and never containing past findings.                  |
-| Toolchains           | A library of 59 host-side installable packs in six groups, plus custom add-ons.                                              |
-| CLI                  | A packaged `sentry cli` that drives the running Desktop with machine-readable JSON.                                          |
-| Languages            | The interface is available in English and Bulgarian (Settings → Application).                                                |
-| Local-first          | Projects and history stay on your machine; the original source folder is never changed.                                      |
+| Area                 | What it does                                                                                                                                               |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Independent agents   | OpenCode, DeepSeek and GLM (through Claude Code) by default; ChatGPT is opt-in. Each agent works alone on the same snapshot.                               |
+| Run modes            | Full QA for the whole project, or Targeted QA for chosen paths.                                                                                            |
+| Evidence             | Findings with evidence, token usage and exports as JSON or log files.                                                                                      |
+| Findings by revision | Browse what every agent reported in every run, per project revision. Nothing is merged or matched between runs.                                            |
+| Export findings      | Save picked findings (or a whole revision) as a Markdown report, GitHub issue files (ZIP) or a SARIF file for code scanning. No AI, nothing sent anywhere. |
+| Re-test              | Pick findings from an older revision and check, on the current one, whether each is resolved and why not if it is not.                                     |
+| Project profile      | Optional per-agent orientation notes for a project, labelled unverified and never containing past findings.                                                |
+| Toolchains           | A library of 59 host-side installable packs in six groups, plus custom add-ons.                                                                            |
+| CLI                  | A packaged `sentry cli` that drives the running Desktop with machine-readable JSON.                                                                        |
+| Languages            | The interface is available in English and Bulgarian (Settings → Application).                                                                              |
+| Local-first          | Projects and history stay on your machine; the original source folder is never changed.                                                                    |
 
 ## Requirements
 
@@ -224,7 +225,7 @@ The original beta executable is not an approved credential downgrade target.
 ### 2.0.0
 
 - Re-test of earlier findings with Passed / Not passed / Could not complete answers.
-- Findings by revision, and a project profile with per-agent notes.
+- Findings by revision, a project profile with per-agent notes, and export of findings as Markdown, GitHub issues or SARIF.
 - Toolchain library of 59 packs, version detection per project, and custom add-ons.
 - ChatGPT as an opt-in agent.
 - CLI parity for re-test, findings, profile, toolchains and ChatGPT.

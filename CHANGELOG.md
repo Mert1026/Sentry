@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- Export findings: in **Findings by revision**, tick findings (or use **Export all in this
+  revision**) and save them as a Markdown report, as GitHub issues (a ZIP with one issue body per
+  finding, an `issues.json` and a README) or as a SARIF 2.1.0 file for GitHub code scanning. The
+  files are built from what the agents reported, with no AI, nothing is sent anywhere and nothing is
+  written into your project. CLI: `project export-findings`. Up to 500 findings per export;
+  re-testing is unchanged.
+
 ## [2.0.1] - 2026-11-10
 
 Update from 2.0.0. It adds run depth (Fast / Full), a default run time limit, per-agent reasoning

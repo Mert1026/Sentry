@@ -5,6 +5,8 @@ import { CLI_BROKER_COMMANDS, RUN_TIMEOUT_MS_MAX, RUN_TIMEOUT_MS_MIN } from '@qa
 import type { DesktopApplicationService } from './services/desktop-service.js';
 import type { SaveDialogOptions } from './services/export-save.js';
 import { revealSavedExport, saveExportRun } from './services/export-save.js';
+import { saveFindingsExport } from './services/findings-export-save.js';
+import { FindingExportRequestSchema } from '@qa/schemas';
 
 export const DesktopChannelSchemas: Record<string, z.ZodTypeAny> = {
   'projects:list': z.object({}).strict(),
@@ -122,6 +124,14 @@ export const DesktopChannelSchemas: Record<string, z.ZodTypeAny> = {
   'runs:export-reveal': z.object({ path: z.string().min(1).max(2000) }).strict(),
   'runs:export-content': z
     .object({ runId: z.string().min(1).max(100), format: z.enum(['log', 'json']) })
+    .strict(),
+  'projects:export-findings': z
+    .object({ projectId: z.string().min(1).max(100) })
+    .merge(FindingExportRequestSchema)
+    .strict(),
+  'projects:save-findings-export': z
+    .object({ projectId: z.string().min(1).max(100) })
+    .merge(FindingExportRequestSchema)
     .strict(),
   'doctors:environment': z.object({}).strict(),
   'providers:status': z.object({}).strict(),
@@ -383,6 +393,24 @@ export async function dispatchDesktopCommand(
       return saveExportRun(parsed['runId'] as string, parsed['format'] as 'log' | 'json', {
         requestSavePath,
         fetchContent: (runId, format) => service.exportContent(runId, format),
+      });
+    }
+    case 'projects:export-findings':
+      return service.exportFindings(parsed['projectId'] as string, {
+        format: parsed['format'],
+        selection: parsed['selection'],
+      });
+    case 'projects:save-findings-export': {
+      const requestSavePath = hooks.requestSavePath;
+      if (requestSavePath === undefined)
+        throw Object.assign(new Error('Save dialog unavailable'), { code: 'DIALOG_UNAVAILABLE' });
+      return saveFindingsExport({
+        requestSavePath,
+        fetchExport: () =>
+          service.exportFindings(parsed['projectId'] as string, {
+            format: parsed['format'],
+            selection: parsed['selection'],
+          }),
       });
     }
     case 'runs:export-reveal': {

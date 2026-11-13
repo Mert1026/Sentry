@@ -35,7 +35,10 @@ import { useProjectProfile } from '../lib/use-project-profile.js';
 import { ToolchainNeedsPanel } from '../components/ToolchainNeedsPanel.js';
 import { ToolchainRequestsPanel } from '../components/ToolchainRequestsPanel.js';
 import { useToolchainNeeds } from '../lib/use-toolchain-needs.js';
-import { RevisionFindingsPanel } from '../components/RevisionFindingsPanel.js';
+import {
+  RevisionFindingsPanel,
+  type PanelExportRequest,
+} from '../components/RevisionFindingsPanel.js';
 import { useFindingsByRevision } from '../lib/use-findings-by-revision.js';
 import { retestStartOptions } from '../lib/retest-options.js';
 import {
@@ -225,6 +228,23 @@ export function ProjectDetail(): React.JSX.Element {
       sentryApi().runs.start(projectId as string, startOptions('targeted') as never),
     onSuccess: onStarted,
     onError: onStartError,
+  });
+  // Save picked findings as a file (Markdown report, GitHub issues ZIP or SARIF).
+  const [exportNote, setExportNote] = React.useState<string | undefined>(undefined);
+  const exportFindings = useMutation({
+    mutationFn: (request: PanelExportRequest) =>
+      sentryApi().projects.saveFindingsExport(projectId as string, request),
+    onMutate: () => setExportNote(undefined),
+    onSuccess: (result) =>
+      setExportNote(
+        result.status === 'saved'
+          ? 'Saved ' +
+              result.findingCount +
+              (result.findingCount === 1 ? ' finding' : ' findings') +
+              ' to ' +
+              result.path
+          : undefined,
+      ),
   });
   // Re-test findings picked in "Findings by revision" on the CURRENT revision, whatever "Run revision" says.
   const startRetest = useMutation({
@@ -811,6 +831,12 @@ export function ProjectDetail(): React.JSX.Element {
             onRetest={(findings, who) => startRetest.mutate({ findings, who })}
             retesting={startRetest.isPending}
             retestError={startRetest.error instanceof Error ? startRetest.error.message : undefined}
+            onExport={(request) => exportFindings.mutate(request)}
+            exporting={exportFindings.isPending}
+            exportNote={exportNote}
+            exportError={
+              exportFindings.error instanceof Error ? exportFindings.error.message : undefined
+            }
           />
         </PageSection>
       </ProjectSectionPanel>

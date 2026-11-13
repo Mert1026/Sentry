@@ -475,6 +475,7 @@ export async function executeCommand(
   }
   if (
     input.command === 'project.findings' ||
+    input.command === 'project.export-findings' ||
     input.command === 'project.profile' ||
     input.command === 'project.profile-build' ||
     input.command === 'settings.show' ||

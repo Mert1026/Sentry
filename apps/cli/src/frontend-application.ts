@@ -4,7 +4,8 @@
 // runtime. This module owns NO database, NO leases, NO harnesses, and NO
 // provider secrets: it maps CLI arguments to broker commands and adapts
 // broker payloads into the stable CLI machine envelope.
-import { writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import {
   CLI_CONTRACT_VERSION,
   CliErrorCodeSchema,
@@ -308,6 +309,7 @@ export async function executeFrontendCommand(
           runDepth: true,
           settings: true,
           findingsByRevision: true,
+          findingsExport: true,
           projectProfile: true,
           toolchains: true,
         },
@@ -424,6 +426,33 @@ export async function executeFrontendCommand(
           ? {}
           : { currentRevisionId: found.currentRevisionId }),
         revisions: Array.isArray(found?.revisions) ? found.revisions : [],
+      });
+    }
+    if (input.command === 'project.export-findings') {
+      const exported = (await broker.request('projects:export-findings', {
+        projectId: input.projectId,
+        format: input.format,
+        selection: input.selection,
+      })) as {
+        files?: Array<{ path?: unknown; content?: unknown }>;
+        findingCount?: number;
+      };
+      const files = Array.isArray(exported.files) ? exported.files : [];
+      if (
+        files.length === 0 ||
+        files.some((f) => typeof f.path !== 'string' || typeof f.content !== 'string')
+      )
+        throw new DesktopProtocolError('DESKTOP_ERROR', 'Desktop returned no export files');
+      const written = await writeFindingsExport(
+        input.out,
+        files as Array<{ path: string; content: string }>,
+      );
+      return success(input.command, {
+        projectId: input.projectId,
+        format: input.format,
+        findingCount: exported.findingCount ?? 0,
+        out: input.out,
+        files: written,
       });
     }
     if (input.command === 'project.profile') {
@@ -687,4 +716,38 @@ export async function executeFrontendCommand(
     }
     devOnly(input.command);
   });
+}
+
+/**
+ * One file goes to `out` as it is; several go into the folder `out`, each kept
+ * inside it (a name that would climb out of the folder is refused).
+ */
+async function writeFindingsExport(
+  out: string,
+  files: ReadonlyArray<{ path: string; content: string }>,
+): Promise<string[]> {
+  if (files.length === 1) {
+    const only = files[0] as { path: string; content: string };
+    await mkdir(dirname(resolve(out)), { recursive: true });
+    await writeFile(out, only.content, 'utf8');
+    return [out];
+  }
+  const root = resolve(out);
+  const written: string[] = [];
+  for (const file of files) {
+    const target = resolve(root, file.path);
+    const inside = relative(root, target);
+    if (
+      file.path.length === 0 ||
+      isAbsolute(file.path) ||
+      inside.startsWith('..') ||
+      isAbsolute(inside) ||
+      inside === ''
+    )
+      throw new DesktopProtocolError('DESKTOP_ERROR', 'Desktop returned an unsafe file name');
+    await mkdir(dirname(target), { recursive: true });
+    await writeFile(target, file.content, 'utf8');
+    written.push(join(out, file.path));
+  }
+  return written;
 }

@@ -1043,3 +1043,95 @@ describe('settings and run depth through the CLI', () => {
     ).toMatch(/run_fast {2}FAST[\s\S]*run run_full$/);
   });
 });
+
+describe('exporting findings through the CLI', () => {
+  const RUN_ID = 'run_01K7777777777777777777A8W1';
+  const FINDING_ID = 'find_01K7777777777777777777A8WA';
+  const REV_ID = 'rev_01K7777777777777777777779B';
+
+  it('reads the selection from the options and refuses unclear ones', () => {
+    const base = ['project', 'export-findings', PROJECT_ID, '--format', 'sarif', '--out', 'x'];
+    expect(parseCommand([...base, '--findings', RUN_ID + ':' + FINDING_ID])).toMatchObject({
+      command: 'project.export-findings',
+      format: 'sarif',
+      selection: { findings: [{ runId: RUN_ID, findingId: FINDING_ID }] },
+    });
+    expect(parseCommand([...base, '--run', RUN_ID])).toMatchObject({
+      selection: { runId: RUN_ID },
+    });
+    expect(parseCommand([...base, '--revision', REV_ID + ',rev_b'])).toMatchObject({
+      selection: { revisionIds: [REV_ID, 'rev_b'] },
+    });
+    expect(() => parseCommand(base)).toThrow(/exactly one/);
+    expect(() => parseCommand([...base, '--run', RUN_ID, '--revision', REV_ID])).toThrow(
+      /exactly one/,
+    );
+    expect(() => parseCommand([...base, '--findings', 'nonsense'])).toThrow(
+      /<run-id>:<finding-id>/,
+    );
+    expect(() =>
+      parseCommand(['project', 'export-findings', PROJECT_ID, '--run', RUN_ID, '--out', 'x']),
+    ).toThrow(/--format/);
+    expect(() =>
+      parseCommand([
+        'project',
+        'export-findings',
+        PROJECT_ID,
+        '--run',
+        RUN_ID,
+        '--format',
+        'sarif',
+      ]),
+    ).toThrow(/--out/);
+    expect(() =>
+      parseCommand([...base.slice(0, 4), 'html', '--out', 'x', '--run', RUN_ID]),
+    ).toThrow(/--format/);
+  });
+
+  it('writes one file as it is and several into a folder, never outside it', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'sentry-cli-export-'));
+    const files: Array<{ path: string; content: string }> = [];
+    const broker = await startFakeBroker((command) => {
+      if (command !== 'projects:export-findings') throw new Error('unexpected ' + command);
+      return { findingCount: files.length, files };
+    });
+    try {
+      const run = (args: string[]) =>
+        executeFrontendCommand(parseCommand(args), { createClient: () => clientFor(broker) });
+      const common = ['project', 'export-findings', PROJECT_ID, '--run', RUN_ID];
+
+      files.push({ path: 'sentry-findings.md', content: '# Report\n' });
+      const single = join(dir, 'nested', 'report.md');
+      expect(await run([...common, '--format', 'markdown', '--out', single])).toMatchObject({
+        command: 'project.export-findings',
+        data: { out: single, files: [single], findingCount: 1 },
+      });
+      expect(await readFile(single, 'utf8')).toBe('# Report\n');
+      expect(broker.seen.at(-1)?.payload).toEqual({
+        projectId: PROJECT_ID,
+        format: 'markdown',
+        selection: { runId: RUN_ID },
+      });
+
+      files.length = 0;
+      files.push(
+        { path: 'README.md', content: 'read me\n' },
+        { path: 'issues/001-first.md', content: 'body ✓\n' },
+      );
+      const folder = join(dir, 'issues-out');
+      await run([...common, '--format', 'github-issues', '--out', folder]);
+      expect(await readFile(join(folder, 'issues', '001-first.md'), 'utf8')).toBe('body ✓\n');
+      expect(await readFile(join(folder, 'README.md'), 'utf8')).toBe('read me\n');
+
+      files.length = 0;
+      files.push({ path: 'a.md', content: '1' }, { path: '../escape.md', content: '2' });
+      await expect(
+        run([...common, '--format', 'github-issues', '--out', join(dir, 'safe')]),
+      ).rejects.toThrow(/unsafe file name/);
+      await expect(readFile(join(dir, 'escape.md'), 'utf8')).rejects.toThrow();
+    } finally {
+      await broker.close();
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});

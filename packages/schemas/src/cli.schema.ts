@@ -49,6 +49,7 @@ export const CLI_COMMANDS = [
   'doctor.config',
   'project.doctor',
   'project.findings',
+  'project.export-findings',
   'project.profile',
   'project.profile-build',
   'toolchain.status',
@@ -559,6 +560,7 @@ export const CapabilitiesResultSchema = z
         // Additive: present when the broker serves these (older consumers ignore them).
         retest: z.literal(true).optional(),
         findingsByRevision: z.literal(true).optional(),
+        findingsExport: z.literal(true).optional(),
         runDepth: z.literal(true).optional(),
         settings: z.literal(true).optional(),
         projectProfile: z.literal(true).optional(),
@@ -608,6 +610,16 @@ export const ProjectFindingsResultSchema = z
     projectId: z.string().min(1).max(200),
     currentRevisionId: z.string().min(1).max(100).optional(),
     revisions: z.array(z.unknown()),
+  })
+  .strict();
+/** What `project export-findings` wrote: one file, or a folder of files. */
+export const ProjectExportFindingsResultSchema = z
+  .object({
+    projectId: z.string().min(1).max(200),
+    format: z.enum(['markdown', 'github-issues', 'sarif']),
+    findingCount: z.number().int().min(0),
+    out: z.string().min(1).max(2000),
+    files: z.array(z.string().min(1).max(2000)).max(1000),
   })
   .strict();
 /** Per-agent project profile state (none / fresh / stale) and notes. */
@@ -670,6 +682,7 @@ export const CliResultSchemas = {
   'doctor.config': DoctorConfigResultSchema,
   'project.doctor': ProjectDoctorResultSchema,
   'project.findings': ProjectFindingsResultSchema,
+  'project.export-findings': ProjectExportFindingsResultSchema,
   'project.profile': ProjectProfileResultSchema,
   'project.profile-build': ProjectProfileResultSchema,
   'toolchain.status': ToolchainStatusResultSchema,

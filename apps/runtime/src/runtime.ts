@@ -25,6 +25,7 @@ import { ProjectManager } from '@qa/project-manager';
 import {
   RunCoordinator,
   SystemdSandboxBackend,
+  exportFindings as buildFindingsExport,
   findingsByRevision,
   sandboxStagingParent,
 } from '@qa/run-engine';
@@ -57,7 +58,8 @@ import {
   type ClaudeExecutableIdentity,
 } from '@qa/harness-claude-code';
 import { HarnessAdapterRegistry } from '@qa/harness-protocol';
-import { RUN_TIMEOUT_MS_MAX, RUN_TIMEOUT_MS_MIN, createQARunId } from '@qa/shared';
+import { RUN_TIMEOUT_MS_MAX, RUN_TIMEOUT_MS_MIN, createQARunId, nowIsoTimestamp } from '@qa/shared';
+import { FindingExportRequestSchema } from '@qa/schemas';
 import {
   RUNTIME_EXPORT_MAX_RAW_BYTES,
   RUNTIME_PROTOCOL_VERSION,
@@ -1033,6 +1035,21 @@ export class SentryRuntimeHost {
     };
   }
 
+  /**
+   * Selected findings as files (a Markdown report, GitHub issue bodies or SARIF). Built from what the
+   * agents reported, with no model involved; nothing is written anywhere by this call.
+   */
+  exportFindings(projectId: string, params: unknown): unknown {
+    const id = ProjectIdInput.parse(projectId);
+    const parsed = FindingExportRequestSchema.parse(params ?? {});
+    return buildFindingsExport(this.repository, id, {
+      format: parsed.format,
+      selection: parsed.selection,
+      toolVersion: RUNTIME_VERSION,
+      generatedAt: nowIsoTimestamp(),
+    });
+  }
+
   /** Every revision with runs, newest first, with each agent's runs and findings kept apart. */
   findingsByRevision(projectId: string): unknown {
     const id = ProjectIdInput.parse(projectId);
@@ -1727,6 +1744,11 @@ export class SentryRuntimeHost {
         return this.toolchainSelection(requireString(params, 'projectId'));
       case 'projects.findingsByRevision':
         return this.findingsByRevision(requireString(params, 'projectId'));
+      case 'projects.exportFindings': {
+        const { projectId: _projectId, ...rest } = params;
+        void _projectId;
+        return this.exportFindings(requireString(params, 'projectId'), rest);
+      }
       case 'runs.list':
         return this.listRuns(requireString(params, 'projectId'));
       case 'runs.get':

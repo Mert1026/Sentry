@@ -23,6 +23,7 @@ sentry_cli_help() {
   echo "  project delete <project-id> --yes [--json]"
   echo "  project revisions <project-id> [--json]"
   echo "  project findings <project-id> [--json]"
+  echo "  project export-findings <project-id> --format markdown|github-issues|sarif (--findings <run-id>:<finding-id>,... | --run <run-id> | --revision <rev-id>,...) --out <path> [--json]"
   echo "  project profile <project-id> [--json]"
   echo "  project profile-build <project-id> [--agents opencode,deepseek,glm,chatgpt] [--json]"
   echo "  project doctor <project-id> [--json]"

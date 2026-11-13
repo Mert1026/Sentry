@@ -815,5 +815,14 @@
   "Not offered": "Не се предлага",
   "The project's files name no toolchain versions.": "Файловете на проекта не посочват версии на инструменти.",
   "Not installed, and no version of it is installed: the run has none of it.": "Не е инсталиран и няма инсталирана никаква негова версия: изпълнението няма такъв инструмент.",
-  "The library does not offer this version.": "Библиотеката не предлага тази версия."
+  "The library does not offer this version.": "Библиотеката не предлага тази версия.",
+  "Exporting findings": "Експортиране на констатации",
+  "Export as": "Експортиране като",
+  "Markdown report": "Markdown отчет",
+  "GitHub issues (ZIP)": "GitHub задачи (ZIP)",
+  "SARIF (GitHub code scanning)": "SARIF (GitHub code scanning)",
+  "Select all": "Избери всички",
+  "Exporting…": "Експортиране…",
+  "Export all in this revision": "Експортирай всички в тази ревизия",
+  "Save the selected findings as a file. A Markdown report is one readable document. GitHub issues is a ZIP with one issue body per finding, an issues.json with titles and labels, and a README. SARIF is a file GitHub code scanning can read. Everything is built from what the agents reported, with no AI involved, nothing is sent anywhere and nothing is written into your project. These are agent reports: review each one before acting on it.": "Запазва избраните констатации като файл. Markdown отчетът е един четим документ. GitHub задачи е ZIP с по една задача за всяка констатация, issues.json със заглавия и етикети и README. SARIF е файл, който GitHub code scanning може да прочете. Всичко се съставя от докладваното от агентите, без изкуствен интелект, нищо не се изпраща никъде и нищо не се записва във вашия проект. Това са доклади на агенти: прегледайте всеки, преди да действате по него."
 }

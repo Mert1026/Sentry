@@ -404,3 +404,78 @@ describe('settings:set for external clients', () => {
     expect(saved).not.toContain('OPENAI_API_KEY');
   });
 });
+
+describe('findings export channels', () => {
+  const projectId = 'proj_01K7777777777777777777A8W1';
+  const selection = {
+    findings: [
+      { runId: 'run_01K7777777777777777777A8W1', findingId: 'find_01K7777777777777777777A8WA' },
+    ],
+  };
+
+  it('lets external clients export findings, but not use the Save As channel', async () => {
+    const h = await harness(true);
+    expect(isCliAllowed('projects:export-findings')).toBe(true);
+    expect(isCliAllowed('projects:save-findings-export')).toBe(false);
+    await expect(
+      dispatchDesktopCommand(
+        h.service,
+        'projects:save-findings-export',
+        { projectId, format: 'markdown', selection },
+        {},
+        { external: true },
+      ),
+    ).rejects.toMatchObject({ code: 'CLI_COMMAND_FORBIDDEN' });
+    await dispatchDesktopCommand(
+      h.service,
+      'projects:export-findings',
+      { projectId, format: 'sarif', selection },
+      {},
+      { external: true },
+    );
+    const call = h.seen.find((c) => c.method === 'projects.exportFindings');
+    expect(call?.params).toEqual({ projectId, format: 'sarif', selection });
+  });
+
+  it('accepts a run or revisions as the selection, and refuses anything else', async () => {
+    const h = await harness(true);
+    const run = (payload: unknown) =>
+      dispatchDesktopCommand(h.service, 'projects:export-findings', payload, {});
+    await run({
+      projectId,
+      format: 'markdown',
+      selection: { runId: 'run_01K7777777777777777777A8W1' },
+    });
+    await run({
+      projectId,
+      format: 'github-issues',
+      selection: { revisionIds: ['rev_01K7777777777777777777779B'] },
+    });
+    for (const bad of [
+      { projectId, format: 'html', selection },
+      { projectId, format: 'markdown', selection: {} },
+      { projectId, format: 'markdown', selection: { findings: [] } },
+      { projectId, format: 'markdown', selection: { revisionIds: ['not-a-revision'] } },
+      {
+        projectId,
+        format: 'markdown',
+        selection: { runId: 'run_1', findings: selection.findings },
+      },
+      { projectId, format: 'markdown', selection, path: 'C:/Windows/x' },
+      { format: 'markdown', selection },
+    ])
+      await expect(run(bad), JSON.stringify(bad).slice(0, 60)).rejects.toThrow();
+  });
+
+  it('needs the native save dialog for the Save As channel', async () => {
+    const h = await harness(true);
+    await expect(
+      dispatchDesktopCommand(
+        h.service,
+        'projects:save-findings-export',
+        { projectId, format: 'markdown', selection },
+        {},
+      ),
+    ).rejects.toMatchObject({ code: 'DIALOG_UNAVAILABLE' });
+  });
+});

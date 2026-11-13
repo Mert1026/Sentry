@@ -21,6 +21,8 @@ export const IPC_CHANNELS = [
   'projects:toolchain-needs',
   'projects:assess-toolchains',
   'projects:findings-by-revision',
+  'projects:export-findings',
+  'projects:save-findings-export',
   'projects:toolchain-selection',
   'runs:list',
   'runs:get',
@@ -274,6 +276,18 @@ export interface SentryDesktopApi {
     toolchainNeeds(projectId: string): Promise<ToolchainNeedsStatus>;
     /** Every revision with runs, newest first: each agent's runs and raw findings, kept apart. */
     findingsByRevision(projectId: string): Promise<FindingsByRevision>;
+    /**
+     * Save the selected findings as a file: opens the native Save As dialog, then writes a Markdown
+     * report, a SARIF file or (for GitHub issues) a ZIP. The renderer only names the findings and the
+     * format; the destination always comes from the dialog.
+     */
+    saveFindingsExport(
+      projectId: string,
+      request: import('@qa/schemas').FindingExportRequest,
+    ): Promise<
+      | { status: 'saved'; path: string; files: number; findingCount: number }
+      | { status: 'cancelled' }
+    >;
     /** Asks the agents (all, or the listed stacks) what they need; returns at once. */
     assessToolchains(
       projectId: string,

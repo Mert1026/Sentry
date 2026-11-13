@@ -54,6 +54,8 @@ const api: SentryDesktopApi & {
       invoke('projects:toolchain-selection', { projectId }),
     findingsByRevision: (projectId: string) =>
       invoke('projects:findings-by-revision', { projectId }),
+    saveFindingsExport: (projectId: string, request: import('@qa/schemas').FindingExportRequest) =>
+      invoke('projects:save-findings-export', { projectId, ...request }),
     assessToolchains: (projectId: string, agentStackIds?: string[]) =>
       invoke(
         'projects:assess-toolchains',

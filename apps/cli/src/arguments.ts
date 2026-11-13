@@ -85,6 +85,20 @@ export type ParsedCliCommand =
   | (BaseCommand<'run.cancel'> & { readonly runId: string })
   | (BaseCommand<'project.revisions'> & { readonly projectId: string })
   | (BaseCommand<'project.findings'> & { readonly projectId: string })
+  | (BaseCommand<'project.export-findings'> & {
+      readonly projectId: string;
+      readonly format: 'markdown' | 'github-issues' | 'sarif';
+      readonly selection:
+        | {
+            readonly findings: ReadonlyArray<{
+              readonly runId: string;
+              readonly findingId: string;
+            }>;
+          }
+        | { readonly runId: string }
+        | { readonly revisionIds: readonly string[] };
+      readonly out: string;
+    })
   | (BaseCommand<'project.profile'> & { readonly projectId: string })
   | (BaseCommand<'project.profile-build'> & {
       readonly projectId: string;
@@ -174,6 +188,7 @@ export function commandHint(args: readonly string[]): CliCommand | 'unknown' {
     'project.delete',
     'project.revisions',
     'project.findings',
+    'project.export-findings',
     'project.profile',
     'project.profile-build',
     'toolchain.status',
@@ -434,6 +449,59 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
     assertFlags(tail, []);
     const [projectId] = assertPositionals(tail, 1, 'qa project findings <project-id>');
     return { command: 'project.findings', projectId: projectId as string };
+  }
+  if (area === 'project' && action === 'export-findings') {
+    assertFlags(tail, ['--format', '--findings', '--run', '--revision', '--out', '--json']);
+    const usage =
+      'Usage: qa project export-findings <project-id> --format markdown|github-issues|sarif (--findings <run-id>:<finding-id>,... | --run <run-id> | --revision <rev-id>,...) --out <path>';
+    const [projectId] = positional(tail);
+    if (projectId === undefined || positional(tail).length !== 1) fail(usage);
+    const format = option(tail, '--format');
+    if (format !== 'markdown' && format !== 'github-issues' && format !== 'sarif')
+      fail('--format must be markdown, github-issues or sarif', '--format');
+    const out = option(tail, '--out');
+    if (out === undefined)
+      fail('--out is required: a file, or a folder for github-issues', '--out');
+    const findingsText = option(tail, '--findings');
+    const runText = option(tail, '--run');
+    const revisionText = option(tail, '--revision');
+    if ([findingsText, runText, revisionText].filter((v) => v !== undefined).length !== 1)
+      fail('Choose exactly one of --findings, --run or --revision', '--findings');
+    const list = (text: string): string[] =>
+      text
+        .split(',')
+        .map((value) => value.trim())
+        .filter((value) => value.length > 0);
+    let selection:
+      | { findings: Array<{ runId: string; findingId: string }> }
+      | { runId: string }
+      | { revisionIds: string[] };
+    if (findingsText !== undefined) {
+      const findings = list(findingsText).map((value) => {
+        const [runId, findingId, extra] = value.split(':');
+        if (!runId || !findingId || extra !== undefined)
+          fail('--findings entries look like <run-id>:<finding-id>', '--findings');
+        return { runId, findingId };
+      });
+      if (findings.length === 0)
+        fail('--findings needs at least one <run-id>:<finding-id>', '--findings');
+      if (findings.length > 500) fail('--findings takes at most 500 findings', '--findings');
+      selection = { findings };
+    } else if (runText !== undefined) {
+      selection = { runId: runText };
+    } else {
+      const revisionIds = list(revisionText as string);
+      if (revisionIds.length === 0) fail('--revision needs at least one revision id', '--revision');
+      if (revisionIds.length > 50) fail('--revision takes at most 50 revisions', '--revision');
+      selection = { revisionIds };
+    }
+    return {
+      command: 'project.export-findings',
+      projectId,
+      format,
+      selection,
+      out,
+    };
   }
   if (area === 'project' && action === 'profile') {
     assertFlags(tail, []);

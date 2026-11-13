@@ -258,3 +258,22 @@ describe('run time limit and depth reach the runtime', () => {
     await expect(h.service.startRun(id, { mode: 'full', depth: 'turbo' })).rejects.toThrow();
   });
 });
+
+describe('findings export through the service', () => {
+  it('asks the runtime for the files and checks the request first', async () => {
+    const h = await harness();
+    const id = 'proj_01K7777777777777777777A8W1';
+    const selection = { runId: 'run_01K7777777777777777777A8W1' };
+    await h.service.exportFindings(id, { format: 'markdown', selection });
+    expect(h.seen.filter((c) => c.method === 'projects.exportFindings').at(-1)?.params).toEqual({
+      projectId: id,
+      format: 'markdown',
+      selection,
+    });
+    const before = h.seen.length;
+    await expect(h.service.exportFindings(id, { format: 'pdf', selection })).rejects.toThrow();
+    await expect(h.service.exportFindings('', { format: 'sarif', selection })).rejects.toThrow();
+    // Nothing reached the runtime for a request that was refused.
+    expect(h.seen).toHaveLength(before);
+  });
+});

@@ -102,7 +102,7 @@ connection never cancels a run; cancel explicitly with `run cancel`.
 ```text
 capabilities [--json]
 project list/add/show/update/delete/revisions/doctor
-project findings | profile | profile-build
+project findings | export-findings | profile | profile-build
 settings show | effort | run-limit
 agent list | agent doctor opencode|deepseek|glm|chatgpt
 run start/list/show/status/cancel/result/export
@@ -132,6 +132,23 @@ default run time limit with `isDefault`.
 - `run list` and `run status` report each run's `depth` (`fast` or `full`) and `timeLimitMs`, and
   `run list` and `project findings` mark fast runs with `FAST`.
 - `capabilities` reports `features.settings: true` and `features.runDepth: true`.
+
+### Exporting findings
+
+```text
+sentry cli project export-findings proj_ID --format markdown --revision rev_ID --out report.md
+sentry cli project export-findings proj_ID --format sarif --run run_ID --out sentry.sarif
+sentry cli project export-findings proj_ID --format github-issues --findings run_ID:find_ID,... --out issues-folder
+```
+
+- Choose exactly one of `--findings <run-id>:<finding-id>,...` (up to 500), `--run <run-id>` or
+  `--revision <rev-id>,...` (up to 50; simulation runs are left out).
+- `markdown` and `sarif` write one file to `--out`. `github-issues` writes a folder: `README.md`,
+  `issues.json` (title, labels, severity and ids per issue) and `issues/NNN-title.md`, one body per
+  finding. Nothing is posted to GitHub.
+- The files are built from what the agents reported, with no AI. The output is deterministic: the
+  same findings give the same files, ordered by severity. Review each one before acting on it.
+- `capabilities` reports `features.findingsExport: true`.
 
 ### Re-testing earlier findings, profiles, toolchains
 
