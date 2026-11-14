@@ -36,6 +36,7 @@ What changed: [What's new](#whats-new).
 | Evidence             | Findings with evidence, token usage and exports as JSON or log files.                                                                                      |
 | Findings by revision | Browse what every agent reported in every run, per project revision. Nothing is merged or matched between runs.                                            |
 | Export findings      | Save picked findings (or a whole revision) as a Markdown report, GitHub issue files (ZIP) or a SARIF file for code scanning. No AI, nothing sent anywhere. |
+| Regression tests     | Pick findings, choose a test framework, and an agent writes one regression test per finding. Downloaded as a ZIP; uses provider budget.                    |
 | Re-test              | Pick findings from an older revision and check, on the current one, whether each is resolved and why not if it is not.                                     |
 | Project profile      | Optional per-agent orientation notes for a project, labelled unverified and never containing past findings.                                                |
 | Toolchains           | A library of 59 host-side installable packs in six groups, plus custom add-ons.                                                                            |
@@ -129,6 +130,15 @@ allow it for that run.
 Project removal confirms deletion of the managed data and history and keeps the
 imported original. Optional WSL disk reclamation needs confirmation and administrator
 consent; the space returned to Windows varies.
+
+## Regression tests
+
+In **Findings by revision**, tick findings, choose a test framework (Vitest, Jest, pytest, xUnit,
+JUnit 5 or go test) and select **Write tests**. This is a real run that uses provider budget: for
+each finding an agent writes one test in a private copy of the current revision and runs it. A good
+test fails while the problem exists. The run lists how each test ended, and **Download tests (ZIP)**
+saves a README and the test files. The tests are AI-written and unverified, and nothing is added to
+your project.
 
 ## Re-test earlier findings
 

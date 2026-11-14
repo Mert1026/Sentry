@@ -8,6 +8,13 @@
   files are built from what the agents reported, with no AI, nothing is sent anywhere and nothing is
   written into your project. CLI: `project export-findings`. Up to 500 findings per export;
   re-testing is unchanged.
+- Regression tests: tick findings in **Findings by revision**, choose a test framework (Vitest,
+  Jest, pytest, xUnit, JUnit 5 or go test) and **Write tests**. An agent writes one test per finding
+  in a private copy of the current revision and runs it; a good test fails while the problem exists.
+  The files are kept with the run and downloaded as a ZIP with a README that says how each test
+  ended. This is a real run: it uses provider budget (up to 12 findings), and the tests are
+  AI-written and unverified. Nothing is added to your project. CLI:
+  `run start --write-tests <run>:<finding>,... --framework <id>` and `run export-tests`.
 
 ## [2.0.1] - 2026-11-10
 

@@ -105,7 +105,7 @@ project list/add/show/update/delete/revisions/doctor
 project findings | export-findings | profile | profile-build
 settings show | effort | run-limit
 agent list | agent doctor opencode|deepseek|glm|chatgpt
-run start/list/show/status/cancel/result/export
+run start/list/show/status/cancel/result/export/export-tests
 toolchain status | install | remove
 ```
 
@@ -149,6 +149,24 @@ sentry cli project export-findings proj_ID --format github-issues --findings run
 - The files are built from what the agents reported, with no AI. The output is deterministic: the
   same findings give the same files, ordered by severity. Review each one before acting on it.
 - `capabilities` reports `features.findingsExport: true`.
+
+### Writing regression tests
+
+```text
+sentry cli run start proj_ID --write-tests run_ID:find_ID[,run_ID:find_ID...] --framework pytest --wait
+sentry cli run export-tests run_ID --out tests-folder
+```
+
+- `--write-tests` takes up to 12 findings from earlier runs and `--framework` one of `vitest`,
+  `jest`, `pytest`, `xunit`, `junit` or `go-test`. Each finding becomes one fixed check for the agent
+  that reported it (`--agents` names the agents instead), on the **current** revision.
+- The agent writes the test into a private copy, runs it, and says whether it fails as expected. This
+  uses provider budget. `--depth`, `--revision`, `--instructions`, `--paths` and `--retest` do not
+  apply.
+- `run export-tests` writes `README.md` (how each test ended) and `tests/<file>` into the folder.
+  The tests are AI-written and unverified: read and run each one before relying on it. A write-tests
+  run stores no findings of its own, and nothing is written into your project.
+- `capabilities` reports `features.testWriting: true`.
 
 ### Re-testing earlier findings, profiles, toolchains
 
