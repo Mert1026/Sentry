@@ -2143,3 +2143,4 @@ export * from './generated-tests.js';
 export * from './generated-tests-export.js';
 
 export * from './ci-files.js';
+export * from './unified-diff.js';
