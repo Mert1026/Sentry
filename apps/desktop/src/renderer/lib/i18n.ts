@@ -259,6 +259,20 @@ function translateCore(trimmed: string): string {
   const savedFindings = /^Saved (\d+) findings? to (.+)$/.exec(trimmed);
   if (savedFindings !== null)
     return `Запазени ${savedFindings[1]} ${savedFindings[1] === '1' ? 'констатация' : 'констатации'} в ${savedFindings[2]}`;
+  const savedTests = /^Saved (\d+) tests? to (.+)$/.exec(trimmed);
+  if (savedTests !== null)
+    return `Запазени ${savedTests[1]} ${savedTests[1] === '1' ? 'тест' : 'теста'} в ${savedTests[2]}`;
+  const writeTestsConfirm =
+    /^Write (\d+) regression test\(s\) with the agents that reported them, in the current revision\? This uses provider budget\. The tests are only kept for download; nothing is added to your project\.$/.exec(
+      trimmed,
+    );
+  if (writeTestsConfirm !== null)
+    return `Да се напишат ${writeTestsConfirm[1]} регресионни теста от агентите, които са ги докладвали, в текущата ревизия? Това изразходва бюджет при доставчика. Тестовете се пазят само за изтегляне; нищо не се добавя във вашия проект.`;
+  const writeTestsFor = /^Write tests for (\d+) selected$/.exec(trimmed);
+  if (writeTestsFor !== null) return `Напиши тестове за ${writeTestsFor[1]} избрани`;
+  const testsWritten = /^Tests written for earlier findings \((.+)\):$/.exec(trimmed);
+  if (testsWritten !== null)
+    return `Написани тестове за по-стари констатации (${testsWritten[1]}):`;
   const pickAtMost = /^Pick at most (\d+)\.$/.exec(trimmed);
   if (pickAtMost !== null) return `Изберете най-много ${pickAtMost[1]}.`;
   const agentRunsFindings = /^(\d+) runs?, (\d+) findings?$/.exec(trimmed);

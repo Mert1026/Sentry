@@ -7,6 +7,7 @@ import type {
   FindingsByRevision,
   RevisionFindingsItem,
   RevisionRetestOutcome,
+  RevisionTestWritingOutcome,
 } from '../../shared/ipc-contract.js';
 
 export interface RevisionPanelStack {
@@ -22,6 +23,25 @@ export type RetestSelection = { runId: string; findingId: string };
 
 /** Most findings one export takes (the same limit the runtime applies). */
 export const EXPORT_LIMIT = 500;
+/** Most findings one test-writing run takes on (the same limit the runtime applies). */
+export const WRITE_TESTS_LIMIT = 12;
+export type TestFramework = 'vitest' | 'jest' | 'pytest' | 'xunit' | 'junit' | 'go-test';
+export const TEST_FRAMEWORK_OPTIONS: ReadonlyArray<{ value: TestFramework; label: string }> = [
+  { value: 'vitest', label: 'Vitest (TypeScript / JavaScript)' },
+  { value: 'jest', label: 'Jest (JavaScript / TypeScript)' },
+  { value: 'pytest', label: 'pytest (Python)' },
+  { value: 'xunit', label: 'xUnit (C# / .NET)' },
+  { value: 'junit', label: 'JUnit 5 (Java)' },
+  { value: 'go-test', label: 'go test (Go)' },
+];
+const TEST_VERDICT: Record<
+  RevisionTestWritingOutcome['verdict'],
+  { label: string; status: 'failed' | 'completed' | 'partial' }
+> = {
+  fails_as_expected: { label: 'Test catches the problem', status: 'completed' },
+  passes_unexpectedly: { label: 'Test passes: check it', status: 'partial' },
+  could_not_run: { label: 'Could not run', status: 'partial' },
+};
 export type ExportFormat = 'markdown' | 'github-issues' | 'sarif';
 export type PanelExportRequest = {
   format: ExportFormat;
@@ -91,6 +111,11 @@ export function RevisionFindingsPanel({
   exporting = false,
   exportNote,
   exportError,
+  onWriteTests,
+  writingTests = false,
+  writeTestsError,
+  onDownloadTests,
+  downloadingTests = false,
 }: {
   stacks: readonly RevisionPanelStack[];
   data: FindingsByRevision | undefined;
@@ -102,6 +127,11 @@ export function RevisionFindingsPanel({
   exporting?: boolean;
   exportNote?: string | undefined;
   exportError?: string | undefined;
+  onWriteTests?: (findings: RetestSelection[], framework: TestFramework) => void;
+  writingTests?: boolean;
+  writeTestsError?: string | undefined;
+  onDownloadTests?: (runId: string) => void;
+  downloadingTests?: boolean;
 }): React.JSX.Element {
   const revisions = data?.revisions ?? [];
   const [chosen, setChosen] = React.useState<string | undefined>(undefined);
@@ -109,9 +139,12 @@ export function RevisionFindingsPanel({
   const [picked, setPicked] = React.useState<ReadonlyMap<string, RetestSelection>>(new Map());
   const [who, setWho] = React.useState<RetestWho>('reporter');
   const [exportFormat, setExportFormat] = React.useState<ExportFormat>('markdown');
+  const [framework, setFramework] = React.useState<TestFramework>('vitest');
   // Findings can be picked on any revision to export them; re-testing only takes older ones.
   const selectable =
-    onExport !== undefined || (canPickFor(selected, data) && onRetest !== undefined);
+    onExport !== undefined ||
+    onWriteTests !== undefined ||
+    (canPickFor(selected, data) && onRetest !== undefined);
   const everyFinding: RetestSelection[] =
     selected?.agents.flatMap((agent) =>
       agent.runs.flatMap((run) =>
@@ -131,6 +164,14 @@ export function RevisionFindingsPanel({
   const exportPicked = (): void => {
     if (onExport === undefined || picked.size === 0 || picked.size > EXPORT_LIMIT) return;
     onExport({ format: exportFormat, selection: { findings: [...picked.values()] } });
+  };
+  const writeTests = (): void => {
+    if (onWriteTests === undefined || picked.size === 0 || picked.size > WRITE_TESTS_LIMIT) return;
+    const text =
+      'Write ' +
+      picked.size +
+      ' regression test(s) with the agents that reported them, in the current revision? This uses provider budget. The tests are only kept for download; nothing is added to your project.';
+    if (window.confirm(translateText(text))) onWriteTests([...picked.values()], framework);
   };
   const exportRevision = (): void => {
     if (onExport === undefined || selected === undefined) return;
@@ -296,6 +337,56 @@ export function RevisionFindingsPanel({
               ) : null}
             </div>
           ) : null}
+          {onWriteTests !== undefined && everyFinding.length > 0 ? (
+            <div
+              className="revision-write-tests"
+              style={{
+                display: 'flex',
+                gap: 12,
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                margin: '10px 0',
+              }}
+            >
+              <InfoPopover title="Writing regression tests">
+                An agent writes one regression test for each ticked finding, in the framework you
+                choose, and runs it against the current revision. A good test fails while the
+                problem exists. The files are kept with the run for you to download: nothing is
+                added to your project. This is a real run and uses provider budget (up to{' '}
+                {WRITE_TESTS_LIMIT} findings at a time). The tests are written by an AI agent: read
+                and run each one before you rely on it.
+              </InfoPopover>
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span>Test framework</span>
+                <select
+                  value={framework}
+                  onChange={(event) => setFramework(event.target.value as TestFramework)}
+                  aria-label="Test framework"
+                >
+                  {TEST_FRAMEWORK_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                className="primary compact"
+                disabled={picked.size === 0 || picked.size > WRITE_TESTS_LIMIT || writingTests}
+                onClick={writeTests}
+              >
+                {writingTests ? 'Starting…' : 'Write tests for ' + picked.size + ' selected'}
+              </button>
+              {picked.size > WRITE_TESTS_LIMIT ? (
+                <span className="metadata">{'Pick at most ' + WRITE_TESTS_LIMIT + '.'}</span>
+              ) : null}
+            </div>
+          ) : null}
+          {writeTestsError !== undefined ? (
+            <p className="error-box" role="alert">
+              {writeTestsError}
+            </p>
+          ) : null}
           {exportNote !== undefined ? (
             <p className="metadata" role="status">
               {exportNote}
@@ -333,7 +424,11 @@ export function RevisionFindingsPanel({
                     >
                       <span>{formatWhen(run.at)}</span>
                       <span className="badge">
-                        {run.retest === undefined ? run.mode.toUpperCase() : 'RETEST'}
+                        {run.testWriting !== undefined
+                          ? 'TESTS'
+                          : run.retest === undefined
+                            ? run.mode.toUpperCase()
+                            : 'RETEST'}
                       </span>
                       {run.depth === 'fast' ? <span className="badge">FAST</span> : null}
                       <StatusPill
@@ -350,6 +445,41 @@ export function RevisionFindingsPanel({
                       />
                       <Link to={'/runs/' + run.runId}>Open run</Link>
                     </div>
+                    {run.testWriting !== undefined ? (
+                      <div style={{ margin: '6px 0 0' }}>
+                        <span className="metadata">
+                          {'Tests written for earlier findings (' +
+                            run.testWriting.framework +
+                            '):'}
+                        </span>
+                        <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
+                          {run.testWriting.tests.map((outcome) => (
+                            <li key={outcome.findingId} style={{ margin: '4px 0' }}>
+                              <StatusPill
+                                status={TEST_VERDICT[outcome.verdict].status}
+                                label={TEST_VERDICT[outcome.verdict].label}
+                              />{' '}
+                              {outcome.title}
+                              {outcome.details !== undefined ? (
+                                <p className="metadata" style={{ margin: '4px 0 0' }}>
+                                  {outcome.details}
+                                </p>
+                              ) : null}
+                            </li>
+                          ))}
+                        </ul>
+                        {onDownloadTests !== undefined ? (
+                          <button
+                            className="compact"
+                            style={{ marginTop: 6 }}
+                            disabled={downloadingTests}
+                            onClick={() => onDownloadTests(run.runId)}
+                          >
+                            {downloadingTests ? 'Saving…' : 'Download tests (ZIP)'}
+                          </button>
+                        ) : null}
+                      </div>
+                    ) : null}
                     {run.retest !== undefined ? (
                       <div style={{ margin: '6px 0 0' }}>
                         <span className="metadata">
@@ -374,7 +504,7 @@ export function RevisionFindingsPanel({
                       </div>
                     ) : null}
                     {run.findings.length === 0 ? (
-                      run.retest === undefined ? (
+                      run.retest === undefined && run.testWriting === undefined ? (
                         <p className="metadata" style={{ margin: '4px 0 0' }}>
                           No findings from this agent in this run.
                         </p>

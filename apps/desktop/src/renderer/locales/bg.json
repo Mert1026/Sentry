@@ -824,5 +824,20 @@
   "Select all": "Избери всички",
   "Exporting…": "Експортиране…",
   "Export all in this revision": "Експортирай всички в тази ревизия",
-  "Save the selected findings as a file. A Markdown report is one readable document. GitHub issues is a ZIP with one issue body per finding, an issues.json with titles and labels, and a README. SARIF is a file GitHub code scanning can read. Everything is built from what the agents reported, with no AI involved, nothing is sent anywhere and nothing is written into your project. These are agent reports: review each one before acting on it.": "Запазва избраните констатации като файл. Markdown отчетът е един четим документ. GitHub задачи е ZIP с по една задача за всяка констатация, issues.json със заглавия и етикети и README. SARIF е файл, който GitHub code scanning може да прочете. Всичко се съставя от докладваното от агентите, без изкуствен интелект, нищо не се изпраща никъде и нищо не се записва във вашия проект. Това са доклади на агенти: прегледайте всеки, преди да действате по него."
+  "Save the selected findings as a file. A Markdown report is one readable document. GitHub issues is a ZIP with one issue body per finding, an issues.json with titles and labels, and a README. SARIF is a file GitHub code scanning can read. Everything is built from what the agents reported, with no AI involved, nothing is sent anywhere and nothing is written into your project. These are agent reports: review each one before acting on it.": "Запазва избраните констатации като файл. Markdown отчетът е един четим документ. GitHub задачи е ZIP с по една задача за всяка констатация, issues.json със заглавия и етикети и README. SARIF е файл, който GitHub code scanning може да прочете. Всичко се съставя от докладваното от агентите, без изкуствен интелект, нищо не се изпраща никъде и нищо не се записва във вашия проект. Това са доклади на агенти: прегледайте всеки, преди да действате по него.",
+  "Test framework": "Тестова рамка",
+  "Writing regression tests": "Писане на регресионни тестове",
+  "Test catches the problem": "Тестът хваща проблема",
+  "Test passes: check it": "Тестът минава: проверете го",
+  "Could not run": "Не можа да се изпълни",
+  "Download tests (ZIP)": "Изтегли тестовете (ZIP)",
+  "Saving…": "Запазване…",
+  "An agent writes one regression test for each ticked finding, in the framework you choose, and runs it against the current revision. A good test fails while the problem exists. The files are kept with the run for you to download: nothing is added to your project. This is a real run and uses provider budget (up to": "Агент пише по един регресионен тест за всяка избрана констатация, в избраната от вас тестова рамка, и го изпълнява върху текущата ревизия. Добрият тест пада, докато проблемът съществува. Файловете се пазят към изпълнението, за да ги изтеглите: нищо не се добавя във вашия проект. Това е истинско изпълнение и изразходва бюджет при доставчика (до",
+  "findings at a time). The tests are written by an AI agent: read and run each one before you rely on it.": "констатации наведнъж). Тестовете са написани от агент с изкуствен интелект: прочетете и изпълнете всеки, преди да разчитате на него.",
+  "Vitest (TypeScript / JavaScript)": "Vitest (TypeScript / JavaScript)",
+  "Jest (JavaScript / TypeScript)": "Jest (JavaScript / TypeScript)",
+  "pytest (Python)": "pytest (Python)",
+  "xUnit (C# / .NET)": "xUnit (C# / .NET)",
+  "JUnit 5 (Java)": "JUnit 5 (Java)",
+  "go test (Go)": "go test (Go)"
 }

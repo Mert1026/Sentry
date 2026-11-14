@@ -38,6 +38,7 @@ import { useToolchainNeeds } from '../lib/use-toolchain-needs.js';
 import {
   RevisionFindingsPanel,
   type PanelExportRequest,
+  type TestFramework,
 } from '../components/RevisionFindingsPanel.js';
 import { useFindingsByRevision } from '../lib/use-findings-by-revision.js';
 import { retestStartOptions } from '../lib/retest-options.js';
@@ -261,6 +262,39 @@ export function ProjectDetail(): React.JSX.Element {
       void queryClient.invalidateQueries({ queryKey: ['findings-by-revision', projectId] });
     },
     onError: onStartError,
+  });
+  // Write regression tests for findings picked in "Findings by revision", on the CURRENT revision.
+  const writeTests = useMutation({
+    mutationFn: (input: {
+      findings: Array<{ runId: string; findingId: string }>;
+      framework: TestFramework;
+    }) =>
+      sentryApi().runs.start(projectId as string, {
+        mode: 'full',
+        ...(webAccess ? { webAccess: true } : {}),
+        ...(toolDownloads ? { toolDownloads: true } : {}),
+        testWriting: input,
+      }),
+    onSuccess: (operation) => {
+      onStarted(operation);
+      void queryClient.invalidateQueries({ queryKey: ['findings-by-revision', projectId] });
+    },
+    onError: onStartError,
+  });
+  // Save the tests a test-writing run kept as one ZIP.
+  const downloadTests = useMutation({
+    mutationFn: (runId: string) => sentryApi().runs.saveTestsExport(runId),
+    onMutate: () => setExportNote(undefined),
+    onSuccess: (result) =>
+      setExportNote(
+        result.status === 'saved'
+          ? 'Saved ' +
+              result.findingCount +
+              (result.findingCount === 1 ? ' test' : ' tests') +
+              ' to ' +
+              result.path
+          : undefined,
+      ),
   });
   const [updateStartedAt, setUpdateStartedAt] = React.useState<number | undefined>(undefined);
   const [updateElapsed, setUpdateElapsed] = React.useState(0);
@@ -831,6 +865,13 @@ export function ProjectDetail(): React.JSX.Element {
             onRetest={(findings, who) => startRetest.mutate({ findings, who })}
             retesting={startRetest.isPending}
             retestError={startRetest.error instanceof Error ? startRetest.error.message : undefined}
+            onWriteTests={(findings, framework) => writeTests.mutate({ findings, framework })}
+            writingTests={writeTests.isPending}
+            writeTestsError={
+              writeTests.error instanceof Error ? writeTests.error.message : undefined
+            }
+            onDownloadTests={(runId) => downloadTests.mutate(runId)}
+            downloadingTests={downloadTests.isPending}
             onExport={(request) => exportFindings.mutate(request)}
             exporting={exportFindings.isPending}
             exportNote={exportNote}

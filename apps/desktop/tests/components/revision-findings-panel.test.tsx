@@ -2,7 +2,12 @@ import React from 'react';
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { RevisionFindingsPanel } from '../../src/renderer/components/RevisionFindingsPanel.js';
+import { TEST_FRAMEWORKS } from '@qa/schemas';
+import {
+  RevisionFindingsPanel,
+  TEST_FRAMEWORK_OPTIONS,
+  WRITE_TESTS_LIMIT,
+} from '../../src/renderer/components/RevisionFindingsPanel.js';
 import type { FindingsByRevision } from '../../src/shared/ipc-contract.js';
 
 afterEach(() => {
@@ -338,5 +343,82 @@ describe('exporting findings', () => {
     cleanup();
     show(data);
     expect(screen.queryByLabelText('Export as')).toBeNull();
+  });
+});
+
+describe('writing regression tests', () => {
+  const withTests = (extra: Record<string, unknown> = {}, value: FindingsByRevision = data) =>
+    render(
+      <MemoryRouter>
+        <RevisionFindingsPanel
+          stacks={stacks}
+          data={value}
+          loading={false}
+          onWriteTests={vi.fn()}
+          {...extra}
+        />
+      </MemoryRouter>,
+    );
+
+  it('keeps the same frameworks and limit as the runtime', () => {
+    expect(TEST_FRAMEWORK_OPTIONS.map((option) => option.value)).toEqual(
+      TEST_FRAMEWORKS.map((framework) => framework.id),
+    );
+    expect(TEST_FRAMEWORK_OPTIONS.map((option) => option.label)).toEqual(
+      TEST_FRAMEWORKS.map((framework) => framework.label),
+    );
+    expect(WRITE_TESTS_LIMIT).toBe(12);
+  });
+
+  it('writes tests for the ticked findings in the chosen framework, after the person confirms', () => {
+    const onWriteTests = vi.fn();
+    withTests({ onWriteTests });
+    fireEvent.click(screen.getByText('Agent A'));
+    expect(
+      screen.getByRole('button', { name: 'Write tests for 0 selected' }).hasAttribute('disabled'),
+    ).toBe(true);
+    fireEvent.click(screen.getByRole('checkbox', { name: /Wrong status/ }));
+    fireEvent.change(screen.getByLabelText('Test framework'), { target: { value: 'pytest' } });
+    const confirm = vi.spyOn(window, 'confirm');
+    confirm.mockReturnValueOnce(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Write tests for 1 selected' }));
+    expect(onWriteTests).not.toHaveBeenCalled();
+    confirm.mockReturnValueOnce(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Write tests for 1 selected' }));
+    expect(onWriteTests).toHaveBeenCalledWith([{ runId: 'run_2', findingId: 'f2' }], 'pytest');
+    expect(confirm).toHaveBeenLastCalledWith(expect.stringContaining('uses provider budget'));
+  });
+
+  it('shows how each written test ended and lets the person download them', () => {
+    const onDownloadTests = vi.fn();
+    const testRun = structuredClone(data);
+    const agentRun = testRun.revisions[0]!.agents[0]!.runs[0]!;
+    (agentRun as { findings: unknown[] }).findings = [];
+    (agentRun as { testWriting?: unknown }).testWriting = {
+      framework: 'pytest',
+      tests: [
+        {
+          n: 1,
+          findingId: 'f0',
+          title: 'Old problem',
+          verdict: 'fails_as_expected',
+          details: 'ran pytest',
+        },
+        { n: 2, findingId: 'f9', title: 'Other', verdict: 'could_not_run' },
+      ],
+    };
+    withTests({ onDownloadTests }, testRun);
+    fireEvent.click(screen.getByText('Agent A'));
+    expect(screen.getByText('TESTS')).toBeTruthy();
+    expect(screen.getByText('Test catches the problem')).toBeTruthy();
+    expect(screen.getByText('Could not run')).toBeTruthy();
+    expect(screen.getByText('ran pytest')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Download tests (ZIP)' }));
+    expect(onDownloadTests).toHaveBeenCalledWith('run_2');
+  });
+
+  it('shows no write-tests controls without a handler', () => {
+    show(data);
+    expect(screen.queryByLabelText('Test framework')).toBeNull();
   });
 });
