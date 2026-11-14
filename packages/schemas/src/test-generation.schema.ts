@@ -83,6 +83,31 @@ export const RunTestGenerationSchema = z
   .strict();
 export type RunTestGeneration = z.infer<typeof RunTestGenerationSchema>;
 
+/** What a test-writing agent run left behind, as kept with the run. Read back from disk, so checked. */
+export const GeneratedTestsBundleSchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    framework: TestFrameworkIdSchema,
+    agentStackId: z.string().min(1).max(100).nullable(),
+    agentRunId: z.string().min(1).max(100),
+    files: z
+      .array(
+        z
+          .object({
+            path: z.string().min(1).max(300),
+            content: z.string().max(GENERATED_TEST_MAX_FILE_BYTES),
+            n: z.number().int().min(1).max(TEST_GENERATION_MAX_FINDINGS).nullable(),
+          })
+          .strict(),
+      )
+      .max(GENERATED_TEST_MAX_FILES),
+    skipped: z
+      .array(z.object({ path: z.string().max(300), reason: z.string().max(100) }).strict())
+      .max(500),
+  })
+  .strict();
+export type GeneratedTestsBundle = z.infer<typeof GeneratedTestsBundleSchema>;
+
 export function testFramework(id: TestFrameworkId): (typeof TEST_FRAMEWORKS)[number] {
   const found = TEST_FRAMEWORKS.find((framework) => framework.id === id);
   if (found === undefined) throw new Error('Unknown test framework: ' + id);

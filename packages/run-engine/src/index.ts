@@ -914,7 +914,9 @@ export class RunCoordinator {
           // The agent is told to put the finding number in the name ("finding-<n>-...").
           n: Number(/(?:^|[^0-9])finding-(\d{1,2})(?!\d)/.exec(file.path)?.[1] ?? 0) || null,
         })),
-        skipped: collected.skipped,
+        skipped: collected.skipped
+          .slice(0, 500)
+          .map((skip) => ({ path: skip.path.slice(0, 300), reason: skip.reason.slice(0, 100) })),
       };
       const paths = runDataPaths(this.dataRoot, input.run.projectId, input.run.id);
       const relativePath = (paths.exports + '/generated-tests-' + agentRunId + '.json')
@@ -2138,3 +2140,4 @@ export * from './findings-by-revision.js';
 export * from './finding-export.js';
 
 export * from './generated-tests.js';
+export * from './generated-tests-export.js';

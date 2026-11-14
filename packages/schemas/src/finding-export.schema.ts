@@ -44,7 +44,8 @@ export type FindingExportRequest = z.infer<typeof FindingExportRequestSchema>;
 /** What an export returns: the files, and how to name and label them. */
 export const FindingExportResultSchema = z
   .object({
-    format: z.enum(FINDING_EXPORT_FORMATS),
+    // 'test-files' only comes from a test-writing run, never from a findings selection.
+    format: z.enum([...FINDING_EXPORT_FORMATS, 'test-files']),
     files: z.array(z.object({ path: z.string().min(1).max(300), content: z.string() }).strict()),
     findingCount: z.number().int().min(0),
     suggestedName: z.string().min(1).max(200),

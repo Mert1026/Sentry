@@ -6,7 +6,13 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { RuntimeInstanceLease, SentryDatabase, SentryRepository } from '@qa/persistence';
 import { ProjectManager } from '@qa/project-manager';
 import type { HarnessRunRequest } from '@qa/schemas';
-import { createFakeHarnessRegistry, findingsByRevision, RunCoordinator } from '../src/index.js';
+import { createHarnessEventId, nowIsoTimestamp } from '@qa/shared';
+import {
+  createFakeHarnessRegistry,
+  exportGeneratedTests,
+  findingsByRevision,
+  RunCoordinator,
+} from '../src/index.js';
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -139,6 +145,56 @@ describe('test-writing runs', () => {
     ).rejects.toMatchObject({ code: 'INVALID_TARGET' });
     await expect(
       run({ testWriting: { findings: Array(13).fill(f.refs[0]), framework: 'pytest' } }),
+    ).rejects.toMatchObject({ code: 'INVALID_TARGET' });
+    f.database.close();
+  });
+
+  it('exports the kept tests with a README that says how each one ended', async () => {
+    const f = await fixture();
+    const written = await f.runs.run(f.added.project.id, {
+      executionKind: 'simulation',
+      testWriting: { findings: f.refs.slice(0, 1), framework: 'pytest' },
+      onHarnessRequest: (request) => {
+        const folder = join(request.workspace.runtimePath, '.sentry-tests');
+        mkdirSync(folder, { recursive: true });
+        writeFileSync(join(folder, 'finding-1-admin.py'), 'def test_admin():\n    assert False\n');
+      },
+    });
+    const agentRun = f.repository.listAgentRuns(written.run.id)[0]!;
+    f.repository.transaction(() => {
+      f.repository.appendHarnessEventWithinTransaction(written.run.id, {
+        schemaVersion: 1,
+        eventId: createHarnessEventId(),
+        agentRunId: agentRun.id,
+        timestamp: nowIsoTimestamp(),
+        type: 'agent.message',
+        message: '[passed] Write test #1: t — pytest: 1 failed as expected',
+      } as never);
+    });
+    const exported = await exportGeneratedTests(
+      f.repository,
+      f.dataRoot,
+      written.run.id,
+      '2026-11-14T10:00:00.000Z',
+    );
+    expect(exported).toMatchObject({
+      format: 'test-files',
+      findingCount: 1,
+      suggestedName: 'sentry-pytest-tests.zip',
+      mimeType: 'application/zip',
+    });
+    expect(exported.files.map((file) => file.path)).toEqual([
+      'README.md',
+      'tests/finding-1-admin.py',
+    ]);
+    const readme = exported.files[0]!.content;
+    expect(readme).toContain('written by an AI agent');
+    expect(readme).toContain('Ran and fails, as a test for an unfixed problem should');
+    expect(readme).toContain('pytest: 1 failed as expected');
+    expect(exported.files[1]!.content).toContain('assert False');
+    // A run that wrote no tests, or an ordinary run, cannot be exported.
+    await expect(
+      exportGeneratedTests(f.repository, f.dataRoot, f.first.run.id, 'now'),
     ).rejects.toMatchObject({ code: 'INVALID_TARGET' });
     f.database.close();
   });
