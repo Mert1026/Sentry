@@ -67,6 +67,11 @@ export type ParsedCliCommand =
       readonly depth?: 'fast' | 'full';
       readonly useProfile?: boolean;
       readonly revisionId?: string;
+      /** Write one regression test per finding, in this framework, on the current revision. */
+      readonly testWriting?: {
+        readonly framework: string;
+        readonly findings: ReadonlyArray<{ readonly runId: string; readonly findingId: string }>;
+      };
       /** Re-test findings from earlier runs on the current revision. */
       readonly retest?: {
         readonly findings: ReadonlyArray<{ readonly runId: string; readonly findingId: string }>;
@@ -81,6 +86,7 @@ export type ParsedCliCommand =
       readonly format: 'log' | 'json';
       readonly out?: string;
     })
+  | (BaseCommand<'run.export-tests'> & { readonly runId: string; readonly out: string })
   | (BaseCommand<'run.result'> & { readonly runId: string })
   | (BaseCommand<'run.cancel'> & { readonly runId: string })
   | (BaseCommand<'project.revisions'> & { readonly projectId: string })
@@ -206,6 +212,7 @@ export function commandHint(args: readonly string[]): CliCommand | 'unknown' {
     'run.status',
     'run.result',
     'run.export',
+    'run.export-tests',
     'run.cancel',
     'doctor.storage',
     'doctor.cleanup',
@@ -310,6 +317,8 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
       '--revision',
       '--retest',
       '--retest-with',
+      '--write-tests',
+      '--framework',
     ]);
     const [projectId] = positional(tail);
     if (projectId === undefined || positional(tail).length !== 1) {
@@ -324,8 +333,15 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
       fail('--retest-with only applies together with --retest', '--retest-with');
     if (retestWith !== undefined && retestWith !== 'reporter' && retestWith !== 'all')
       fail('--retest-with must be reporter or all', '--retest-with');
-    // A retest always runs full on the current revision; --mode may be omitted for it.
-    const mode = option(tail, '--mode') ?? (isRetest ? 'full' : undefined);
+    const writeTestsText = option(tail, '--write-tests');
+    const frameworkText = option(tail, '--framework');
+    const isTestWriting = writeTestsText !== undefined;
+    if (!isTestWriting && frameworkText !== undefined)
+      fail('--framework only applies together with --write-tests', '--framework');
+    if (isTestWriting && isRetest)
+      fail('--write-tests and --retest cannot be combined', '--write-tests');
+    // A retest or test-writing run always runs full on the current revision; --mode may be omitted.
+    const mode = option(tail, '--mode') ?? (isRetest || isTestWriting ? 'full' : undefined);
     const agentsText = option(tail, '--agents');
     if (mode !== 'full' && mode !== 'targeted') fail('--mode must be full or targeted', '--mode');
     let retest:
@@ -352,11 +368,42 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
       if (option(tail, '--instructions') !== undefined || option(tail, '--paths') !== undefined)
         fail('--retest takes no --instructions or --paths', '--retest');
     }
+    let testWriting:
+      { framework: string; findings: Array<{ runId: string; findingId: string }> } | undefined;
+    if (isTestWriting) {
+      if (mode !== 'full') fail('--write-tests runs in full mode only', '--write-tests');
+      if (
+        frameworkText === undefined ||
+        !'vitest|jest|pytest|xunit|junit|go-test'.split('|').includes(frameworkText)
+      )
+        fail(
+          '--framework must be one of vitest, jest, pytest, xunit, junit, go-test',
+          '--framework',
+        );
+      const findings = writeTestsText
+        .split(',')
+        .map((value) => value.trim())
+        .filter((value) => value.length > 0)
+        .map((value) => {
+          const [runId, findingId, extra] = value.split(':');
+          if (!runId || !findingId || extra !== undefined)
+            fail('--write-tests entries look like <run-id>:<finding-id>', '--write-tests');
+          return { runId, findingId };
+        });
+      if (findings.length === 0)
+        fail('--write-tests needs at least one <run-id>:<finding-id>', '--write-tests');
+      if (findings.length > 12) fail('--write-tests takes at most 12 findings', '--write-tests');
+      if (new Set(findings.map((f) => f.runId + ':' + f.findingId)).size !== findings.length)
+        fail('--write-tests lists a duplicate finding', '--write-tests');
+      testWriting = { framework: frameworkText, findings };
+      if (option(tail, '--instructions') !== undefined || option(tail, '--paths') !== undefined)
+        fail('--write-tests takes no --instructions or --paths', '--write-tests');
+    }
     // Omitted --agents selects the stable real AgentStacks. A retest with the default
     // "reporter" choice leaves the agents to the findings (each goes to the agent that reported it).
     const agents: AgentName[] =
       agentsText === undefined
-        ? isRetest && retest?.who === 'reporter'
+        ? (isRetest && retest?.who === 'reporter') || isTestWriting
           ? []
           : [...DEFAULT_AGENT_NAMES]
         : (agentsText
@@ -377,11 +424,15 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
       fail('--depth must be fast or full', '--depth');
     if (isRetest && depth !== undefined)
       fail('--retest has its own fixed checks; --depth does not apply', '--depth');
+    if (isTestWriting && depth !== undefined)
+      fail('--write-tests has its own fixed checks; --depth does not apply', '--depth');
     const revisionId = option(tail, '--revision');
     if (revisionId !== undefined && !/^rev_[0-9A-HJKMNP-TV-Z]{26}$/.test(revisionId))
       fail('--revision must be a revision id (rev_...)', '--revision');
     if (isRetest && revisionId !== undefined)
       fail('--retest always runs on the current revision', '--revision');
+    if (isTestWriting && revisionId !== undefined)
+      fail('--write-tests always runs on the current revision', '--revision');
     if (new Set(agents).size !== agents.length)
       fail('--agents lists a duplicate agent', '--agents');
     // Async start is the default machine flow: the runtime owns the run and
@@ -427,6 +478,7 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
       ...(depth === undefined ? {} : { depth }),
       ...(revisionId === undefined ? {} : { revisionId }),
       ...(retest === undefined ? {} : { retest }),
+      ...(testWriting === undefined ? {} : { testWriting }),
       ...(paths === undefined ? {} : { paths }),
     };
   }
@@ -607,6 +659,16 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
     if (format !== 'log' && format !== 'json') fail('--format must be log or json', '--format');
     const out = option(tail, '--out');
     return { command: 'run.export', runId, format, ...(out === undefined ? {} : { out }) };
+  }
+  if (area === 'run' && action === 'export-tests') {
+    assertFlags(tail, ['--out', '--json']);
+    const [runId] = positional(tail);
+    if (runId === undefined || positional(tail).length !== 1)
+      fail('Usage: qa run export-tests <run-id> --out <folder>');
+    const out = option(tail, '--out');
+    if (out === undefined)
+      fail('--out is required: a folder for the README and the tests', '--out');
+    return { command: 'run.export-tests', runId, out };
   }
   if (area === 'run' && action === 'result') {
     assertFlags(tail, []);

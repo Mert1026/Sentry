@@ -43,6 +43,7 @@ export const CLI_COMMANDS = [
   'run.status',
   'run.result',
   'run.export',
+  'run.export-tests',
   'run.cancel',
   'doctor.storage',
   'doctor.cleanup',
@@ -561,6 +562,7 @@ export const CapabilitiesResultSchema = z
         retest: z.literal(true).optional(),
         findingsByRevision: z.literal(true).optional(),
         findingsExport: z.literal(true).optional(),
+        testWriting: z.literal(true).optional(),
         runDepth: z.literal(true).optional(),
         settings: z.literal(true).optional(),
         projectProfile: z.literal(true).optional(),
@@ -610,6 +612,15 @@ export const ProjectFindingsResultSchema = z
     projectId: z.string().min(1).max(200),
     currentRevisionId: z.string().min(1).max(100).optional(),
     revisions: z.array(z.unknown()),
+  })
+  .strict();
+/** What `run export-tests` wrote into a folder: a README and the tests a test-writing run kept. */
+export const RunExportTestsResultSchema = z
+  .object({
+    runId: QARunIdSchema,
+    testCount: z.number().int().min(0),
+    out: z.string().min(1).max(2000),
+    files: z.array(z.string().min(1).max(2000)).max(1000),
   })
   .strict();
 /** What `project export-findings` wrote: one file, or a folder of files. */
@@ -675,6 +686,7 @@ export const CliResultSchemas = {
   'run.status': RunStatusResultSchema,
   'run.result': RunResultResultSchema,
   'run.export': RunExportResultSchema,
+  'run.export-tests': RunExportTestsResultSchema,
   'run.cancel': RunCancelResultSchema,
   'project.revisions': ProjectRevisionsResultSchema,
   'doctor.storage': DoctorStorageResultSchema,

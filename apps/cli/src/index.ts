@@ -124,6 +124,8 @@ function helpText(): string {
     '  qa project doctor <project-id> [--json]',
     '  qa run result <run-id> [--json]',
     '  qa run export <run-id> --format log|json [--out <path>] [--json]',
+    '  qa run start <project-id> --write-tests <run-id>:<finding-id>,... --framework vitest|jest|pytest|xunit|junit|go-test [--agents ...] [--wait] [--json]   an agent writes one regression test per finding; uses provider budget',
+    '  qa run export-tests <run-id> --out <folder> [--json]   saves the README and the tests a write-tests run kept',
     '',
     'run simulate is FAKE / DEVELOPMENT ONLY. run start executes the selected real agent stacks.',
     'Production commands run against the Desktop broker (sentry open must be running).',

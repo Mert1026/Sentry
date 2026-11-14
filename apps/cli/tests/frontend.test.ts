@@ -1135,3 +1135,85 @@ describe('exporting findings through the CLI', () => {
     }
   });
 });
+
+describe('writing regression tests through the CLI', () => {
+  const RUN_ID = 'run_01K7777777777777777777A8W1';
+  const FINDING_ID = 'find_01K7777777777777777777A8WA';
+  const ref = RUN_ID + ':' + FINDING_ID;
+
+  it('reads --write-tests and --framework, and refuses a muddled request', () => {
+    expect(
+      parseCommand(['run', 'start', PROJECT_ID, '--write-tests', ref, '--framework', 'pytest']),
+    ).toMatchObject({
+      command: 'run.start',
+      mode: 'full',
+      agents: [],
+      testWriting: { framework: 'pytest', findings: [{ runId: RUN_ID, findingId: FINDING_ID }] },
+    });
+    const bad = (extra: string[]) =>
+      parseCommand(['run', 'start', PROJECT_ID, '--write-tests', ref, ...extra]);
+    expect(() => bad([])).toThrow(/--framework/);
+    expect(() => bad(['--framework', 'cobol'])).toThrow(/--framework/);
+    expect(() => bad(['--framework', 'pytest', '--depth', 'fast'])).toThrow(/--depth/);
+    expect(() => bad(['--framework', 'pytest', '--retest', ref])).toThrow(/cannot be combined/);
+    expect(() => bad(['--framework', 'pytest', '--paths', 'src'])).toThrow(
+      /no --instructions or --paths/,
+    );
+    expect(() => bad(['--framework', 'pytest', '--mode', 'targeted'])).toThrow(/full mode/);
+    expect(() =>
+      parseCommand(['run', 'start', PROJECT_ID, '--mode', 'full', '--framework', 'pytest']),
+    ).toThrow(/together with --write-tests/);
+    expect(() =>
+      parseCommand([
+        'run',
+        'start',
+        PROJECT_ID,
+        '--write-tests',
+        ref + ',' + ref,
+        '--framework',
+        'pytest',
+      ]),
+    ).toThrow(/duplicate/);
+  });
+
+  it('starts the run with the request and saves the kept tests into a folder', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'sentry-cli-tests-'));
+    const broker = await startFakeBroker((command) => {
+      if (command === 'runs:start') return { operationId: 'dop_1', runId: RUN_ID };
+      if (command === 'runs:export-tests')
+        return {
+          findingCount: 1,
+          files: [
+            { path: 'README.md', content: 'readme\n' },
+            { path: 'tests/finding-1-a.py', content: 'def test_a(): assert 1\n' },
+          ],
+        };
+      throw new Error('unexpected ' + command);
+    });
+    try {
+      const run = (args: string[]) =>
+        executeFrontendCommand(parseCommand(args), { createClient: () => clientFor(broker) });
+      await run(['run', 'start', PROJECT_ID, '--write-tests', ref, '--framework', 'pytest']);
+      expect(broker.seen.find((c) => c.command === 'runs:start')?.payload).toMatchObject({
+        projectId: PROJECT_ID,
+        mode: 'full',
+        testWriting: { framework: 'pytest', findings: [{ runId: RUN_ID, findingId: FINDING_ID }] },
+      });
+      expect(broker.seen.find((c) => c.command === 'runs:start')?.payload).not.toHaveProperty(
+        'agentStackIds',
+      );
+      const out = join(dir, 'tests-out');
+      expect(await run(['run', 'export-tests', RUN_ID, '--out', out])).toMatchObject({
+        command: 'run.export-tests',
+        data: { runId: RUN_ID, testCount: 1, out },
+      });
+      expect(await readFile(join(out, 'tests', 'finding-1-a.py'), 'utf8')).toBe(
+        'def test_a(): assert 1\n',
+      );
+      expect(await readFile(join(out, 'README.md'), 'utf8')).toBe('readme\n');
+    } finally {
+      await broker.close();
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});

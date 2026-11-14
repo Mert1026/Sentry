@@ -34,6 +34,7 @@ export function emitHumanSuccess(response: CliSuccessEnvelope, io: CliIo): void 
           'Re-test earlier findings: yes (run start --retest)',
           'Findings by revision: yes (project findings)',
           'Findings export: yes (project export-findings)',
+          'Write regression tests: yes (run start --write-tests, run export-tests)',
           'Project profile: yes (project profile, project profile-build)',
           'Toolchains: yes (toolchain status|install|remove)',
           'Run depth: yes (run start --depth fast|full)',
@@ -195,6 +196,15 @@ export function emitHumanSuccess(response: CliSuccessEnvelope, io: CliIo): void 
           ' to ' +
           response.data.out +
           (response.data.files.length > 1 ? ' (' + response.data.files.length + ' files)' : ''),
+      );
+      return;
+    case 'run.export-tests':
+      io.stdout(
+        'Saved ' +
+          response.data.testCount +
+          (response.data.testCount === 1 ? ' test' : ' tests') +
+          ' and a README to ' +
+          response.data.out,
       );
       return;
     case 'run.export':

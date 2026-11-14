@@ -310,6 +310,7 @@ export async function executeFrontendCommand(
           settings: true,
           findingsByRevision: true,
           findingsExport: true,
+          testWriting: true,
           projectProfile: true,
           toolchains: true,
         },
@@ -455,6 +456,30 @@ export async function executeFrontendCommand(
         files: written,
       });
     }
+    if (input.command === 'run.export-tests') {
+      const exported = (await broker.request('runs:export-tests', {
+        runId: input.runId,
+      })) as {
+        files?: Array<{ path?: unknown; content?: unknown }>;
+        findingCount?: number;
+      };
+      const files = Array.isArray(exported.files) ? exported.files : [];
+      if (
+        files.length === 0 ||
+        files.some((f) => typeof f.path !== 'string' || typeof f.content !== 'string')
+      )
+        throw new DesktopProtocolError('DESKTOP_ERROR', 'Desktop returned no test files');
+      const written = await writeFindingsExport(
+        input.out,
+        files as Array<{ path: string; content: string }>,
+      );
+      return success(input.command, {
+        runId: input.runId,
+        testCount: exported.findingCount ?? 0,
+        out: input.out,
+        files: written,
+      });
+    }
     if (input.command === 'project.profile') {
       return success(input.command, {
         projectId: input.projectId,
@@ -585,6 +610,7 @@ export async function executeFrontendCommand(
         ...(input.depth === undefined ? {} : { depth: input.depth }),
         ...(input.revisionId === undefined ? {} : { revisionId: input.revisionId }),
         ...(input.retest === undefined ? {} : { retest: input.retest }),
+        ...(input.testWriting === undefined ? {} : { testWriting: input.testWriting }),
       })) as { operationId?: string; runId?: string; status?: string } & Record<string, unknown>;
       if (typeof started.runId !== 'string') {
         throw new DesktopProtocolError(
