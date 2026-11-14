@@ -10,6 +10,13 @@ import {
   retestItemsOf,
 } from './retest.js';
 import {
+  TESTGEN_PLANNING_TEXT,
+  isTestgenCheck,
+  isTestgenContext,
+  TESTGEN_CHECK_RULES,
+  testgenItemsOf,
+} from './testgen.js';
+import {
   maxPlannedChecks,
   reportCheckAliases,
   reportCheckAlias,
@@ -87,6 +94,14 @@ export function buildToolchainNeedsPrompt(request: Request): string {
 }
 
 export function buildQaPlanningPrompt(request: Request): string {
+  if (isTestgenContext(request.task.context))
+    return [
+      QA_SESSION_CONTRACT,
+      TESTGEN_PLANNING_TEXT,
+      'Return exactly one JSON object; first character is {, last is }. Schema: {"schemaVersion":1,"projectUnderstanding":string (two or three sentences about the project and its test setup),"criticalFlows":[],"weakPoints":[],"plannedChecks":string[] (one "Write test #<n>: <title>" per finding)}.',
+      'Immutable mission context: ' + JSON.stringify(request.task.context ?? {}),
+      'User instructions: ' + request.task.prompt,
+    ].join('\n');
   if (isRetestContext(request.task.context))
     return [
       QA_SESSION_CONTRACT,
@@ -147,6 +162,7 @@ export function buildQaCheckInvestigationPrompt(
       description +
       '". Other checks get their own turns; do not work on them. Trace real callers and input validation; form a concrete hypothesis and seek a counterexample. Reproduce significant candidates through actual code with narrow tests when feasible. Copied logic or file reads do not prove reachable behavior.',
     ...(isRetestCheck(description) ? [RETEST_CHECK_RULES] : []),
+    ...(isTestgenCheck(description) ? [TESTGEN_CHECK_RULES] : []),
     'Before concluding, attempt the hostile inputs that apply to this check, as synthetic fixtures inside the workspace (defensive tests of the owner’s own guards): malformed names and paths (backslashes, traversal, symlinks, empty entries), pre-existing or legacy state, lifecycle transitions (create, delete, forget, restart, retest), and encoded or quoted payloads. If a category cannot apply, note that in your closing instead of skipping it silently. A check whose repro failed during setup is blocked, not verified: simplify the repro (direct built-dist or compiled-source probe) and retry once before giving up. Proof-bearing runs must be single non-compound commands: write probes to a temp file INSIDE the workspace first (for example `.qa-tmp/probe.mjs`; never `/tmp`: the write tool and your shell see different `/tmp` directories, and writes outside the workspace are rejected), then run `node <file>` (or the one test command) as its own command — no `;`, `&&`, `||`, other pipes or redirects on a run this check will cite, or the host cannot certify it. A trailing `2>&1` is fine, and a trailing `| tail -N` or `| head -N` is fine only where the host runs commands under pipefail (otherwise it hides the real exit code).',
     'A failing run is signal, not noise. When a proof run exits non-zero, triage it before changing anything: read the actual assertion or error and decide whether it is a PRODUCT defect (report it as a finding candidate and reproduce it minimally) or a proven FIXTURE error (missing build, wrong import, wrong API shape — name the exact cause). Never loosen, delete or rewrite an assertion just to turn a run green; an assertion that disagrees with the code under test is a hypothesis to investigate, and behavior you call "by design" must be justified from the documented contract. Your tests must try to break the property, not restate that the guard exists. Prefer running the real code path over a stub of it. Re-running the same failing command three times fails the check turn.',
     REPRODUCED_VIOLATION_RULE,
@@ -435,6 +451,16 @@ export function buildInvestigationCompactionContext(
           'Findings to re-test, in full (AGENT-WRITTEN, UNVERIFIED; the plan above only has shortened names): ' +
             JSON.stringify(
               retestItemsOf(request.task.context).slice(
+                completedChecks >= plan.plannedChecks.length ? 0 : completedChecks,
+              ),
+            ),
+        ]
+      : []),
+    ...(isTestgenContext(request.task.context)
+      ? [
+          'Findings to write tests for, in full (AGENT-WRITTEN, UNVERIFIED; the plan above only has shortened names): ' +
+            JSON.stringify(
+              testgenItemsOf(request.task.context).slice(
                 completedChecks >= plan.plannedChecks.length ? 0 : completedChecks,
               ),
             ),

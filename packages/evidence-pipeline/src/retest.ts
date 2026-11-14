@@ -1,3 +1,5 @@
+import { applyTestgenPlan } from './testgen.js';
+
 /** Context key under which a retest run hands an agent the findings it must re-test. */
 export const RETEST_CONTEXT_KEY = 'retest';
 
@@ -69,7 +71,10 @@ export function applyRetestPlan<T extends { plannedChecks: string[] }>(
   context: Readonly<Record<string, unknown>> | undefined,
 ): T {
   const items = itemsOf(context);
-  return items.length === 0 ? plan : { ...plan, plannedChecks: items.map(retestCheckName) };
+  // A test-writing run fixes its checks the same way, so the adapters need only this one hook.
+  return items.length === 0
+    ? applyTestgenPlan(plan, context)
+    : { ...plan, plannedChecks: items.map(retestCheckName) };
 }
 
 /** True for a check that re-tests a finding (its name starts "Retest #n: "). */
