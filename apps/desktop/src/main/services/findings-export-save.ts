@@ -51,7 +51,8 @@ export function findingsExportBytes(result: FindingExportResultDto, now: Date): 
     result.files.length === 1 &&
     only !== undefined &&
     result.format !== 'github-issues' &&
-    result.format !== 'test-files'
+    result.format !== 'test-files' &&
+    result.format !== 'ci-files'
   )
     return Buffer.from(only.content, 'utf8');
   return buildZip(result.files, now);

@@ -639,6 +639,9 @@ importers:
       vitest:
         specifier: 'catalog:'
         version: 2.1.9(@types/node@22.20.2)(jsdom@26.0.0)
+      yaml:
+        specifier: 2.9.1
+        version: 2.9.1
 
   packages/runtime-protocol:
     dependencies:

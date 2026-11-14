@@ -26,3 +26,4 @@ export * from './cli.schema.js';
 export * from './finding-export.schema.js';
 
 export * from './test-generation.schema.js';
+export * from './ci-export.schema.js';
