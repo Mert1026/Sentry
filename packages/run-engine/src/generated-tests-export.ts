@@ -24,10 +24,33 @@ export interface GeneratedTestEntry {
   readonly details?: string;
 }
 
+/** One test file of a patch: new, or changed from the project's own. */
+export interface GeneratedPatchEntry {
+  readonly agentStackId: string | null;
+  readonly path: string;
+  readonly kind: 'new' | 'modified';
+  readonly diff: string;
+  readonly content: string;
+  readonly added: number;
+  readonly removed: number;
+}
+
+/** How one finding's test ended, for the README of a patch (a patch is not tied to numbered files). */
+export interface GeneratedPatchResult {
+  readonly n: number;
+  readonly title: string;
+  readonly agentStackId: string;
+  readonly verdict?: TestgenVerdict;
+  readonly details?: string;
+}
+
 export interface GeneratedTests {
   readonly runId: string;
   readonly framework: TestFrameworkId;
+  readonly style: 'new-files' | 'patch';
   readonly tests: GeneratedTestEntry[];
+  readonly patches: GeneratedPatchEntry[];
+  readonly results: GeneratedPatchResult[];
   readonly skipped: Array<{ agentStackId: string | null; path: string; reason: string }>;
 }
 
@@ -66,9 +89,22 @@ export async function readGeneratedTests(
 
   const used = new Set<string>();
   const tests: GeneratedTestEntry[] = [];
+  const patches: GeneratedPatchEntry[] = [];
   const skipped: GeneratedTests['skipped'] = [];
   for (const bundle of bundles) {
     for (const skip of bundle.skipped) skipped.push({ agentStackId: bundle.agentStackId, ...skip });
+    for (const entry of bundle.patch ?? []) {
+      // Two agents changing the same file would make patches that cannot both apply: the first wins.
+      if (patches.some((other) => other.path === entry.path)) {
+        skipped.push({
+          agentStackId: bundle.agentStackId,
+          path: entry.path,
+          reason: 'another agent changed the same file',
+        });
+        continue;
+      }
+      patches.push({ agentStackId: bundle.agentStackId, ...entry });
+    }
     for (const file of bundle.files) {
       const item = spec.items.find((candidate) => candidate.n === file.n);
       const verdict = file.n === null ? undefined : verdicts.get(bundle.agentRunId + ':' + file.n);
@@ -88,7 +124,28 @@ export async function readGeneratedTests(
     }
   }
   tests.sort((a, b) => (a.n ?? 99) - (b.n ?? 99) || (a.path < b.path ? -1 : 1));
-  return { runId, framework: spec.framework, tests, skipped };
+  patches.sort((a, b) => (a.path < b.path ? -1 : 1));
+  const agentRunByStack = new Map(
+    repository.listAgentRuns(runId).map((agentRun) => [agentRun.agentStackId, agentRun.id]),
+  );
+  const results: GeneratedPatchResult[] = spec.items.map((item) => {
+    const verdict = verdicts.get(agentRunByStack.get(item.agentStackId) + ':' + item.n);
+    return {
+      n: item.n,
+      title: item.title,
+      agentStackId: item.agentStackId,
+      ...(verdict === undefined ? {} : verdict),
+    };
+  });
+  return {
+    runId,
+    framework: spec.framework,
+    style: spec.style ?? 'new-files',
+    tests,
+    patches,
+    results,
+    skipped,
+  };
 }
 
 const VERDICT_TEXT: Record<TestgenVerdict, string> = {
@@ -138,6 +195,69 @@ export function testFilesReadme(generated: GeneratedTests, generatedAt: string):
   return lines.join('\n') + '\n';
 }
 
+const PATCH_FILE_NAME = 'sentry-tests.patch';
+
+/** The README that comes with a patch: how to apply it, what it touches, and how each test ended. */
+export function patchReadme(generated: GeneratedTests, generatedAt: string): string {
+  const framework = testFramework(generated.framework);
+  const lines = [
+    '# Test patch from Sentry',
+    '',
+    'Generated ' + generatedAt + ' for ' + framework.label + '.',
+    '',
+    '> An AI agent added these tests to copies of your existing test files, in a copy of your project that has since been deleted. The agent ran them there against the revision you chose, but they are unverified on your machine: read the patch, apply it, and run your tests before you rely on it. Sentry has not changed your project.',
+    '',
+    '## Apply it',
+    '',
+    'From the root of your repository (the revision you ran Sentry on):',
+    '',
+    '```text',
+    'git apply --check ' + PATCH_FILE_NAME,
+    'git apply ' + PATCH_FILE_NAME,
+    '```',
+    '',
+    'The first command only checks that the patch fits; it changes nothing. Without git, copy the files from `updated-files/` over the ones in your project, keeping the same paths.',
+    '',
+    '## Files in the patch',
+    '',
+    '| File | Change | Lines |',
+    '| --- | --- | --- |',
+  ];
+  for (const entry of generated.patches)
+    lines.push(
+      '| `' +
+        entry.path.replace(/`/g, '') +
+        '` | ' +
+        (entry.kind === 'new' ? 'new file' : 'changed') +
+        ' | +' +
+        entry.added +
+        ' -' +
+        entry.removed +
+        ' |',
+    );
+  lines.push('', '## What the agent reported', '', '| Finding | Result |', '| --- | --- |');
+  for (const result of generated.results)
+    lines.push(
+      '| ' +
+        oneLine(result.title).replace(/\|/g, '\\|') +
+        ' | ' +
+        (result.verdict === undefined ? 'No result reported' : VERDICT_TEXT[result.verdict]) +
+        ' |',
+    );
+  const details = generated.results.filter((result) => result.details !== undefined);
+  if (details.length > 0) {
+    lines.push('', '## What the agent said', '');
+    for (const result of details)
+      lines.push('- ' + oneLine(result.title) + ': ' + oneLine(result.details ?? ''));
+  }
+  if (generated.skipped.length > 0) {
+    lines.push('', '## Files that were left out', '');
+    for (const skip of generated.skipped)
+      lines.push('- `' + oneLine(skip.path).replace(/`/g, '') + '`: ' + oneLine(skip.reason));
+  }
+  return lines.join('\n') + '\n';
+}
+
 /** The files of a test-writing run's export: a README and the tests, ready to save as one ZIP. */
 export async function exportGeneratedTests(
   repository: SentryRepository,
@@ -146,6 +266,27 @@ export async function exportGeneratedTests(
   generatedAt: string,
 ): Promise<FindingExportResultDto> {
   const generated = await readGeneratedTests(repository, dataRoot, runId);
+  if (generated.style === 'patch') {
+    if (generated.patches.length === 0)
+      throw new RunEngineError(
+        'INVALID_TARGET',
+        'This run kept no test changes. Check that it finished and that its agents changed test files.',
+      );
+    return {
+      format: 'test-files',
+      files: [
+        { path: 'README.md', content: patchReadme(generated, generatedAt) },
+        { path: PATCH_FILE_NAME, content: generated.patches.map((entry) => entry.diff).join('') },
+        ...generated.patches.map((entry) => ({
+          path: 'updated-files/' + entry.path,
+          content: entry.content,
+        })),
+      ],
+      findingCount: generated.patches.length,
+      suggestedName: 'sentry-' + generated.framework + '-test-patch.zip',
+      mimeType: 'application/zip',
+    };
+  }
   if (generated.tests.length === 0)
     throw new RunEngineError(
       'INVALID_TARGET',

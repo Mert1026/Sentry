@@ -17,7 +17,11 @@ import { AgentUsageSchema } from './usage.schema.js';
 import { ExecutionSafeguardsSchema } from './agent.schema.js';
 import { RunInstructionsSchema } from './context.schema.js';
 import { RunProfileUsageSchema } from './profile.schema.js';
-import { TEST_GENERATION_MAX_FINDINGS, TestFrameworkIdSchema } from './test-generation.schema.js';
+import {
+  TEST_GENERATION_MAX_FINDINGS,
+  TestFrameworkIdSchema,
+  TestWritingStyleSchema,
+} from './test-generation.schema.js';
 
 /** Most findings one retest run may take on: each one is a full check for an agent. */
 export const RETEST_MAX_FINDINGS = 12;
@@ -55,6 +59,7 @@ export type RunRetest = z.infer<typeof RunRetestSchema>;
 export const RunTestWritingSchema = z
   .object({
     framework: TestFrameworkIdSchema,
+    style: TestWritingStyleSchema.optional(),
     items: z
       .array(
         z

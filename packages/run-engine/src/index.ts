@@ -8,7 +8,10 @@ import {
   testgenContextEntry,
   type RetestItem,
 } from '@qa/evidence-pipeline';
-import { collectGeneratedTests } from './generated-tests.js';
+import { collectGeneratedTests, collectPatchFiles, isTestFilePath } from './generated-tests.js';
+import { unifiedDiff } from './unified-diff.js';
+import { lstat, readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { ProjectProfileBuilder, profileState } from './profile-builder.js';
 import {
   createWorkspacePreparer,
@@ -38,6 +41,8 @@ import {
   RunTestWritingSchema,
   type RunTestWriting,
   type TestFrameworkId,
+  type TestWritingStyle,
+  GENERATED_TEST_MAX_FILE_BYTES,
   RunActivitySchema,
   RunRetestSchema,
   TargetSpecSchema,
@@ -66,6 +71,7 @@ import {
   type HarnessAdapterRegistration,
 } from '@qa/harness-protocol';
 import {
+  assertNoSymlinkBelow,
   FilesystemArtifactStore,
   matchImportExclusion,
   projectDataPaths,
@@ -133,6 +139,8 @@ export interface RunOptions {
   readonly testWriting?: {
     readonly findings: ReadonlyArray<{ readonly runId: string; readonly findingId: string }>;
     readonly framework: TestFrameworkId;
+    /** 'patch' adds the tests to existing test files and hands out a patch; default 'new-files'. */
+    readonly style?: TestWritingStyle;
   };
   readonly onHarnessRequest?: (request: HarnessRunRequest) => void;
   /** Signals this request's identity immediately after the initial row is saved. */
@@ -650,6 +658,7 @@ export class RunCoordinator {
                         [TESTGEN_CONTEXT_KEY]: testgenContextEntry(
                           testWriting.itemsFor(registration.stack.id),
                           testWriting.spec.framework,
+                          testWriting.spec.style,
                         ),
                       }),
                 },
@@ -850,6 +859,7 @@ export class RunCoordinator {
     return {
       spec: RunTestWritingSchema.parse({
         framework: request.framework,
+        ...(request.style === undefined ? {} : { style: request.style }),
         items: found.map((item) => ({
           n: item.n,
           findingId: item.finding.id,
@@ -890,31 +900,112 @@ export class RunCoordinator {
   }
 
   /**
+   * The patch for a patch-style run: each file the agent left in the patch folder is compared with the
+   * project's own file at the same path. Only test files count; a path that is not a test file, a
+   * file that cannot be read as plain text, or one that did not change is left out with its reason.
+   */
+  private async buildPatch(
+    workspaceRoot: string,
+    baselineRoot: string,
+  ): Promise<{
+    entries: Array<{
+      path: string;
+      kind: 'new' | 'modified';
+      diff: string;
+      content: string;
+      added: number;
+      removed: number;
+    }>;
+    skipped: Array<{ path: string; reason: string }>;
+  }> {
+    const collected = await collectPatchFiles(workspaceRoot);
+    const entries: Array<{
+      path: string;
+      kind: 'new' | 'modified';
+      diff: string;
+      content: string;
+      added: number;
+      removed: number;
+    }> = [];
+    const skipped = [...collected.skipped];
+    for (const file of collected.files) {
+      if (!isTestFilePath(file.path)) {
+        skipped.push({ path: file.path, reason: 'not a test file' });
+        continue;
+      }
+      const baseline = join(baselineRoot, ...file.path.split('/'));
+      let before: string | undefined;
+      try {
+        // The project's copy is Sentry's own, but a link inside it must never lead the read elsewhere.
+        await assertNoSymlinkBelow(baselineRoot, baseline);
+        const info = await lstat(baseline).catch(() => undefined);
+        if (info !== undefined) {
+          if (!info.isFile() || info.size > GENERATED_TEST_MAX_FILE_BYTES) {
+            skipped.push({ path: file.path, reason: 'project file is not a small text file' });
+            continue;
+          }
+          const bytes = await readFile(baseline);
+          if (bytes.includes(0)) {
+            skipped.push({ path: file.path, reason: 'project file is not text' });
+            continue;
+          }
+          before = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+        }
+      } catch {
+        skipped.push({ path: file.path, reason: 'project file cannot be read safely' });
+        continue;
+      }
+      const changed = unifiedDiff(file.path, before, file.content);
+      if (changed === undefined) {
+        skipped.push({ path: file.path, reason: 'no change' });
+        continue;
+      }
+      entries.push({
+        path: file.path,
+        kind: before === undefined ? 'new' : 'modified',
+        diff: changed.diff,
+        content: file.content,
+        added: changed.added,
+        removed: changed.removed,
+      });
+    }
+    return { entries, skipped };
+  }
+
+  /**
    * Keeps the test files a test-writing agent left in its workspace, before the workspace is
    * removed: stored as one JSON artifact of this run. Never throws, so cleanup always follows.
    */
   private async keepGeneratedTests(
-    input: { run: QARun },
+    input: { run: QARun; workingCopy: string },
     agentRunId: AgentRunId,
     workspace: HarnessWorkspace,
   ): Promise<void> {
     const spec = input.run.configuration.testWriting;
     if (spec === undefined) return;
     try {
-      const collected = await collectGeneratedTests(workspace.runtimePath, spec.framework);
+      const patchStyle = spec.style === 'patch';
+      const collected = patchStyle
+        ? { files: [], skipped: [] }
+        : await collectGeneratedTests(workspace.runtimePath, spec.framework);
+      const patch = patchStyle
+        ? await this.buildPatch(workspace.runtimePath, input.workingCopy)
+        : undefined;
       const agentRun = this.repository.getAgentRun(agentRunId);
       const bundle = {
         schemaVersion: 1,
         framework: spec.framework,
+        ...(spec.style === undefined ? {} : { style: spec.style }),
         agentStackId: agentRun?.agentStackId ?? null,
         agentRunId,
+        ...(patch === undefined ? {} : { patch: patch.entries }),
         files: collected.files.map((file) => ({
           path: file.path,
           content: file.content,
           // The agent is told to put the finding number in the name ("finding-<n>-...").
           n: Number(/(?:^|[^0-9])finding-(\d{1,2})(?!\d)/.exec(file.path)?.[1] ?? 0) || null,
         })),
-        skipped: collected.skipped
+        skipped: [...collected.skipped, ...(patch?.skipped ?? [])]
           .slice(0, 500)
           .map((skip) => ({ path: skip.path.slice(0, 300), reason: skip.reason.slice(0, 100) })),
       };

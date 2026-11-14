@@ -10,6 +10,7 @@ import { createHarnessEventId, nowIsoTimestamp } from '@qa/shared';
 import {
   createFakeHarnessRegistry,
   exportGeneratedTests,
+  readGeneratedTests,
   findingsByRevision,
   RunCoordinator,
 } from '../src/index.js';
@@ -27,6 +28,8 @@ async function fixture() {
   await mkdir(join(source, 'src'), { recursive: true });
   await writeFile(join(source, 'README.md'), '# Fixture\n');
   await writeFile(join(source, 'src', 'main.ts'), 'export const main = 1;\n');
+  await mkdir(join(source, 'tests'), { recursive: true });
+  await writeFile(join(source, 'tests', 'main.test.ts'), "import { main } from '../src/main';\n");
   const database = new SentryDatabase({ dataRoot });
   const repository = new SentryRepository(database);
   const lease = new RuntimeInstanceLease(repository, { autoHeartbeat: false });
@@ -200,6 +203,94 @@ describe('test-writing runs', () => {
     // A run that wrote no tests, or an ordinary run, cannot be exported.
     await expect(
       exportGeneratedTests(f.repository, f.dataRoot, f.first.run.id, 'now'),
+    ).rejects.toMatchObject({ code: 'INVALID_TARGET' });
+    f.database.close();
+  });
+
+  it('patch style: compares each test file with the project’s own and leaves out the rest', async () => {
+    const f = await fixture();
+    const written = await f.runs.run(f.added.project.id, {
+      executionKind: 'simulation',
+      testWriting: { findings: f.refs.slice(0, 1), framework: 'vitest', style: 'patch' },
+      onHarnessRequest: (request) => {
+        const patch = join(request.workspace.runtimePath, '.sentry-patch');
+        mkdirSync(join(patch, 'tests'), { recursive: true });
+        mkdirSync(join(patch, 'src'), { recursive: true });
+        writeFileSync(
+          join(patch, 'tests', 'main.test.ts'),
+          "import { main } from '../src/main';\nit('works', () => expect(main).toBe(2));\n",
+        );
+        writeFileSync(join(patch, 'tests', 'extra.test.ts'), 'it("new", () => {});\n');
+        // Product code is never part of a patch.
+        writeFileSync(join(patch, 'src', 'main.ts'), 'export const main = 2;\n');
+        // A file identical to the project's own is not a change.
+        writeFileSync(
+          join(patch, 'tests', 'unchanged.test.ts'),
+          "import { main } from '../src/main';\n",
+        );
+      },
+    });
+    expect(written.run.configuration.testWriting?.style).toBe('patch');
+    const generated = await readGeneratedTests(f.repository, f.dataRoot, written.run.id);
+    expect(generated.style).toBe('patch');
+    expect(generated.patches.map((entry) => [entry.path, entry.kind])).toEqual([
+      ['tests/extra.test.ts', 'new'],
+      ['tests/main.test.ts', 'modified'],
+      // The fixture has no tests/unchanged.test.ts, so this one is new rather than unchanged.
+      ['tests/unchanged.test.ts', 'new'],
+    ]);
+    expect(generated.skipped).toEqual([
+      expect.objectContaining({ path: 'src/main.ts', reason: 'not a test file' }),
+    ]);
+    const exported = await exportGeneratedTests(f.repository, f.dataRoot, written.run.id, 'now');
+    expect(exported).toMatchObject({
+      format: 'test-files',
+      suggestedName: 'sentry-vitest-test-patch.zip',
+    });
+    expect(exported.files.map((file) => file.path)).toEqual([
+      'README.md',
+      'sentry-tests.patch',
+      'updated-files/tests/extra.test.ts',
+      'updated-files/tests/main.test.ts',
+      'updated-files/tests/unchanged.test.ts',
+    ]);
+    const patch = exported.files[1]!.content;
+    expect(patch).toContain('diff --git a/tests/main.test.ts b/tests/main.test.ts');
+    expect(patch).toContain("+it('works', () => expect(main).toBe(2));");
+    expect(patch).toContain('new file mode 100644');
+    expect(patch).not.toContain('src/main.ts');
+    expect(exported.files[0]!.content).toContain('git apply --check sentry-tests.patch');
+    expect(exported.files[0]!.content).toContain('not a test file');
+    f.database.close();
+  });
+
+  it('patch style: a file identical to the project’s own is left out as no change', async () => {
+    const f = await fixture();
+    const written = await f.runs.run(f.added.project.id, {
+      executionKind: 'simulation',
+      testWriting: { findings: f.refs.slice(0, 1), framework: 'vitest', style: 'patch' },
+      onHarnessRequest: (request) => {
+        const patch = join(request.workspace.runtimePath, '.sentry-patch', 'tests');
+        mkdirSync(patch, { recursive: true });
+        writeFileSync(join(patch, 'main.test.ts'), "import { main } from '../src/main';\n");
+      },
+    });
+    const generated = await readGeneratedTests(f.repository, f.dataRoot, written.run.id);
+    expect(generated.patches).toEqual([]);
+    expect(generated.skipped).toEqual([
+      expect.objectContaining({ path: 'tests/main.test.ts', reason: 'no change' }),
+    ]);
+    f.database.close();
+  });
+
+  it('patch style: a run whose agents changed no test file cannot be exported', async () => {
+    const f = await fixture();
+    const written = await f.runs.run(f.added.project.id, {
+      executionKind: 'simulation',
+      testWriting: { findings: f.refs.slice(0, 1), framework: 'vitest', style: 'patch' },
+    });
+    await expect(
+      exportGeneratedTests(f.repository, f.dataRoot, written.run.id, 'now'),
     ).rejects.toMatchObject({ code: 'INVALID_TARGET' });
     f.database.close();
   });

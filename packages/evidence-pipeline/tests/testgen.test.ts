@@ -112,4 +112,15 @@ describe('test-writing checks', () => {
     expect(parseTestgenResult('[passed] Retest #1: t')).toBeUndefined();
     expect(parseTestgenResult('hello')).toBeUndefined();
   });
+
+  it('tells the agent the delivery style and where to leave patch files', () => {
+    const fresh = testgenContextEntry([item()], 'pytest');
+    expect(fresh).toMatchObject({ style: 'new-files', testsFolder: '.sentry-tests' });
+    const patch = testgenContextEntry([item()], 'pytest', 'patch');
+    expect(patch).toMatchObject({ style: 'patch', testsFolder: '.sentry-patch' });
+    expect(TESTGEN_CHECK_RULES).toContain('If it is "patch"');
+    expect(TESTGEN_CHECK_RULES).toContain('.sentry-patch/');
+    expect(TESTGEN_CHECK_RULES).toContain('Only test files go there, never product code');
+    expect(TESTGEN_CHECK_RULES).toContain('If the style is "new-files"');
+  });
 });

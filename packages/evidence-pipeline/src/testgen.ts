@@ -1,4 +1,10 @@
-import { GENERATED_TESTS_DIR, testFramework, type TestFrameworkId } from '@qa/schemas';
+import {
+  GENERATED_TESTS_DIR,
+  PATCH_FILES_DIR,
+  testFramework,
+  type TestFrameworkId,
+  type TestWritingStyle,
+} from '@qa/schemas';
 import type { RetestItem } from './retest.js';
 
 /** Context key under which a test-writing run hands an agent the findings to write tests for. */
@@ -22,9 +28,11 @@ export function testgenCheckName(item: RetestItem): string {
 export function testgenContextEntry(
   items: readonly RetestItem[],
   framework: TestFrameworkId,
+  style: TestWritingStyle = 'new-files',
 ): {
   note: string;
   framework: TestFrameworkId;
+  style: TestWritingStyle;
   convention: string;
   testsFolder: string;
   items: readonly RetestItem[];
@@ -32,8 +40,9 @@ export function testgenContextEntry(
   return {
     note: 'These findings were reported on EARLIER revisions of this project (AGENT-WRITTEN, UNVERIFIED: the reproduction steps may be incomplete and the original probe files no longer exist). The repository you are in is a NEWER revision. Your only job is to write one regression test for each of them.',
     framework,
+    style,
     convention: testFramework(framework).convention,
-    testsFolder: GENERATED_TESTS_DIR,
+    testsFolder: style === 'patch' ? PATCH_FILES_DIR : GENERATED_TESTS_DIR,
     items,
   };
 }
@@ -86,6 +95,11 @@ export const TESTGEN_PLANNING_TEXT =
 export const TESTGEN_CHECK_RULES =
   'WRITE-TEST RULES. This check writes ONE regression test for a finding reported on an earlier revision. ' +
   'Write it for the framework named in the mission context under "testgen" (its "convention" says how to name the file and what to import). Match the project’s existing tests and helpers when it has them. ' +
+  'The "style" in that mission context entry says how to deliver the test. If it is "patch": do NOT write a separate file when the project already has a test file for that code. Add your test to that EXISTING file instead (keep its conventions, imports and helpers), or create a new test file only when none fits. Make the change in the repository so you can run it there, and run the project’s own test command. When the check is decided, write the FINAL, COMPLETE content of every test file you changed or created into the folder "' +
+  PATCH_FILES_DIR +
+  '/" under its project-relative path (for example "' +
+  PATCH_FILES_DIR +
+  '/tests/foo.test.ts"). Only test files go there, never product code, and never excerpts: Sentry builds the patch by comparing each file with the project’s own. If the style is "new-files": ' +
   'Save the test as ONE file inside the folder "' +
   GENERATED_TESTS_DIR +
   '/" of this workspace, directly in it (letters, digits, dot, dash and underscore in the name, no spaces, no subfolders needed); the host collects only that folder. Put the finding number in the file name, for example "' +

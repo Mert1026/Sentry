@@ -9,6 +9,17 @@ import { z } from 'zod';
 /** Where, inside its workspace, the agent puts the test files Sentry collects. */
 export const GENERATED_TESTS_DIR = '.sentry-tests';
 
+/** Where the agent puts the final files of a patch (their project-relative paths below it). */
+export const PATCH_FILES_DIR = '.sentry-patch';
+
+/**
+ * 'new-files': each test is a new file of its own. 'patch': the agent adds the tests to the
+ * project's existing test files where it can, and Sentry turns the result into a patch to apply.
+ */
+export const TEST_WRITING_STYLES = ['new-files', 'patch'] as const;
+export const TestWritingStyleSchema = z.enum(TEST_WRITING_STYLES);
+export type TestWritingStyle = z.infer<typeof TestWritingStyleSchema>;
+
 /** Most findings one test-writing run takes on: each one is a full check for an agent. */
 export const TEST_GENERATION_MAX_FINDINGS = 12;
 
@@ -67,6 +78,7 @@ export const GENERATED_TEST_MAX_TOTAL_BYTES = 1_000_000;
 export const RunTestGenerationSchema = z
   .object({
     framework: TestFrameworkIdSchema,
+    style: TestWritingStyleSchema.optional(),
     findings: z
       .array(
         z
@@ -87,6 +99,7 @@ export type RunTestGeneration = z.infer<typeof RunTestGenerationSchema>;
 export const TestWritingRequestSchema = z
   .object({
     framework: TestFrameworkIdSchema,
+    style: TestWritingStyleSchema.optional(),
     findings: z
       .array(
         z
@@ -104,6 +117,7 @@ export const GeneratedTestsBundleSchema = z
   .object({
     schemaVersion: z.literal(1),
     framework: TestFrameworkIdSchema,
+    style: TestWritingStyleSchema.optional(),
     agentStackId: z.string().min(1).max(100).nullable(),
     agentRunId: z.string().min(1).max(100),
     files: z
@@ -120,6 +134,22 @@ export const GeneratedTestsBundleSchema = z
     skipped: z
       .array(z.object({ path: z.string().max(300), reason: z.string().max(100) }).strict())
       .max(500),
+    // Patch style: one entry per test file that differs from the project's, with its diff.
+    patch: z
+      .array(
+        z
+          .object({
+            path: z.string().min(1).max(300),
+            kind: z.enum(['new', 'modified']),
+            diff: z.string().min(1).max(400_000),
+            content: z.string().max(GENERATED_TEST_MAX_FILE_BYTES),
+            added: z.number().int().min(0),
+            removed: z.number().int().min(0),
+          })
+          .strict(),
+      )
+      .max(GENERATED_TEST_MAX_FILES)
+      .optional(),
   })
   .strict();
 export type GeneratedTestsBundle = z.infer<typeof GeneratedTestsBundleSchema>;
