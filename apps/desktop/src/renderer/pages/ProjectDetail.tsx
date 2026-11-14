@@ -40,6 +40,8 @@ import {
   type PanelExportRequest,
   type TestFramework,
 } from '../components/RevisionFindingsPanel.js';
+import type { CiTarget } from '../components/CiFilesPanel.js';
+import { CiFilesPanel } from '../components/CiFilesPanel.js';
 import { useFindingsByRevision } from '../lib/use-findings-by-revision.js';
 import { retestStartOptions } from '../lib/retest-options.js';
 import {
@@ -280,6 +282,19 @@ export function ProjectDetail(): React.JSX.Element {
       void queryClient.invalidateQueries({ queryKey: ['findings-by-revision', projectId] });
     },
     onError: onStartError,
+  });
+  // Save fixed CI templates (a pipeline that runs the tests) as one ZIP.
+  const [ciNote, setCiNote] = React.useState<string | undefined>(undefined);
+  const saveCi = useMutation({
+    mutationFn: (request: { target: CiTarget; framework: TestFramework }) =>
+      sentryApi().projects.saveCiExport(request),
+    onMutate: () => setCiNote(undefined),
+    onSuccess: (result) =>
+      setCiNote(
+        result.status === 'saved'
+          ? 'Saved ' + result.files + ' CI files to ' + result.path
+          : undefined,
+      ),
   });
   // Save the tests a test-writing run kept as one ZIP.
   const downloadTests = useMutation({
@@ -878,6 +893,14 @@ export function ProjectDetail(): React.JSX.Element {
             exportError={
               exportFindings.error instanceof Error ? exportFindings.error.message : undefined
             }
+          />
+        </PageSection>
+        <PageSection title="CI files">
+          <CiFilesPanel
+            onSave={(request) => saveCi.mutate(request)}
+            saving={saveCi.isPending}
+            note={ciNote}
+            error={saveCi.error instanceof Error ? saveCi.error.message : undefined}
           />
         </PageSection>
       </ProjectSectionPanel>

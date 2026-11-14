@@ -259,6 +259,8 @@ function translateCore(trimmed: string): string {
   const savedFindings = /^Saved (\d+) findings? to (.+)$/.exec(trimmed);
   if (savedFindings !== null)
     return `Запазени ${savedFindings[1]} ${savedFindings[1] === '1' ? 'констатация' : 'констатации'} в ${savedFindings[2]}`;
+  const savedCi = /^Saved (\d+) CI files to (.+)$/.exec(trimmed);
+  if (savedCi !== null) return `Запазени ${savedCi[1]} CI файла в ${savedCi[2]}`;
   const savedTests = /^Saved (\d+) tests? to (.+)$/.exec(trimmed);
   if (savedTests !== null)
     return `Запазени ${savedTests[1]} ${savedTests[1] === '1' ? 'тест' : 'теста'} в ${savedTests[2]}`;

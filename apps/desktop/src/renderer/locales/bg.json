@@ -839,5 +839,13 @@
   "pytest (Python)": "pytest (Python)",
   "xUnit (C# / .NET)": "xUnit (C# / .NET)",
   "JUnit 5 (Java)": "JUnit 5 (Java)",
-  "go test (Go)": "go test (Go)"
+  "go test (Go)": "go test (Go)",
+  "CI files": "CI файлове",
+  "CI system": "CI система",
+  "Test framework for CI": "Тестова рамка за CI",
+  "Download CI files (ZIP)": "Изтегли CI файловете (ZIP)",
+  "GitHub Actions": "GitHub Actions",
+  "GitLab CI": "GitLab CI",
+  "Azure Pipelines": "Azure Pipelines",
+  "Download a ready-made pipeline file that runs your test suite, including the regression tests from Sentry, on every push. For GitHub Actions it also includes a workflow that uploads a Sentry SARIF export to code scanning. These are fixed templates: they use no AI and no provider budget, nothing in them comes from your project or your findings, and nothing is added to your repository. Adjust the language version and the install step to your project before you rely on them.": "Изтеглете готов файл за CI процес, който изпълнява тестовете на проекта ви, включително регресионните тестове от Sentry, при всяко публикуване. За GitHub Actions се включва и работен процес, който качва SARIF експорт от Sentry в code scanning. Това са фиксирани шаблони: не използват изкуствен интелект и бюджет при доставчик, нищо в тях не идва от вашия проект или констатации и нищо не се добавя във вашето хранилище. Преди да разчитате на тях, нагодете версията на езика и стъпката за инсталиране към проекта си."
 }
