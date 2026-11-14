@@ -25,6 +25,8 @@ export const IPC_CHANNELS = [
   'projects:save-findings-export',
   'runs:export-tests',
   'runs:save-tests-export',
+  'ci:export',
+  'ci:save-export',
   'projects:toolchain-selection',
   'runs:list',
   'runs:get',
@@ -297,6 +299,16 @@ export interface SentryDesktopApi {
      * report, a SARIF file or (for GitHub issues) a ZIP. The renderer only names the findings and the
      * format; the destination always comes from the dialog.
      */
+    /**
+     * Save fixed CI templates (GitHub Actions, GitLab CI or Azure Pipelines) for the written tests as a
+     * ZIP: opens the native Save As dialog; the destination always comes from it.
+     */
+    saveCiExport(
+      request: import('@qa/schemas').CiExportRequest,
+    ): Promise<
+      | { status: 'saved'; path: string; files: number; findingCount: number }
+      | { status: 'cancelled' }
+    >;
     saveFindingsExport(
       projectId: string,
       request: import('@qa/schemas').FindingExportRequest,

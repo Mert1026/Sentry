@@ -524,3 +524,35 @@ describe('test-writing channels', () => {
       await expect(start(bad), JSON.stringify(bad).slice(0, 50)).rejects.toThrow();
   });
 });
+
+describe('CI file channels', () => {
+  const request = { target: 'github-actions', framework: 'pytest' };
+
+  it('lets the CLI fetch CI files, but not use the Save As channel', async () => {
+    const h = await harness(true);
+    expect(isCliAllowed('ci:export')).toBe(true);
+    expect(isCliAllowed('ci:save-export')).toBe(false);
+    await expect(
+      dispatchDesktopCommand(h.service, 'ci:save-export', request, {}, { external: true }),
+    ).rejects.toMatchObject({ code: 'CLI_COMMAND_FORBIDDEN' });
+    await dispatchDesktopCommand(h.service, 'ci:export', request, {}, { external: true });
+    expect(h.seen.find((c) => c.method === 'ci.export')?.params).toEqual(request);
+    await expect(
+      dispatchDesktopCommand(h.service, 'ci:save-export', request, {}),
+    ).rejects.toMatchObject({ code: 'DIALOG_UNAVAILABLE' });
+  });
+
+  it('refuses an unknown CI system or framework and extra fields', async () => {
+    const h = await harness(true);
+    for (const bad of [
+      { target: 'jenkins', framework: 'pytest' },
+      { target: 'gitlab-ci', framework: 'cobol' },
+      { target: 'gitlab-ci' },
+      { ...request, path: 'C:/x' },
+    ])
+      await expect(
+        dispatchDesktopCommand(h.service, 'ci:export', bad, {}),
+        JSON.stringify(bad),
+      ).rejects.toThrow();
+  });
+});

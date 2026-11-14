@@ -26,6 +26,7 @@ import {
   RunCoordinator,
   SystemdSandboxBackend,
   exportFindings as buildFindingsExport,
+  buildCiFiles,
   exportGeneratedTests,
   findingsByRevision,
   sandboxStagingParent,
@@ -60,7 +61,11 @@ import {
 } from '@qa/harness-claude-code';
 import { HarnessAdapterRegistry } from '@qa/harness-protocol';
 import { RUN_TIMEOUT_MS_MAX, RUN_TIMEOUT_MS_MIN, createQARunId, nowIsoTimestamp } from '@qa/shared';
-import { FindingExportRequestSchema, TestWritingRequestSchema } from '@qa/schemas';
+import {
+  CiExportRequestSchema,
+  FindingExportRequestSchema,
+  TestWritingRequestSchema,
+} from '@qa/schemas';
 import {
   RUNTIME_EXPORT_MAX_RAW_BYTES,
   RUNTIME_PROTOCOL_VERSION,
@@ -1051,6 +1056,11 @@ export class SentryRuntimeHost {
     });
   }
 
+  /** Fixed CI templates (GitHub Actions, GitLab CI, Azure Pipelines) for the written tests. */
+  exportCi(params: unknown): unknown {
+    return buildCiFiles(CiExportRequestSchema.parse(params ?? {}));
+  }
+
   /** The tests a test-writing run kept, as files (a README and the tests). Nothing is written anywhere. */
   async exportTests(runId: string): Promise<unknown> {
     const id = RunIdInput.parse(runId);
@@ -1759,6 +1769,8 @@ export class SentryRuntimeHost {
         return this.toolchainSelection(requireString(params, 'projectId'));
       case 'projects.findingsByRevision':
         return this.findingsByRevision(requireString(params, 'projectId'));
+      case 'ci.export':
+        return this.exportCi(params);
       case 'runs.exportTests':
         return this.exportTests(requireString(params, 'runId'));
       case 'projects.exportFindings': {

@@ -19,6 +19,7 @@ import {
   parseRunTimeLimit,
 } from '@qa/shared';
 import {
+  CiExportRequestSchema,
   FindingExportRequestSchema,
   TestWritingRequestSchema,
   type AgentStackDefinition,
@@ -244,6 +245,12 @@ export class DesktopApplicationService {
       projectId: id,
       ...parsed,
     }) as Promise<FindingExportResultDto>;
+  }
+
+  /** Fixed CI templates for one CI system and one test framework. */
+  async exportCiFiles(request: unknown): Promise<FindingExportResultDto> {
+    const parsed = CiExportRequestSchema.parse(request);
+    return this.call('ci.export', parsed) as Promise<FindingExportResultDto>;
   }
 
   /** The tests a test-writing run kept, as files: a README and the tests. */
