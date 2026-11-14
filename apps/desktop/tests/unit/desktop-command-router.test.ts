@@ -479,3 +479,48 @@ describe('findings export channels', () => {
     ).rejects.toMatchObject({ code: 'DIALOG_UNAVAILABLE' });
   });
 });
+
+describe('test-writing channels', () => {
+  const runId = 'run_01K7777777777777777777A8W1';
+  const projectId = 'proj_01K7777777777777777777A8W1';
+
+  it('lets the CLI fetch a run’s tests, but not use the Save As channel', async () => {
+    const h = await harness(true);
+    expect(isCliAllowed('runs:export-tests')).toBe(true);
+    expect(isCliAllowed('runs:save-tests-export')).toBe(false);
+    await expect(
+      dispatchDesktopCommand(
+        h.service,
+        'runs:save-tests-export',
+        { runId },
+        {},
+        { external: true },
+      ),
+    ).rejects.toMatchObject({ code: 'CLI_COMMAND_FORBIDDEN' });
+    await dispatchDesktopCommand(h.service, 'runs:export-tests', { runId }, {}, { external: true });
+    expect(h.seen.find((c) => c.method === 'runs.exportTests')?.params).toEqual({ runId });
+    await expect(
+      dispatchDesktopCommand(h.service, 'runs:export-tests', { runId: 'nope' }, {}),
+    ).rejects.toThrow();
+    await expect(
+      dispatchDesktopCommand(h.service, 'runs:save-tests-export', { runId }, {}),
+    ).rejects.toMatchObject({ code: 'DIALOG_UNAVAILABLE' });
+  });
+
+  it('passes a test-writing request to the runtime, and refuses a malformed one', async () => {
+    const h = await harness(true);
+    const findings = [{ runId, findingId: 'find_01K7777777777777777777A8WA' }];
+    const start = (testWriting: unknown) =>
+      dispatchDesktopCommand(h.service, 'runs:start', { projectId, mode: 'full', testWriting }, {});
+    await start({ framework: 'pytest', findings });
+    expect(h.seen.find((c) => c.method === 'runs.start')?.params).toMatchObject({
+      testWriting: { framework: 'pytest', findings },
+    });
+    for (const bad of [
+      { framework: 'cobol', findings },
+      { framework: 'pytest', findings: [] },
+      { framework: 'pytest', findings, extra: 1 },
+    ])
+      await expect(start(bad), JSON.stringify(bad).slice(0, 50)).rejects.toThrow();
+  });
+});

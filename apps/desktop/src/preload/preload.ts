@@ -67,6 +67,7 @@ const api: SentryDesktopApi & {
     get: (runId: string) => invoke('runs:get', { runId }),
     status: (runId: string) => invoke('runs:status', { runId }),
     start: (projectId: string, options) => invoke('runs:start', { projectId, ...options }),
+    saveTestsExport: (runId: string) => invoke('runs:save-tests-export', { runId }),
     startProduction: (projectId: string, options) =>
       invoke('runs:start', { projectId, ...options }),
     cancel: (runId: string) => invoke('runs:cancel', { runId }),

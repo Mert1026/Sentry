@@ -86,6 +86,11 @@ describe('test-writing runs', () => {
       .flatMap((agent) => agent.runs)
       .filter((run) => run.runId === written.run.id);
     expect(shown.every((run) => run.findings.length === 0)).toBe(true);
+    // The run lists, per test, what its agent reported (none yet for these fake agents).
+    expect(shown.flatMap((run) => run.testWriting?.tests ?? []).map((t) => t.verdict)).toEqual(
+      shown.flatMap((run) => run.testWriting?.tests ?? []).map(() => 'could_not_run'),
+    );
+    expect(shown.some((run) => run.testWriting?.framework === 'pytest')).toBe(true);
     f.database.close();
   });
 

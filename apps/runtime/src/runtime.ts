@@ -26,6 +26,7 @@ import {
   RunCoordinator,
   SystemdSandboxBackend,
   exportFindings as buildFindingsExport,
+  exportGeneratedTests,
   findingsByRevision,
   sandboxStagingParent,
 } from '@qa/run-engine';
@@ -59,7 +60,7 @@ import {
 } from '@qa/harness-claude-code';
 import { HarnessAdapterRegistry } from '@qa/harness-protocol';
 import { RUN_TIMEOUT_MS_MAX, RUN_TIMEOUT_MS_MIN, createQARunId, nowIsoTimestamp } from '@qa/shared';
-import { FindingExportRequestSchema } from '@qa/schemas';
+import { FindingExportRequestSchema, TestWritingRequestSchema } from '@qa/schemas';
 import {
   RUNTIME_EXPORT_MAX_RAW_BYTES,
   RUNTIME_PROTOCOL_VERSION,
@@ -1050,6 +1051,12 @@ export class SentryRuntimeHost {
     });
   }
 
+  /** The tests a test-writing run kept, as files (a README and the tests). Nothing is written anywhere. */
+  async exportTests(runId: string): Promise<unknown> {
+    const id = RunIdInput.parse(runId);
+    return exportGeneratedTests(this.repository, this.dataRoot, id as never, nowIsoTimestamp());
+  }
+
   /** Every revision with runs, newest first, with each agent's runs and findings kept apart. */
   findingsByRevision(projectId: string): unknown {
     const id = ProjectIdInput.parse(projectId);
@@ -1151,6 +1158,14 @@ export class SentryRuntimeHost {
       ...(parsed.depth === undefined ? {} : { depth: parsed.depth }),
       ...(parsed.revisionId === undefined ? {} : { revisionId: parsed.revisionId }),
       ...(parsed.useProfile === true ? { useProfile: true } : {}),
+      ...(parsed.testWriting === undefined
+        ? {}
+        : {
+            testWriting: {
+              framework: parsed.testWriting.framework,
+              findings: parsed.testWriting.findings.map((ref) => ({ ...ref })),
+            },
+          }),
       ...(parsed.retest === undefined
         ? {}
         : {
@@ -1744,6 +1759,8 @@ export class SentryRuntimeHost {
         return this.toolchainSelection(requireString(params, 'projectId'));
       case 'projects.findingsByRevision':
         return this.findingsByRevision(requireString(params, 'projectId'));
+      case 'runs.exportTests':
+        return this.exportTests(requireString(params, 'runId'));
       case 'projects.exportFindings': {
         const { projectId: _projectId, ...rest } = params;
         void _projectId;
@@ -1799,6 +1816,7 @@ const StartRunParamsSchema = z
     toolDownloads: z.boolean().optional(),
     depth: z.enum(['fast', 'full']).optional(),
     useProfile: z.boolean().optional(),
+    testWriting: TestWritingRequestSchema.optional(),
     retest: z
       .object({
         findings: z

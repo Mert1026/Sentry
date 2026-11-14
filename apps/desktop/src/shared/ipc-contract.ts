@@ -23,6 +23,8 @@ export const IPC_CHANNELS = [
   'projects:findings-by-revision',
   'projects:export-findings',
   'projects:save-findings-export',
+  'runs:export-tests',
+  'runs:save-tests-export',
   'projects:toolchain-selection',
   'runs:list',
   'runs:get',
@@ -162,6 +164,15 @@ export interface RevisionRetestOutcome {
   readonly details?: string;
 }
 
+export interface RevisionTestWritingOutcome {
+  readonly n: number;
+  readonly findingId: string;
+  readonly title: string;
+  /** "fails_as_expected" is a good regression test: it ran and catches the problem. */
+  readonly verdict: 'fails_as_expected' | 'passes_unexpectedly' | 'could_not_run';
+  readonly details?: string;
+}
+
 export interface RevisionAgentRunItem {
   readonly runId: string;
   readonly mode: string;
@@ -173,6 +184,11 @@ export interface RevisionAgentRunItem {
   readonly findings: readonly RevisionFindingItem[];
   /** Present only in a retest run: the agent's verdict on each earlier finding it was given. */
   readonly retest?: readonly RevisionRetestOutcome[];
+  /** Present only in a test-writing run: the framework and how each test ended. */
+  readonly testWriting?: {
+    readonly framework: string;
+    readonly tests: readonly RevisionTestWritingOutcome[];
+  };
 }
 
 export interface RevisionAgentItem {
@@ -321,6 +337,8 @@ export interface SentryDesktopApi {
           findings: Array<{ runId: string; findingId: string }>;
           who: 'reporter' | 'all';
         };
+        /** Write one regression test per finding in this framework; replaces the agents' own planning. */
+        testWriting?: import('@qa/schemas').TestWritingRequest;
       },
     ): Promise<DesktopOperation>;
     /** Back-compat alias for start. */
@@ -342,9 +360,21 @@ export interface SentryDesktopApi {
           findings: Array<{ runId: string; findingId: string }>;
           who: 'reporter' | 'all';
         };
+        /** Write one regression test per finding in this framework; replaces the agents' own planning. */
+        testWriting?: import('@qa/schemas').TestWritingRequest;
       },
     ): Promise<DesktopOperation>;
     cancel(runId: string): Promise<unknown>;
+    /**
+     * Save the tests a test-writing run kept as one ZIP (a README and the tests): opens the native
+     * Save As dialog; the destination always comes from it.
+     */
+    saveTestsExport(
+      runId: string,
+    ): Promise<
+      | { status: 'saved'; path: string; files: number; findingCount: number }
+      | { status: 'cancelled' }
+    >;
     exportRun(runId: string, format: 'log' | 'json'): Promise<unknown>;
     /**
      * Native Save As: main shows the dialog, streams the canonical

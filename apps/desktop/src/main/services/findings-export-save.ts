@@ -47,7 +47,12 @@ export function saveOptionsForFindingsExport(result: FindingExportResultDto): Sa
 /** The bytes to save: the single file as it is, or several files as one ZIP. */
 export function findingsExportBytes(result: FindingExportResultDto, now: Date): Buffer {
   const [only] = result.files;
-  if (result.files.length === 1 && only !== undefined && result.format !== 'github-issues')
+  if (
+    result.files.length === 1 &&
+    only !== undefined &&
+    result.format !== 'github-issues' &&
+    result.format !== 'test-files'
+  )
     return Buffer.from(only.content, 'utf8');
   return buildZip(result.files, now);
 }

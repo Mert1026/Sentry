@@ -1,4 +1,9 @@
-import { parseRetestResult, type RetestVerdict } from '@qa/evidence-pipeline';
+import {
+  parseRetestResult,
+  parseTestgenResult,
+  type RetestVerdict,
+  type TestgenVerdict,
+} from '@qa/evidence-pipeline';
 import type { SentryRepository } from '@qa/persistence';
 import type { QARun } from '@qa/schemas';
 import type { AgentStackId, ProjectId } from '@qa/shared';
@@ -22,6 +27,15 @@ export interface RetestOutcome {
   readonly details?: string;
 }
 
+/** How one test this agent was asked to write ended, as the agent reported it. */
+export interface TestWritingOutcome {
+  readonly n: number;
+  readonly findingId: string;
+  readonly title: string;
+  readonly verdict: TestgenVerdict;
+  readonly details?: string;
+}
+
 /** One agent's part of one run: how it ended and what it reported. */
 export interface RevisionAgentRun {
   readonly runId: string;
@@ -34,6 +48,47 @@ export interface RevisionAgentRun {
   readonly findings: readonly RevisionFinding[];
   /** Present only in a retest run: the agent's verdict on each earlier finding it was given. */
   readonly retest?: readonly RetestOutcome[];
+  /** Present only in a test-writing run: the framework and how each test this agent was asked for ended. */
+  readonly testWriting?: {
+    readonly framework: string;
+    readonly tests: readonly TestWritingOutcome[];
+  };
+}
+
+/** How each test a test-writing run asked this agent for ended, from the check lines of its report. */
+function testWritingOutcomes(
+  repository: SentryRepository,
+  run: QARun,
+  agentRunId: string,
+  agentStackId: string,
+): { framework: string; tests: TestWritingOutcome[] } | undefined {
+  const spec = run.configuration.testWriting;
+  if (spec === undefined) return undefined;
+  const mine = spec.items.filter((item) => item.agentStackId === agentStackId);
+  const reported = new Map<number, { verdict: TestgenVerdict; details?: string }>();
+  for (const stored of repository.iterateRunEvents(run.id)) {
+    const event = stored.event;
+    if (event.agentRunId !== agentRunId || event.type !== 'agent.message') continue;
+    const result = parseTestgenResult(event.message);
+    if (result !== undefined)
+      reported.set(result.n, {
+        verdict: result.verdict,
+        ...(result.details === undefined ? {} : { details: result.details }),
+      });
+  }
+  return {
+    framework: spec.framework,
+    tests: mine.map((item) => {
+      const result = reported.get(item.n);
+      return {
+        n: item.n,
+        findingId: item.findingId,
+        title: item.title,
+        verdict: result?.verdict ?? 'could_not_run',
+        details: result?.details ?? 'The agent did not report a result for this test.',
+      };
+    }),
+  };
 }
 
 /** The agent's verdicts for a retest run, read from the check lines of its report. */
@@ -110,8 +165,10 @@ export function findingsByRevision(
       const list = byAgent.get(agentRun.agentStackId) ?? [];
       byAgent.set(agentRun.agentStackId, list);
       const retest = retestOutcomes(repository, run, agentRun.id, agentRun.agentStackId);
+      const testWriting = testWritingOutcomes(repository, run, agentRun.id, agentRun.agentStackId);
       list.push({
         ...(retest === undefined ? {} : { retest }),
+        ...(testWriting === undefined ? {} : { testWriting }),
         runId: run.id,
         mode: run.mode,
         ...(run.configuration.executionSafeguards?.depth === 'fast'

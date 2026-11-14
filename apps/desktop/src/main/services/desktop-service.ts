@@ -20,6 +20,7 @@ import {
 } from '@qa/shared';
 import {
   FindingExportRequestSchema,
+  TestWritingRequestSchema,
   type AgentStackDefinition,
   type FindingExportResultDto,
 } from '@qa/schemas';
@@ -54,6 +55,7 @@ const StartRunOptions = z
     toolDownloads: z.boolean().optional(),
     depth: z.enum(['fast', 'full']).optional(),
     useProfile: z.boolean().optional(),
+    testWriting: TestWritingRequestSchema.optional(),
     retest: z
       .object({
         findings: z
@@ -244,6 +246,12 @@ export class DesktopApplicationService {
     }) as Promise<FindingExportResultDto>;
   }
 
+  /** The tests a test-writing run kept, as files: a README and the tests. */
+  async exportGeneratedTests(runId: string): Promise<FindingExportResultDto> {
+    const id = RunIdInput.parse(runId);
+    return this.call('runs.exportTests', { runId: id }) as Promise<FindingExportResultDto>;
+  }
+
   findingsByRevision(projectId: string): Promise<unknown> {
     const id = ProjectIdInput.parse(projectId);
     return this.call('projects.findingsByRevision', { projectId: id });
@@ -316,6 +324,7 @@ export class DesktopApplicationService {
         ...(parsed.depth === undefined ? {} : { depth: parsed.depth }),
         ...(parsed.useProfile === true ? { useProfile: true } : {}),
         ...(parsed.retest === undefined ? {} : { retest: parsed.retest }),
+        ...(parsed.testWriting === undefined ? {} : { testWriting: parsed.testWriting }),
       })) as DesktopOperation;
     } catch (error) {
       // A client-side timeout does NOT mean the runtime didn't start the run:

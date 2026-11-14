@@ -83,6 +83,22 @@ export const RunTestGenerationSchema = z
   .strict();
 export type RunTestGeneration = z.infer<typeof RunTestGenerationSchema>;
 
+/** What a caller asks for: which findings, in which framework. Numbers and agents are chosen by Sentry. */
+export const TestWritingRequestSchema = z
+  .object({
+    framework: TestFrameworkIdSchema,
+    findings: z
+      .array(
+        z
+          .object({ runId: z.string().min(1).max(100), findingId: z.string().min(1).max(100) })
+          .strict(),
+      )
+      .min(1)
+      .max(TEST_GENERATION_MAX_FINDINGS),
+  })
+  .strict();
+export type TestWritingRequest = z.infer<typeof TestWritingRequestSchema>;
+
 /** What a test-writing agent run left behind, as kept with the run. Read back from disk, so checked. */
 export const GeneratedTestsBundleSchema = z
   .object({

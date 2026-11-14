@@ -6,7 +6,7 @@ import type { DesktopApplicationService } from './services/desktop-service.js';
 import type { SaveDialogOptions } from './services/export-save.js';
 import { revealSavedExport, saveExportRun } from './services/export-save.js';
 import { saveFindingsExport } from './services/findings-export-save.js';
-import { FindingExportRequestSchema } from '@qa/schemas';
+import { FindingExportRequestSchema, TestWritingRequestSchema } from '@qa/schemas';
 
 export const DesktopChannelSchemas: Record<string, z.ZodTypeAny> = {
   'projects:list': z.object({}).strict(),
@@ -60,6 +60,7 @@ export const DesktopChannelSchemas: Record<string, z.ZodTypeAny> = {
       toolDownloads: z.boolean().optional(),
       depth: z.enum(['fast', 'full']).optional(),
       useProfile: z.boolean().optional(),
+      testWriting: TestWritingRequestSchema.optional(),
       retest: z
         .object({
           findings: z
@@ -95,6 +96,7 @@ export const DesktopChannelSchemas: Record<string, z.ZodTypeAny> = {
       toolDownloads: z.boolean().optional(),
       depth: z.enum(['fast', 'full']).optional(),
       useProfile: z.boolean().optional(),
+      testWriting: TestWritingRequestSchema.optional(),
       retest: z
         .object({
           findings: z
@@ -129,6 +131,8 @@ export const DesktopChannelSchemas: Record<string, z.ZodTypeAny> = {
     .object({ projectId: z.string().min(1).max(100) })
     .merge(FindingExportRequestSchema)
     .strict(),
+  'runs:export-tests': z.object({ runId: z.string().min(1).max(100) }).strict(),
+  'runs:save-tests-export': z.object({ runId: z.string().min(1).max(100) }).strict(),
   'projects:save-findings-export': z
     .object({ projectId: z.string().min(1).max(100) })
     .merge(FindingExportRequestSchema)
@@ -374,6 +378,7 @@ export async function dispatchDesktopCommand(
         depth: parsed['depth'],
         useProfile: parsed['useProfile'],
         retest: parsed['retest'],
+        testWriting: parsed['testWriting'],
         revisionId: parsed['revisionId'],
       });
       if (operation.runId !== undefined)
@@ -400,6 +405,17 @@ export async function dispatchDesktopCommand(
         format: parsed['format'],
         selection: parsed['selection'],
       });
+    case 'runs:export-tests':
+      return service.exportGeneratedTests(parsed['runId'] as string);
+    case 'runs:save-tests-export': {
+      const requestSavePath = hooks.requestSavePath;
+      if (requestSavePath === undefined)
+        throw Object.assign(new Error('Save dialog unavailable'), { code: 'DIALOG_UNAVAILABLE' });
+      return saveFindingsExport({
+        requestSavePath,
+        fetchExport: () => service.exportGeneratedTests(parsed['runId'] as string),
+      });
+    }
     case 'projects:save-findings-export': {
       const requestSavePath = hooks.requestSavePath;
       if (requestSavePath === undefined)
