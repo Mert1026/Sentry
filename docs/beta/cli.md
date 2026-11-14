@@ -164,6 +164,11 @@ sentry cli run export-tests run_ID --out tests-folder
 - The agent writes the test into a private copy, runs it, and says whether it fails as expected. This
   uses provider budget. `--depth`, `--revision`, `--instructions`, `--paths` and `--retest` do not
   apply.
+- `--style patch` (default `new-files`) has the agent add each test to the project's existing test
+  files where one fits. `run export-tests` then writes `sentry-tests.patch` (apply it from the
+  repository root with `git apply --check` and `git apply`), `updated-files/<path>` and a
+  `README.md`. Only test files are included; anything else the agent changed is left out and listed
+  in the README.
 - `run export-tests` writes `README.md` (how each test ended) and `tests/<file>` into the folder.
   The tests are AI-written and unverified: read and run each one before relying on it. A write-tests
   run stores no findings of its own, and nothing is written into your project.

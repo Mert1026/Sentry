@@ -344,7 +344,7 @@ function Show-SentryCliHelp {
   Write-Host '  run cancel <run-id> [--json]'
   Write-Host '  run result <run-id> [--json]'
   Write-Host '  run export <run-id> --format log|json --out <path> [--json]'
-  Write-Host '  run start <project-id> --write-tests <run-id>:<finding-id>,... --framework vitest|jest|pytest|xunit|junit|go-test [--wait] [--json]'
+  Write-Host '  run start <project-id> --write-tests <run-id>:<finding-id>,... --framework vitest|jest|pytest|xunit|junit|go-test [--style new-files|patch] [--wait] [--json]'
   Write-Host '  run export-tests <run-id> --out <folder> [--json]'
   Write-Host '  ci export --target github-actions|gitlab-ci|azure-pipelines --framework vitest|jest|pytest|xunit|junit|go-test --out <folder> [--json]'
   Write-Host '  toolchain status [--json]'

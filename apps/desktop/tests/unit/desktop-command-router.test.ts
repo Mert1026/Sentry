@@ -513,12 +513,17 @@ describe('test-writing channels', () => {
     const start = (testWriting: unknown) =>
       dispatchDesktopCommand(h.service, 'runs:start', { projectId, mode: 'full', testWriting }, {});
     await start({ framework: 'pytest', findings });
+    await start({ framework: 'pytest', style: 'patch', findings });
+    expect(h.seen.filter((c) => c.method === 'runs.start').at(-1)?.params).toMatchObject({
+      testWriting: { framework: 'pytest', style: 'patch', findings },
+    });
     expect(h.seen.find((c) => c.method === 'runs.start')?.params).toMatchObject({
       testWriting: { framework: 'pytest', findings },
     });
     for (const bad of [
       { framework: 'cobol', findings },
       { framework: 'pytest', findings: [] },
+      { framework: 'pytest', style: 'zip', findings },
       { framework: 'pytest', findings, extra: 1 },
     ])
       await expect(start(bad), JSON.stringify(bad).slice(0, 50)).rejects.toThrow();

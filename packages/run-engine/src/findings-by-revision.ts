@@ -51,6 +51,8 @@ export interface RevisionAgentRun {
   /** Present only in a test-writing run: the framework and how each test this agent was asked for ended. */
   readonly testWriting?: {
     readonly framework: string;
+    /** 'patch' when the tests were added to existing test files and handed out as a patch. */
+    readonly style: 'new-files' | 'patch';
     readonly tests: readonly TestWritingOutcome[];
   };
 }
@@ -61,7 +63,7 @@ function testWritingOutcomes(
   run: QARun,
   agentRunId: string,
   agentStackId: string,
-): { framework: string; tests: TestWritingOutcome[] } | undefined {
+): { framework: string; style: 'new-files' | 'patch'; tests: TestWritingOutcome[] } | undefined {
   const spec = run.configuration.testWriting;
   if (spec === undefined) return undefined;
   const mine = spec.items.filter((item) => item.agentStackId === agentStackId);
@@ -78,6 +80,7 @@ function testWritingOutcomes(
   }
   return {
     framework: spec.framework,
+    style: spec.style ?? 'new-files',
     tests: mine.map((item) => {
       const result = reported.get(item.n);
       return {

@@ -25,6 +25,13 @@ export type RetestSelection = { runId: string; findingId: string };
 export const EXPORT_LIMIT = 500;
 /** Most findings one test-writing run takes on (the same limit the runtime applies). */
 export const WRITE_TESTS_LIMIT = 12;
+export type TestWritingStyle = 'new-files' | 'patch';
+export const TEST_STYLE_OPTIONS: ReadonlyArray<{ value: TestWritingStyle; label: string }> = [
+  { value: 'new-files', label: 'New test files' },
+  { value: 'patch', label: 'Patch for existing tests' },
+];
+export const PATCH_STYLE_HELP =
+  'With "Patch for existing tests" the agent adds the tests to your existing test files and tries them on the current revision, and you get a patch (a .patch file and the updated files) to apply yourself. Only test files are included.';
 export type TestFramework = 'vitest' | 'jest' | 'pytest' | 'xunit' | 'junit' | 'go-test';
 export const TEST_FRAMEWORK_OPTIONS: ReadonlyArray<{ value: TestFramework; label: string }> = [
   { value: 'vitest', label: 'Vitest (TypeScript / JavaScript)' },
@@ -127,7 +134,11 @@ export function RevisionFindingsPanel({
   exporting?: boolean;
   exportNote?: string | undefined;
   exportError?: string | undefined;
-  onWriteTests?: (findings: RetestSelection[], framework: TestFramework) => void;
+  onWriteTests?: (
+    findings: RetestSelection[],
+    framework: TestFramework,
+    style: TestWritingStyle,
+  ) => void;
   writingTests?: boolean;
   writeTestsError?: string | undefined;
   onDownloadTests?: (runId: string) => void;
@@ -140,6 +151,7 @@ export function RevisionFindingsPanel({
   const [who, setWho] = React.useState<RetestWho>('reporter');
   const [exportFormat, setExportFormat] = React.useState<ExportFormat>('markdown');
   const [framework, setFramework] = React.useState<TestFramework>('vitest');
+  const [style, setStyle] = React.useState<TestWritingStyle>('new-files');
   // Findings can be picked on any revision to export them; re-testing only takes older ones.
   const selectable =
     onExport !== undefined ||
@@ -171,7 +183,7 @@ export function RevisionFindingsPanel({
       'Write ' +
       picked.size +
       ' regression test(s) with the agents that reported them, in the current revision? This uses provider budget. The tests are only kept for download; nothing is added to your project.';
-    if (window.confirm(translateText(text))) onWriteTests([...picked.values()], framework);
+    if (window.confirm(translateText(text))) onWriteTests([...picked.values()], framework, style);
   };
   const exportRevision = (): void => {
     if (onExport === undefined || selected === undefined) return;
@@ -354,7 +366,7 @@ export function RevisionFindingsPanel({
                 problem exists. The files are kept with the run for you to download: nothing is
                 added to your project. This is a real run and uses provider budget (up to{' '}
                 {WRITE_TESTS_LIMIT} findings at a time). The tests are written by an AI agent: read
-                and run each one before you rely on it.
+                and run each one before you rely on it. {PATCH_STYLE_HELP}
               </InfoPopover>
               <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <span>Test framework</span>
@@ -364,6 +376,20 @@ export function RevisionFindingsPanel({
                   aria-label="Test framework"
                 >
                   {TEST_FRAMEWORK_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span>Write as</span>
+                <select
+                  value={style}
+                  onChange={(event) => setStyle(event.target.value as TestWritingStyle)}
+                  aria-label="Write as"
+                >
+                  {TEST_STYLE_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
                     </option>
@@ -475,7 +501,11 @@ export function RevisionFindingsPanel({
                             disabled={downloadingTests}
                             onClick={() => onDownloadTests(run.runId)}
                           >
-                            {downloadingTests ? 'Saving…' : 'Download tests (ZIP)'}
+                            {downloadingTests
+                              ? 'Saving…'
+                              : run.testWriting.style === 'patch'
+                                ? 'Download patch (ZIP)'
+                                : 'Download tests (ZIP)'}
                           </button>
                         ) : null}
                       </div>

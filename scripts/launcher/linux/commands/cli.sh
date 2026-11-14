@@ -37,7 +37,7 @@ sentry_cli_help() {
   echo "  run cancel <run-id> [--json]"
   echo "  run result <run-id> [--json]"
   echo "  run export <run-id> --format log|json --out <path> [--json]"
-  echo "  run start <project-id> --write-tests <run-id>:<finding-id>,... --framework vitest|jest|pytest|xunit|junit|go-test [--wait] [--json]"
+  echo "  run start <project-id> --write-tests <run-id>:<finding-id>,... --framework vitest|jest|pytest|xunit|junit|go-test [--style new-files|patch] [--wait] [--json]"
   echo "  run export-tests <run-id> --out <folder> [--json]"
   echo "  ci export --target github-actions|gitlab-ci|azure-pipelines --framework vitest|jest|pytest|xunit|junit|go-test --out <folder> [--json]"
   echo "  toolchain status [--json]"

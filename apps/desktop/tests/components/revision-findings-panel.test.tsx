@@ -385,7 +385,11 @@ describe('writing regression tests', () => {
     expect(onWriteTests).not.toHaveBeenCalled();
     confirm.mockReturnValueOnce(true);
     fireEvent.click(screen.getByRole('button', { name: 'Write tests for 1 selected' }));
-    expect(onWriteTests).toHaveBeenCalledWith([{ runId: 'run_2', findingId: 'f2' }], 'pytest');
+    expect(onWriteTests).toHaveBeenCalledWith(
+      [{ runId: 'run_2', findingId: 'f2' }],
+      'pytest',
+      'new-files',
+    );
     expect(confirm).toHaveBeenLastCalledWith(expect.stringContaining('uses provider budget'));
   });
 
@@ -420,5 +424,35 @@ describe('writing regression tests', () => {
   it('shows no write-tests controls without a handler', () => {
     show(data);
     expect(screen.queryByLabelText('Test framework')).toBeNull();
+  });
+
+  it('can write the tests as a patch for existing test files', () => {
+    const onWriteTests = vi.fn();
+    withTests({ onWriteTests });
+    fireEvent.click(screen.getByText('Agent A'));
+    fireEvent.click(screen.getByRole('checkbox', { name: /Wrong status/ }));
+    fireEvent.change(screen.getByLabelText('Write as'), { target: { value: 'patch' } });
+    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Write tests for 1 selected' }));
+    expect(onWriteTests).toHaveBeenCalledWith(
+      [{ runId: 'run_2', findingId: 'f2' }],
+      'vitest',
+      'patch',
+    );
+  });
+
+  it('labels the download of a patch run as a patch', () => {
+    const testRun = structuredClone(data);
+    const agentRun = testRun.revisions[0]!.agents[0]!.runs[0]!;
+    (agentRun as { findings: unknown[] }).findings = [];
+    (agentRun as { testWriting?: unknown }).testWriting = {
+      framework: 'vitest',
+      style: 'patch',
+      tests: [{ n: 1, findingId: 'f0', title: 'Old problem', verdict: 'fails_as_expected' }],
+    };
+    withTests({ onDownloadTests: vi.fn() }, testRun);
+    fireEvent.click(screen.getByText('Agent A'));
+    expect(screen.getByRole('button', { name: 'Download patch (ZIP)' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Download tests (ZIP)' })).toBeNull();
   });
 });

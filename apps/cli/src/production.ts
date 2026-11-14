@@ -37,7 +37,7 @@ export function productionHelp(): string {
     '  run cancel <run-id> [--json]',
     '  run result <run-id> [--json]',
     '  run export <run-id> --format log|json --out <path> [--json]',
-    '  run start <project-id> --write-tests <run-id>:<finding-id>,... --framework vitest|jest|pytest|xunit|junit|go-test [--wait] [--json]',
+    '  run start <project-id> --write-tests <run-id>:<finding-id>,... --framework vitest|jest|pytest|xunit|junit|go-test [--style new-files|patch] [--wait] [--json]',
     '  run export-tests <run-id> --out <folder> [--json]',
     '  ci export --target github-actions|gitlab-ci|azure-pipelines --framework vitest|jest|pytest|xunit|junit|go-test --out <folder> [--json]',
     '  toolchain status [--json]',

@@ -70,6 +70,7 @@ export type ParsedCliCommand =
       /** Write one regression test per finding, in this framework, on the current revision. */
       readonly testWriting?: {
         readonly framework: string;
+        readonly style?: 'new-files' | 'patch';
         readonly findings: ReadonlyArray<{ readonly runId: string; readonly findingId: string }>;
       };
       /** Re-test findings from earlier runs on the current revision. */
@@ -325,6 +326,7 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
       '--retest-with',
       '--write-tests',
       '--framework',
+      '--style',
     ]);
     const [projectId] = positional(tail);
     if (projectId === undefined || positional(tail).length !== 1) {
@@ -341,9 +343,14 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
       fail('--retest-with must be reporter or all', '--retest-with');
     const writeTestsText = option(tail, '--write-tests');
     const frameworkText = option(tail, '--framework');
+    const styleText = option(tail, '--style');
     const isTestWriting = writeTestsText !== undefined;
     if (!isTestWriting && frameworkText !== undefined)
       fail('--framework only applies together with --write-tests', '--framework');
+    if (!isTestWriting && styleText !== undefined)
+      fail('--style only applies together with --write-tests', '--style');
+    if (styleText !== undefined && styleText !== 'new-files' && styleText !== 'patch')
+      fail('--style must be new-files or patch', '--style');
     if (isTestWriting && isRetest)
       fail('--write-tests and --retest cannot be combined', '--write-tests');
     // A retest or test-writing run always runs full on the current revision; --mode may be omitted.
@@ -375,7 +382,12 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
         fail('--retest takes no --instructions or --paths', '--retest');
     }
     let testWriting:
-      { framework: string; findings: Array<{ runId: string; findingId: string }> } | undefined;
+      | {
+          framework: string;
+          style?: 'new-files' | 'patch';
+          findings: Array<{ runId: string; findingId: string }>;
+        }
+      | undefined;
     if (isTestWriting) {
       if (mode !== 'full') fail('--write-tests runs in full mode only', '--write-tests');
       if (
@@ -401,7 +413,11 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
       if (findings.length > 12) fail('--write-tests takes at most 12 findings', '--write-tests');
       if (new Set(findings.map((f) => f.runId + ':' + f.findingId)).size !== findings.length)
         fail('--write-tests lists a duplicate finding', '--write-tests');
-      testWriting = { framework: frameworkText, findings };
+      testWriting = {
+        framework: frameworkText,
+        ...(styleText === undefined ? {} : { style: styleText }),
+        findings,
+      };
       if (option(tail, '--instructions') !== undefined || option(tail, '--paths') !== undefined)
         fail('--write-tests takes no --instructions or --paths', '--write-tests');
     }

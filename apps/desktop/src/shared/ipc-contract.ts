@@ -189,6 +189,7 @@ export interface RevisionAgentRunItem {
   /** Present only in a test-writing run: the framework and how each test ended. */
   readonly testWriting?: {
     readonly framework: string;
+    readonly style: 'new-files' | 'patch';
     readonly tests: readonly RevisionTestWritingOutcome[];
   };
 }

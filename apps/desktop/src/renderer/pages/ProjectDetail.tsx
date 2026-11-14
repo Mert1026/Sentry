@@ -39,6 +39,7 @@ import {
   RevisionFindingsPanel,
   type PanelExportRequest,
   type TestFramework,
+  type TestWritingStyle,
 } from '../components/RevisionFindingsPanel.js';
 import type { CiTarget } from '../components/CiFilesPanel.js';
 import { CiFilesPanel } from '../components/CiFilesPanel.js';
@@ -270,6 +271,7 @@ export function ProjectDetail(): React.JSX.Element {
     mutationFn: (input: {
       findings: Array<{ runId: string; findingId: string }>;
       framework: TestFramework;
+      style: TestWritingStyle;
     }) =>
       sentryApi().runs.start(projectId as string, {
         mode: 'full',
@@ -880,7 +882,9 @@ export function ProjectDetail(): React.JSX.Element {
             onRetest={(findings, who) => startRetest.mutate({ findings, who })}
             retesting={startRetest.isPending}
             retestError={startRetest.error instanceof Error ? startRetest.error.message : undefined}
-            onWriteTests={(findings, framework) => writeTests.mutate({ findings, framework })}
+            onWriteTests={(findings, framework, style) =>
+              writeTests.mutate({ findings, framework, style })
+            }
             writingTests={writeTests.isPending}
             writeTestsError={
               writeTests.error instanceof Error ? writeTests.error.message : undefined

@@ -1173,6 +1173,9 @@ export class SentryRuntimeHost {
         : {
             testWriting: {
               framework: parsed.testWriting.framework,
+              ...(parsed.testWriting.style === undefined
+                ? {}
+                : { style: parsed.testWriting.style }),
               findings: parsed.testWriting.findings.map((ref) => ({ ...ref })),
             },
           }),

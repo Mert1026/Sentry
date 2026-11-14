@@ -141,6 +141,15 @@ test fails while the problem exists. The run lists how each test ended, and **Do
 saves a README and the test files. The tests are AI-written and unverified, and nothing is added to
 your project.
 
+### Patch for existing tests
+
+Choose **Write as: Patch for existing tests** to have the agent add each test to your existing test
+files where one fits, instead of creating new files. It tries the change on the current revision
+first. **Download patch (ZIP)** saves `sentry-tests.patch` (check it with `git apply --check`, then
+`git apply`), the updated files for anyone without git, and a README. Only test files are included:
+product code is never part of the patch, and anything left out is listed. Sentry applies nothing to
+your project.
+
 ## CI files
 
 The project page's **CI files** section downloads a ready-made pipeline for GitHub Actions, GitLab

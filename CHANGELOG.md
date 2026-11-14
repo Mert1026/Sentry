@@ -15,6 +15,12 @@
   ended. This is a real run: it uses provider budget (up to 12 findings), and the tests are
   AI-written and unverified. Nothing is added to your project. CLI:
   `run start --write-tests <run>:<finding>,... --framework <id>` and `run export-tests`.
+- Patch for existing tests: choose **Write as: Patch for existing tests** when writing tests (CLI:
+  `--style patch`). The agent adds each test to the project's existing test files where one fits,
+  tries it on the current revision, and leaves the final files for Sentry, which compares each with
+  your own file and hands out `sentry-tests.patch` (apply it with `git apply`), the updated files
+  and a README. Only test files are included; product code and anything else is left out and
+  listed. Your project is never changed.
 - CI files: the project page's **CI files** section downloads a ready-made pipeline for GitHub
   Actions, GitLab CI or Azure Pipelines that runs your test suite (including the regression tests)
   with the framework you choose; for GitHub it also adds a workflow that uploads the SARIF export

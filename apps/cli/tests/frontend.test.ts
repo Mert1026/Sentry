@@ -1155,6 +1155,23 @@ describe('writing regression tests through the CLI', () => {
     expect(() => bad([])).toThrow(/--framework/);
     expect(() => bad(['--framework', 'cobol'])).toThrow(/--framework/);
     expect(() => bad(['--framework', 'pytest', '--depth', 'fast'])).toThrow(/--depth/);
+    expect(
+      parseCommand([
+        'run',
+        'start',
+        PROJECT_ID,
+        '--write-tests',
+        ref,
+        '--framework',
+        'pytest',
+        '--style',
+        'patch',
+      ]),
+    ).toMatchObject({ testWriting: { framework: 'pytest', style: 'patch' } });
+    expect(() => bad(['--framework', 'pytest', '--style', 'zip'])).toThrow(/--style/);
+    expect(() =>
+      parseCommand(['run', 'start', PROJECT_ID, '--mode', 'full', '--style', 'patch']),
+    ).toThrow(/together with --write-tests/);
     expect(() => bad(['--framework', 'pytest', '--retest', ref])).toThrow(/cannot be combined/);
     expect(() => bad(['--framework', 'pytest', '--paths', 'src'])).toThrow(
       /no --instructions or --paths/,
