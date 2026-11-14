@@ -106,6 +106,7 @@ project findings | export-findings | profile | profile-build
 settings show | effort | run-limit
 agent list | agent doctor opencode|deepseek|glm|chatgpt
 run start/list/show/status/cancel/result/export/export-tests
+ci export
 toolchain status | install | remove
 ```
 
@@ -167,6 +168,21 @@ sentry cli run export-tests run_ID --out tests-folder
   The tests are AI-written and unverified: read and run each one before relying on it. A write-tests
   run stores no findings of its own, and nothing is written into your project.
 - `capabilities` reports `features.testWriting: true`.
+
+### CI files
+
+```text
+sentry cli ci export --target github-actions --framework pytest --out ci-folder
+```
+
+- `--target` is `github-actions`, `gitlab-ci` or `azure-pipelines`; `--framework` is `vitest`, `jest`,
+  `pytest`, `xunit`, `junit` or `go-test`.
+- The folder gets a `README.md` and the pipeline file(s): for GitHub two workflows under
+  `.github/workflows/` (the tests, and a SARIF upload to code scanning), for GitLab
+  `sentry-tests.gitlab-ci.yml` (add it with `include:`), for Azure `azure-pipelines-sentry-tests.yml`.
+- They are fixed templates that run the project's whole test suite. No AI, no provider budget, and
+  nothing from the project or its findings is used. Adjust versions and the install step.
+- `capabilities` reports `features.ciFiles: true`.
 
 ### Re-testing earlier findings, profiles, toolchains
 

@@ -1217,3 +1217,81 @@ describe('writing regression tests through the CLI', () => {
     }
   });
 });
+
+describe('CI files through the CLI', () => {
+  it('reads the CI system, framework and folder, and refuses anything else', () => {
+    expect(
+      parseCommand([
+        'ci',
+        'export',
+        '--target',
+        'gitlab-ci',
+        '--framework',
+        'pytest',
+        '--out',
+        'x',
+      ]),
+    ).toEqual({ command: 'ci.export', target: 'gitlab-ci', framework: 'pytest', out: 'x' });
+    const base = [
+      'ci',
+      'export',
+      '--target',
+      'github-actions',
+      '--framework',
+      'jest',
+      '--out',
+      'x',
+    ];
+    expect(() => parseCommand(base.filter((_, i) => i !== 2 && i !== 3))).toThrow(/--target/);
+    expect(() =>
+      parseCommand(['ci', 'export', '--target', 'jenkins', '--framework', 'jest', '--out', 'x']),
+    ).toThrow(/--target/);
+    expect(() =>
+      parseCommand(['ci', 'export', '--target', 'gitlab-ci', '--framework', 'cobol', '--out', 'x']),
+    ).toThrow(/--framework/);
+    expect(() =>
+      parseCommand(['ci', 'export', '--target', 'gitlab-ci', '--framework', 'jest']),
+    ).toThrow(/--out/);
+  });
+
+  it('asks the broker for the files and saves them into the folder', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'sentry-cli-ci-'));
+    const broker = await startFakeBroker((command) => {
+      if (command !== 'ci:export') throw new Error('unexpected ' + command);
+      return {
+        findingCount: 2,
+        files: [
+          { path: 'README.md', content: 'readme' },
+          { path: '.github/workflows/sentry-regression-tests.yml', content: 'name: x' },
+        ],
+      };
+    });
+    try {
+      const out = join(dir, 'ci');
+      const result = await executeFrontendCommand(
+        parseCommand([
+          'ci',
+          'export',
+          '--target',
+          'github-actions',
+          '--framework',
+          'jest',
+          '--out',
+          out,
+        ]),
+        { createClient: () => clientFor(broker) },
+      );
+      expect(result).toMatchObject({
+        command: 'ci.export',
+        data: { target: 'github-actions', framework: 'jest', out },
+      });
+      expect(broker.seen.at(-1)?.payload).toEqual({ target: 'github-actions', framework: 'jest' });
+      expect(
+        await readFile(join(out, '.github', 'workflows', 'sentry-regression-tests.yml'), 'utf8'),
+      ).toBe('name: x');
+    } finally {
+      await broker.close();
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});

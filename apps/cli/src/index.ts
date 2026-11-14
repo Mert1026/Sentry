@@ -125,6 +125,7 @@ function helpText(): string {
     '  qa run result <run-id> [--json]',
     '  qa run export <run-id> --format log|json [--out <path>] [--json]',
     '  qa run start <project-id> --write-tests <run-id>:<finding-id>,... --framework vitest|jest|pytest|xunit|junit|go-test [--agents ...] [--wait] [--json]   an agent writes one regression test per finding; uses provider budget',
+    '  qa ci export --target github-actions|gitlab-ci|azure-pipelines --framework vitest|jest|pytest|xunit|junit|go-test --out <folder> [--json]   saves a README and a pipeline file that runs the tests',
     '  qa run export-tests <run-id> --out <folder> [--json]   saves the README and the tests a write-tests run kept',
     '',
     'run simulate is FAKE / DEVELOPMENT ONLY. run start executes the selected real agent stacks.',

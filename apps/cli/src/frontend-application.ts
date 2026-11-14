@@ -311,6 +311,7 @@ export async function executeFrontendCommand(
           findingsByRevision: true,
           findingsExport: true,
           testWriting: true,
+          ciFiles: true,
           projectProfile: true,
           toolchains: true,
         },
@@ -452,6 +453,28 @@ export async function executeFrontendCommand(
         projectId: input.projectId,
         format: input.format,
         findingCount: exported.findingCount ?? 0,
+        out: input.out,
+        files: written,
+      });
+    }
+    if (input.command === 'ci.export') {
+      const exported = (await broker.request('ci:export', {
+        target: input.target,
+        framework: input.framework,
+      })) as { files?: Array<{ path?: unknown; content?: unknown }> };
+      const files = Array.isArray(exported.files) ? exported.files : [];
+      if (
+        files.length === 0 ||
+        files.some((f) => typeof f.path !== 'string' || typeof f.content !== 'string')
+      )
+        throw new DesktopProtocolError('DESKTOP_ERROR', 'Desktop returned no CI files');
+      const written = await writeFindingsExport(
+        input.out,
+        files as Array<{ path: string; content: string }>,
+      );
+      return success(input.command, {
+        target: input.target,
+        framework: input.framework,
         out: input.out,
         files: written,
       });

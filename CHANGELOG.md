@@ -15,6 +15,11 @@
   ended. This is a real run: it uses provider budget (up to 12 findings), and the tests are
   AI-written and unverified. Nothing is added to your project. CLI:
   `run start --write-tests <run>:<finding>,... --framework <id>` and `run export-tests`.
+- CI files: the project page's **CI files** section downloads a ready-made pipeline for GitHub
+  Actions, GitLab CI or Azure Pipelines that runs your test suite (including the regression tests)
+  with the framework you choose; for GitHub it also adds a workflow that uploads the SARIF export
+  to code scanning. They are fixed templates: no AI, no provider budget, and nothing from your
+  project or findings goes into them. CLI: `ci export`.
 
 ## [2.0.1] - 2026-11-10
 

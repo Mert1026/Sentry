@@ -36,6 +36,7 @@ What changed: [What's new](#whats-new).
 | Evidence             | Findings with evidence, token usage and exports as JSON or log files.                                                                                      |
 | Findings by revision | Browse what every agent reported in every run, per project revision. Nothing is merged or matched between runs.                                            |
 | Export findings      | Save picked findings (or a whole revision) as a Markdown report, GitHub issue files (ZIP) or a SARIF file for code scanning. No AI, nothing sent anywhere. |
+| CI files             | Download a pipeline for GitHub Actions, GitLab CI or Azure Pipelines that runs the tests, and a SARIF upload for GitHub. Fixed templates, no AI.           |
 | Regression tests     | Pick findings, choose a test framework, and an agent writes one regression test per finding. Downloaded as a ZIP; uses provider budget.                    |
 | Re-test              | Pick findings from an older revision and check, on the current one, whether each is resolved and why not if it is not.                                     |
 | Project profile      | Optional per-agent orientation notes for a project, labelled unverified and never containing past findings.                                                |
@@ -139,6 +140,15 @@ each finding an agent writes one test in a private copy of the current revision 
 test fails while the problem exists. The run lists how each test ended, and **Download tests (ZIP)**
 saves a README and the test files. The tests are AI-written and unverified, and nothing is added to
 your project.
+
+## CI files
+
+The project page's **CI files** section downloads a ready-made pipeline for GitHub Actions, GitLab
+CI or Azure Pipelines that runs your whole test suite, including the regression tests above, with
+the framework you choose. For GitHub it also includes a workflow that uploads a Sentry SARIF export
+to code scanning. They are fixed templates: no AI and no provider budget, nothing from your project
+or findings goes into them, and nothing is added to your repository. Adjust the language version and
+the install step before relying on them.
 
 ## Re-test earlier findings
 

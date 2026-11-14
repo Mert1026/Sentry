@@ -477,6 +477,7 @@ export async function executeCommand(
     input.command === 'project.findings' ||
     input.command === 'project.export-findings' ||
     input.command === 'run.export-tests' ||
+    input.command === 'ci.export' ||
     input.command === 'project.profile' ||
     input.command === 'project.profile-build' ||
     input.command === 'settings.show' ||

@@ -87,6 +87,11 @@ export type ParsedCliCommand =
       readonly out?: string;
     })
   | (BaseCommand<'run.export-tests'> & { readonly runId: string; readonly out: string })
+  | (BaseCommand<'ci.export'> & {
+      readonly target: 'github-actions' | 'gitlab-ci' | 'azure-pipelines';
+      readonly framework: 'vitest' | 'jest' | 'pytest' | 'xunit' | 'junit' | 'go-test';
+      readonly out: string;
+    })
   | (BaseCommand<'run.result'> & { readonly runId: string })
   | (BaseCommand<'run.cancel'> & { readonly runId: string })
   | (BaseCommand<'project.revisions'> & { readonly projectId: string })
@@ -213,6 +218,7 @@ export function commandHint(args: readonly string[]): CliCommand | 'unknown' {
     'run.result',
     'run.export',
     'run.export-tests',
+    'ci.export',
     'run.cancel',
     'doctor.storage',
     'doctor.cleanup',
@@ -659,6 +665,26 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
     if (format !== 'log' && format !== 'json') fail('--format must be log or json', '--format');
     const out = option(tail, '--out');
     return { command: 'run.export', runId, format, ...(out === undefined ? {} : { out }) };
+  }
+  if (area === 'ci' && action === 'export') {
+    assertFlags(tail, ['--target', '--framework', '--out', '--json']);
+    assertPositionals(tail, 0, 'qa ci export --target <ci> --framework <framework> --out <folder>');
+    const target = option(tail, '--target');
+    if (target !== 'github-actions' && target !== 'gitlab-ci' && target !== 'azure-pipelines')
+      fail('--target must be github-actions, gitlab-ci or azure-pipelines', '--target');
+    const framework = option(tail, '--framework');
+    if (
+      framework !== 'vitest' &&
+      framework !== 'jest' &&
+      framework !== 'pytest' &&
+      framework !== 'xunit' &&
+      framework !== 'junit' &&
+      framework !== 'go-test'
+    )
+      fail('--framework must be one of vitest, jest, pytest, xunit, junit, go-test', '--framework');
+    const out = option(tail, '--out');
+    if (out === undefined) fail('--out is required: a folder for the CI files', '--out');
+    return { command: 'ci.export', target, framework, out };
   }
   if (area === 'run' && action === 'export-tests') {
     assertFlags(tail, ['--out', '--json']);

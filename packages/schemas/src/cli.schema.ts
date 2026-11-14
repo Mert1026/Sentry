@@ -44,6 +44,7 @@ export const CLI_COMMANDS = [
   'run.result',
   'run.export',
   'run.export-tests',
+  'ci.export',
   'run.cancel',
   'doctor.storage',
   'doctor.cleanup',
@@ -563,6 +564,7 @@ export const CapabilitiesResultSchema = z
         findingsByRevision: z.literal(true).optional(),
         findingsExport: z.literal(true).optional(),
         testWriting: z.literal(true).optional(),
+        ciFiles: z.literal(true).optional(),
         runDepth: z.literal(true).optional(),
         settings: z.literal(true).optional(),
         projectProfile: z.literal(true).optional(),
@@ -612,6 +614,15 @@ export const ProjectFindingsResultSchema = z
     projectId: z.string().min(1).max(200),
     currentRevisionId: z.string().min(1).max(100).optional(),
     revisions: z.array(z.unknown()),
+  })
+  .strict();
+/** What `ci export` wrote into a folder: a README and the CI files for one CI system. */
+export const CiExportResultSchema = z
+  .object({
+    target: z.enum(['github-actions', 'gitlab-ci', 'azure-pipelines']),
+    framework: z.enum(['vitest', 'jest', 'pytest', 'xunit', 'junit', 'go-test']),
+    out: z.string().min(1).max(2000),
+    files: z.array(z.string().min(1).max(2000)).max(100),
   })
   .strict();
 /** What `run export-tests` wrote into a folder: a README and the tests a test-writing run kept. */
@@ -687,6 +698,7 @@ export const CliResultSchemas = {
   'run.result': RunResultResultSchema,
   'run.export': RunExportResultSchema,
   'run.export-tests': RunExportTestsResultSchema,
+  'ci.export': CiExportResultSchema,
   'run.cancel': RunCancelResultSchema,
   'project.revisions': ProjectRevisionsResultSchema,
   'doctor.storage': DoctorStorageResultSchema,
