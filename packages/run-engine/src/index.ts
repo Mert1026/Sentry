@@ -1933,3 +1933,5 @@ export * from './sandbox.js';
 export * from './simulation.js';
 export * from './findings-by-revision.js';
 export * from './finding-export.js';
+
+export * from './generated-tests.js';

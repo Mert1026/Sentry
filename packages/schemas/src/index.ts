@@ -24,3 +24,5 @@ export * from './activity.schema.js';
 export * from './runtime.schema.js';
 export * from './cli.schema.js';
 export * from './finding-export.schema.js';
+
+export * from './test-generation.schema.js';
