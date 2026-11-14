@@ -4,8 +4,11 @@ import {
   PROFILE_CONTEXT_KEY,
   RETEST_CONTEXT_KEY,
   retestContextEntry,
+  TESTGEN_CONTEXT_KEY,
+  testgenContextEntry,
   type RetestItem,
 } from '@qa/evidence-pipeline';
+import { collectGeneratedTests } from './generated-tests.js';
 import { ProjectProfileBuilder, profileState } from './profile-builder.js';
 import {
   createWorkspacePreparer,
@@ -31,6 +34,10 @@ import {
   HarnessRunRequestSchema,
   QARunSchema,
   RETEST_MAX_FINDINGS,
+  TEST_GENERATION_MAX_FINDINGS,
+  RunTestWritingSchema,
+  type RunTestWriting,
+  type TestFrameworkId,
   RunActivitySchema,
   RunRetestSchema,
   TargetSpecSchema,
@@ -59,8 +66,10 @@ import {
   type HarnessAdapterRegistration,
 } from '@qa/harness-protocol';
 import {
+  FilesystemArtifactStore,
   matchImportExclusion,
   projectDataPaths,
+  runDataPaths,
   RuntimeInstanceLease,
   RuntimePersistenceError,
   SENTRY_PRODUCTION_RUN_TIMEOUT_MS,
@@ -115,6 +124,15 @@ export interface RunOptions {
   readonly retest?: {
     readonly findings: ReadonlyArray<{ readonly runId: string; readonly findingId: string }>;
     readonly who: 'reporter' | 'all';
+  };
+  /**
+   * Write one regression test per finding reported on earlier revisions, in one test framework.
+   * Each finding becomes one fixed check for one agent (the one that reported it, or the first
+   * chosen agent when the reporter is not among them). Cannot be combined with `retest`.
+   */
+  readonly testWriting?: {
+    readonly findings: ReadonlyArray<{ readonly runId: string; readonly findingId: string }>;
+    readonly framework: TestFrameworkId;
   };
   readonly onHarnessRequest?: (request: HarnessRunRequest) => void;
   /** Signals this request's identity immediately after the initial row is saved. */
@@ -269,8 +287,15 @@ export class RunCoordinator {
       options.retest === undefined
         ? undefined
         : this.prepareRetest(projectId, options.retest, options);
+    if (options.testWriting !== undefined && options.retest !== undefined)
+      throw new RunEngineError('INVALID_TARGET', 'A run cannot both re-test and write tests.');
+    const testWriting =
+      options.testWriting === undefined
+        ? undefined
+        : this.prepareTestWriting(projectId, options.testWriting, options);
     const selectedIds =
       retest?.agentStackIds ??
+      testWriting?.agentStackIds ??
       options.agentStackIds ??
       this.registry.list().map((item) => item.stack.id);
     const selected = selectedIds.map((id) => {
@@ -408,12 +433,13 @@ export class RunCoordinator {
             ...(options.webAccess === true ? { webAccess: true } : {}),
             ...(options.toolDownloads === true ? { toolDownloads: true } : {}),
             // A retest has its own fixed checks, so depth does not apply to it.
-            ...(options.depth === undefined || retest !== undefined
+            ...(options.depth === undefined || retest !== undefined || testWriting !== undefined
               ? {}
               : { depth: options.depth }),
           },
           profileUsage,
           ...(retest === undefined ? {} : { retest: retest.spec }),
+          ...(testWriting === undefined ? {} : { testWriting: testWriting.spec }),
         },
         createdAt,
         startedAt: createdAt,
@@ -494,11 +520,19 @@ export class RunCoordinator {
         retest === undefined
           ? ''
           : 'RETEST RUN. Do not run a general QA. Re-test only the findings listed in the mission context under "retest", one check each, against the current code. ';
+      const testWritingPreamble =
+        testWriting === undefined
+          ? ''
+          : 'WRITE-TESTS RUN. Do not run a general QA. Write one regression test for each finding listed in the mission context under "testgen", one check each, into the folder named there. ';
       const instructionMessage =
-        targetSpec === undefined && options.instructions === undefined && retest === undefined
+        targetSpec === undefined &&
+        options.instructions === undefined &&
+        retest === undefined &&
+        testWriting === undefined
           ? undefined
           : targetedPreamble +
             retestPreamble +
+            testWritingPreamble +
             (options.instructions ?? 'No additional user instructions.');
       // Micro-patch §8: the hook may flip targeted→full (explicit fallback).
       // Update the SAME persisted row before agents begin — configuration
@@ -517,6 +551,9 @@ export class RunCoordinator {
             : { executionSafeguards: run.configuration.executionSafeguards }),
           profileUsage,
           ...(run.configuration.retest === undefined ? {} : { retest: run.configuration.retest }),
+          ...(run.configuration.testWriting === undefined
+            ? {}
+            : { testWriting: run.configuration.testWriting }),
           ...(instructionMessage === undefined
             ? {}
             : { instructions: { message: instructionMessage, createdAt } }),
@@ -605,6 +642,14 @@ export class RunCoordinator {
                     : {
                         [RETEST_CONTEXT_KEY]: retestContextEntry(
                           retest.itemsFor(registration.stack.id),
+                        ),
+                      }),
+                  ...(testWriting === undefined
+                    ? {}
+                    : {
+                        [TESTGEN_CONTEXT_KEY]: testgenContextEntry(
+                          testWriting.itemsFor(registration.stack.id),
+                          testWriting.spec.framework,
                         ),
                       }),
                 },
@@ -742,6 +787,159 @@ export class RunCoordinator {
       else usage.missingAgentStackIds.push(stack.id);
     }
     return { usage, texts };
+  }
+
+  /**
+   * Resolves the findings a test-writing run takes on: each must be a stored finding of this
+   * project. Returns the spec saved on the run, the agents that take part and each agent's items.
+   */
+  private prepareTestWriting(
+    projectId: ProjectId,
+    request: NonNullable<RunOptions['testWriting']>,
+    options: RunOptions,
+  ): {
+    spec: RunTestWriting;
+    agentStackIds: AgentStackId[];
+    itemsFor: (agentStackId: string) => RetestItem[];
+  } {
+    if (request.findings.length === 0 || request.findings.length > TEST_GENERATION_MAX_FINDINGS)
+      throw new RunEngineError(
+        'INVALID_TARGET',
+        'Writing tests takes between 1 and ' + TEST_GENERATION_MAX_FINDINGS + ' findings.',
+      );
+    const registered = this.registry.list().map((item) => item.stack.id as AgentStackId);
+    const found = request.findings.map((ref, index) => {
+      const sourceRun = this.repository.getRun(ref.runId as QARunId);
+      if (sourceRun === undefined || sourceRun.projectId !== projectId)
+        throw new RunEngineError(
+          'INVALID_TARGET',
+          'Run ' + ref.runId + ' is not part of this project',
+        );
+      const finding = this.repository
+        .listFindings(sourceRun.id)
+        .find((candidate) => candidate.id === ref.findingId);
+      if (finding === undefined)
+        throw new RunEngineError('INVALID_TARGET', 'Finding ' + ref.findingId + ' was not found');
+      const revisionId = this.repository.getSnapshot(sourceRun.snapshotId)?.projectRevisionId;
+      const digits = (
+        (revisionId === undefined
+          ? undefined
+          : this.repository.getRevision(revisionId)?.contentHash) ?? ''
+      ).replace(/^sha256:/, '');
+      return {
+        n: index + 1,
+        finding,
+        sourceRun,
+        revision: digits.length <= 6 ? digits : digits.slice(0, 3) + '...' + digits.slice(-3),
+      };
+    });
+    if (new Set(found.map((item) => item.finding.id)).size !== found.length)
+      throw new RunEngineError('INVALID_TARGET', 'The same finding was listed twice.');
+    const chosen =
+      options.agentStackIds === undefined
+        ? [...new Set(found.map((item) => item.finding.sourceAgentStackId))]
+        : [...(options.agentStackIds as readonly AgentStackId[])];
+    for (const id of chosen)
+      if (!registered.includes(id))
+        throw new RunEngineError('AGENT_STACK_NOT_FOUND', 'Agent stack not found: ' + id);
+    const first = chosen[0];
+    if (first === undefined) throw new Error('At least one agent stack must be selected');
+    const writer = (item: (typeof found)[number]): AgentStackId =>
+      chosen.includes(item.finding.sourceAgentStackId) ? item.finding.sourceAgentStackId : first;
+    const used = [...new Set(found.map(writer))];
+    return {
+      spec: RunTestWritingSchema.parse({
+        framework: request.framework,
+        items: found.map((item) => ({
+          n: item.n,
+          findingId: item.finding.id,
+          sourceRunId: item.sourceRun.id,
+          sourceAgentStackId: item.finding.sourceAgentStackId,
+          title: item.finding.title,
+          agentStackId: writer(item),
+        })),
+      }),
+      agentStackIds: used,
+      itemsFor: (agentStackId) =>
+        found
+          .filter((item) => writer(item) === agentStackId)
+          .map(({ n, finding, revision }) => ({
+            n,
+            findingId: finding.id,
+            title: finding.title,
+            severity: finding.severity,
+            confidence: finding.confidence,
+            category: finding.category,
+            locations: finding.locations.map(
+              (place) =>
+                place.relativePath + (place.startLine === undefined ? '' : ':' + place.startLine),
+            ),
+            description: finding.description.slice(0, 2000),
+            ...(finding.expectedBehavior === undefined
+              ? {}
+              : { expectedBehavior: finding.expectedBehavior.slice(0, 1000) }),
+            ...(finding.actualBehavior === undefined
+              ? {}
+              : { actualBehavior: finding.actualBehavior.slice(0, 1000) }),
+            reproductionSteps: finding.reproductionSteps
+              .map((step) => step.slice(0, 500))
+              .slice(0, 10),
+            reportedOnRevision: revision,
+          })),
+    };
+  }
+
+  /**
+   * Keeps the test files a test-writing agent left in its workspace, before the workspace is
+   * removed: stored as one JSON artifact of this run. Never throws, so cleanup always follows.
+   */
+  private async keepGeneratedTests(
+    input: { run: QARun },
+    agentRunId: AgentRunId,
+    workspace: HarnessWorkspace,
+  ): Promise<void> {
+    const spec = input.run.configuration.testWriting;
+    if (spec === undefined) return;
+    try {
+      const collected = await collectGeneratedTests(workspace.runtimePath, spec.framework);
+      const agentRun = this.repository.getAgentRun(agentRunId);
+      const bundle = {
+        schemaVersion: 1,
+        framework: spec.framework,
+        agentStackId: agentRun?.agentStackId ?? null,
+        agentRunId,
+        files: collected.files.map((file) => ({
+          path: file.path,
+          content: file.content,
+          // The agent is told to put the finding number in the name ("finding-<n>-...").
+          n: Number(/(?:^|[^0-9])finding-(\d{1,2})(?!\d)/.exec(file.path)?.[1] ?? 0) || null,
+        })),
+        skipped: collected.skipped,
+      };
+      const paths = runDataPaths(this.dataRoot, input.run.projectId, input.run.id);
+      const relativePath = (paths.exports + '/generated-tests-' + agentRunId + '.json')
+        .slice(this.dataRoot.length)
+        .replace(/^[\\/]+/, '')
+        .replaceAll('\\', '/');
+      await new FilesystemArtifactStore(this.dataRoot, this.repository).write({
+        relativePath,
+        type: 'json',
+        source: (async function* () {
+          yield JSON.stringify(bundle);
+        })(),
+        projectId: input.run.projectId,
+        qaRunId: input.run.id,
+        mimeType: 'application/json',
+      });
+    } catch {
+      this.activities.stage({
+        qaRunId: input.run.id,
+        source: 'sentry',
+        kind: 'runtime',
+        status: 'warning',
+        title: 'Could not keep the test files this agent wrote.',
+      });
+    }
   }
 
   /**
@@ -1046,7 +1244,10 @@ export class RunCoordinator {
               this.repository.saveHypothesis(event.hypothesis);
             else if (event.type === 'finding.submitted') {
               // A retest answers "is it fixed, and if not why"; it never adds findings of its own.
-              if (input.run.configuration.retest === undefined)
+              if (
+                input.run.configuration.retest === undefined &&
+                input.run.configuration.testWriting === undefined
+              )
                 this.repository.saveFinding(event.finding);
             } else if (event.type === 'evidence.submitted') {
               this.assertEvidenceArtifactsExist(event.evidence, input.run.id);
@@ -1211,6 +1412,7 @@ export class RunCoordinator {
             );
         } finally {
           if (workspace !== undefined) {
+            await this.keepGeneratedTests(input, agentRunId, workspace);
             const cleanup = await this.workspaces.cleanup(workspace);
             if (cleanup.warning !== undefined) {
               this.activities.stage({
@@ -1762,7 +1964,8 @@ export class RunCoordinator {
     }
     if (checkpoint === undefined) return;
     for (const evidence of checkpoint.evidence) this.repository.saveEvidence(evidence);
-    if (this.repository.getRun(qaRunId)?.configuration.retest === undefined)
+    const configuration = this.repository.getRun(qaRunId)?.configuration;
+    if (configuration?.retest === undefined && configuration?.testWriting === undefined)
       for (const finding of checkpoint.findings) this.repository.saveFinding(finding);
   }
 

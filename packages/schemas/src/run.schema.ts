@@ -17,6 +17,7 @@ import { AgentUsageSchema } from './usage.schema.js';
 import { ExecutionSafeguardsSchema } from './agent.schema.js';
 import { RunInstructionsSchema } from './context.schema.js';
 import { RunProfileUsageSchema } from './profile.schema.js';
+import { TEST_GENERATION_MAX_FINDINGS, TestFrameworkIdSchema } from './test-generation.schema.js';
 
 /** Most findings one retest run may take on: each one is a full check for an agent. */
 export const RETEST_MAX_FINDINGS = 12;
@@ -47,6 +48,32 @@ export const RunRetestSchema = z
   .strict();
 export type RunRetest = z.infer<typeof RunRetestSchema>;
 
+/**
+ * A run that writes one regression test per finding reported on earlier revisions, in one test
+ * framework. Each item is numbered across the whole run; `agentStackId` says who writes it.
+ */
+export const RunTestWritingSchema = z
+  .object({
+    framework: TestFrameworkIdSchema,
+    items: z
+      .array(
+        z
+          .object({
+            n: z.number().int().min(1).max(TEST_GENERATION_MAX_FINDINGS),
+            findingId: FindingIdSchema,
+            sourceRunId: QARunIdSchema,
+            sourceAgentStackId: AgentStackIdSchema,
+            title: z.string().min(1).max(200),
+            agentStackId: AgentStackIdSchema,
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(TEST_GENERATION_MAX_FINDINGS),
+  })
+  .strict();
+export type RunTestWriting = z.infer<typeof RunTestWritingSchema>;
+
 export const QARunConfigurationSchema = z
   .object({
     agentStackIds: z.array(AgentStackIdSchema).min(1),
@@ -56,6 +83,7 @@ export const QARunConfigurationSchema = z
     executionSafeguards: ExecutionSafeguardsSchema.optional(),
     profileUsage: RunProfileUsageSchema.optional(),
     retest: RunRetestSchema.optional(),
+    testWriting: RunTestWritingSchema.optional(),
   })
   .strict();
 export type QARunConfiguration = z.infer<typeof QARunConfigurationSchema>;

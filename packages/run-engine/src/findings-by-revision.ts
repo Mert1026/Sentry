@@ -122,7 +122,12 @@ export function findingsByRevision(
         at: agentRun.startedAt ?? run.startedAt ?? run.createdAt,
         // A retest run only answers for the earlier findings; any finding an older one stored is not shown.
         findings: findings
-          .filter((finding) => retest === undefined && finding.agentRunId === agentRun.id)
+          .filter(
+            (finding) =>
+              retest === undefined &&
+              run.configuration.testWriting === undefined &&
+              finding.agentRunId === agentRun.id,
+          )
           .map((finding) => {
             const place = finding.locations[0];
             return {
