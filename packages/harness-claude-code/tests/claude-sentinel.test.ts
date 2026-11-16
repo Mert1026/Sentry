@@ -445,6 +445,31 @@ describe('Claude executable runtime identity', () => {
     expect(isSandboxBootstrapFailureText(text)).toBe(false);
   });
 
+  it('classifies an apply-seccomp nested user namespace failure as a bootstrap failure, only when it leads the result', async () => {
+    const { isSandboxBootstrapFailureText } = await import('../src/index.js');
+    const line =
+      'apply-seccomp: write /proc/self/setgroups (nested userns is capability-restricted; caller must provide CAP_SYS_ADMIN): Permission denied';
+    expect(isSandboxBootstrapFailureText(line)).toBe(true);
+    expect(isSandboxBootstrapFailureText('Exit code 1\n' + line)).toBe(true);
+    // Quoted deeper in a printed file or documentation it is just text.
+    expect(
+      isSandboxBootstrapFailureText(['a', 'b', 'c', 'd', 'the fixture prints: ' + line].join('\n')),
+    ).toBe(false);
+    expect(isSandboxBootstrapFailureText('see docs: apply-seccomp is the helper name')).toBe(false);
+  });
+
+  it('gives a repair hint for a blocked user namespace and none for other sandbox failures', async () => {
+    const { sandboxRepairHint } = await import('../src/index.js');
+    const hint = sandboxRepairHint(
+      'apply-seccomp: write /proc/self/setgroups (nested userns is capability-restricted)',
+    );
+    expect(hint).toContain('blocks the nested user namespaces');
+    expect(hint).toContain('sentry doctor');
+    expect(hint).toContain('The other agents are not affected');
+    expect(sandboxRepairHint("bwrap: Can't mkdir /mnt/c/x: Permission denied")).toBe('');
+    expect(sandboxRepairHint('')).toBe('');
+  });
+
   it('does not classify markers buried in file output as bootstrap failure', async () => {
     const { isSandboxBootstrapFailureText } = await import('../src/index.js');
     // Regression (run_01M617HK8WXK434SZ4H3RY23K3): a Bash result printing a

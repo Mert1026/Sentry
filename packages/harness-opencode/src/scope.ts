@@ -1,4 +1,5 @@
-import { lstat, mkdir, readdir, rename, rm } from 'node:fs/promises';
+import { copyFile, lstat, mkdir, readdir, rename, rm, stat } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { randomUUID } from 'node:crypto';
 import { dirname, join } from 'node:path';
 import { OpenCodeHarnessError } from './errors.js';
@@ -64,10 +65,55 @@ export async function createOpenCodeRunScope(input: {
   await mkdir(cacheHome, { recursive: true });
   await mkdir(binDir, { recursive: true });
   await mkdir(runTmp, { recursive: true });
+  await seedModelCatalog(cacheHome);
   return { directory, home, configHome, dataHome, stateHome, cacheHome, binDir, runTmp };
 }
 
+/**
+ * OpenCode only knows a model if it is in its models.dev catalog
+ * (`<cache>/opencode/models.json`). The scope cache starts empty, so every run
+ * would otherwise depend on a live download that can lose a race or be
+ * blocked, and a model released after the bundled snapshot fails at once with
+ * `ProviderModelNotFoundError`. Seed the scope from the host's last good copy
+ * and save a fresh copy back after the run. Best-effort: the catalog is public
+ * data, never credential material.
+ */
+function hostModelCatalogPath(): string {
+  const cache = process.env.XDG_CACHE_HOME || join(homedir(), '.cache');
+  return join(cache, 'opencode', 'models.json');
+}
+
+async function seedModelCatalog(cacheHome: string): Promise<void> {
+  try {
+    const target = join(cacheHome, 'opencode');
+    await mkdir(target, { recursive: true });
+    await copyFile(hostModelCatalogPath(), join(target, 'models.json'));
+  } catch {
+    // No host copy yet: OpenCode downloads the catalog itself.
+  }
+}
+
+async function saveModelCatalog(scope: OpenCodeRunScope): Promise<void> {
+  try {
+    const fresh = join(scope.cacheHome, 'opencode', 'models.json');
+    const host = hostModelCatalogPath();
+    const [freshStat, hostStat] = await Promise.all([
+      stat(fresh),
+      stat(host).catch(() => undefined),
+    ]);
+    if (freshStat.size < 10_000) return;
+    if (hostStat !== undefined && hostStat.mtimeMs >= freshStat.mtimeMs) return;
+    await mkdir(dirname(host), { recursive: true });
+    const partial = host + '.' + randomUUID().slice(0, 8) + '.tmp';
+    await copyFile(fresh, partial);
+    await rename(partial, host);
+  } catch {
+    // Keeping the older host copy is fine.
+  }
+}
+
 export async function cleanupOpenCodeRunScope(scope: OpenCodeRunScope): Promise<void> {
+  await saveModelCatalog(scope);
   // Retry against transient OS file locks (dying child watchers, AV/indexer
   // scans of the session database after process death).
   let lastCause: unknown;

@@ -102,7 +102,7 @@ connection never cancels a run; cancel explicitly with `run cancel`.
 ```text
 capabilities [--json]
 project list/add/show/update/delete/revisions/doctor
-project findings | profile | profile-build
+project findings | export-findings | profile | profile-build
 settings show | effort | run-limit
 agent list | agent doctor opencode|deepseek|glm|chatgpt
 run start/list/show/status/cancel/result/export
@@ -132,6 +132,31 @@ default run time limit with `isDefault`.
 - `run list` and `run status` report each run's `depth` (`fast` or `full`) and `timeLimitMs`, and
   `run list` and `project findings` mark fast runs with `FAST`.
 - `capabilities` reports `features.settings: true` and `features.runDepth: true`.
+
+### Secrets check
+
+`run start ... --no-secrets` turns off each agent's "Secrets in code" check for that run: no search
+is made, no secrets light is shown, and the run records `secretsCheck: false` in its safeguards.
+Left out, every ordinary production run includes the check (it adds about a minute or two per
+agent). It does not apply to `--retest` runs, which never have it. `--depth fast --no-secrets` is the
+shortest run.
+
+### Exporting findings
+
+```text
+sentry cli project export-findings proj_ID --format markdown --revision rev_ID --out report.md
+sentry cli project export-findings proj_ID --format sarif --run run_ID --out sentry.sarif
+sentry cli project export-findings proj_ID --format github-issues --findings run_ID:find_ID,... --out issues-folder
+```
+
+- Choose exactly one of `--findings <run-id>:<finding-id>,...` (up to 500), `--run <run-id>` or
+  `--revision <rev-id>,...` (up to 50; simulation runs are left out).
+- `markdown` and `sarif` write one file to `--out`. `github-issues` writes a folder: `README.md`,
+  `issues.json` (title, labels, severity and ids per issue) and `issues/NNN-title.md`, one body per
+  finding. Nothing is posted to GitHub.
+- The files are built from what the agents reported, with no AI. The output is deterministic: the
+  same findings give the same files, ordered by severity. Review each one before acting on it.
+- `capabilities` reports `features.findingsExport: true`.
 
 ### Re-testing earlier findings, profiles, toolchains
 
@@ -322,10 +347,12 @@ second pass needs 40% of the window left, deepening 50% and the hazard sweep
 
 `run start --depth fast|full` chooses how many checks the agents plan. **Full**
 (the default, and what runs did before) plans about one check per 25 minutes of the
-time window, up to 8 (6 in the default 3-hour window); **fast** plans at most 3.
-Both use the same time window and the same extra passes (second pass, deepening
-and hazard sweep), so a fast run is shorter but not minimal: in one measured
-run the first pass was about 60% of the time and the extra passes about 35%.
+time window, up to 8 (6 in the default 3-hour window); **fast** plans at most 2.
+Full also makes extra passes after its checks (second pass on undecided checks,
+deepening and hazard sweep). Fast skips the deepening round and the hazard sweep
+(its second pass still runs), so it is much shorter: in one measured fast run
+those two extras were about 55% of a 36-minute run. Every run also adds a
+"Secrets in code" check for each agent.
 The depth is recorded on the run and shown next to it in Desktop. `--depth`
 does not apply to `--retest` runs, which have their own fixed checks.
 `capabilities` reports `features.runDepth: true` when the broker supports it.

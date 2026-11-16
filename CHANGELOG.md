@@ -2,6 +2,66 @@
 
 ## [Unreleased]
 
+- A provider's safety filter at the report stage is now named for what it is. When OpenAI's filter flags a security-testing run ("flagged for possible cybersecurity risk") while an agent writes its report,
+  the agent used to fail with a generic `OPENCODE_START_FAILED` and a cut-off message. It now fails with `OPENCODE_PROVIDER_REFUSED`, says the provider declined the content (not an outage or a
+  credential problem), that retrying does not help, and shows the provider's own explanation, which can name its permissive-access program for authorized security work. The agent's finished checks are
+  still kept in the run's Activity as `[not reported]`; they are unverified and never recorded as findings.
+- Agents now have a real headless browser. Until now agents could not get one (browser downloads are
+  skipped and their hosts are outside the network allowlist), so checks on web pages (narrow-viewport
+  overflow, focus order, mobile menus, link targets) ended `inconclusive` on hand-built replicas.
+  `sentry setup` and `sentry update` now install one managed browser (Chrome headless shell and
+  `puppeteer-core`, plus the few system libraries a minimal host lacks; rootless, about 350 MB, once)
+  under `~/.local/share/sentry/tools/browser`, and the check prompt of OpenCode, ChatGPT, DeepSeek and
+  GLM tells agents how to use it. If the install fails, setup warns and continues; agents run as before.
+  In a reviewed run, the one agent that found a browser on its own needed about 30 commands to do it.
+- Agents no longer reinstall dependencies that Sentry already installed. Sentry prepares each agent's
+  workspace (`node_modules`) before a run, but agents then ran a plain `pnpm install`, which deleted and
+  recreated it: 135-145 s per agent in a reviewed run, and when the tool timed out the workspace was left
+  half rebuilt, which cost one agent its executable checks. The check prompt now says the dependencies are
+  already there, why not to reinstall them, and what to run instead (for example a scoped
+  `pnpm --filter <package>... build`); an install is still allowed once a command proves a dependency is
+  missing.
+- A failed report no longer loses a finished investigation. When an agent has investigated but its report
+  cannot be produced (a quota or billing error, a provider outage, an invalid answer), its own closing
+  statement for each check is kept in the run's Activity as `[not reported] ...`, with a line saying why.
+  They are unverified and never recorded as findings or evidence. In a reviewed run a DeepSeek agent lost
+  6.6 minutes of paid investigation to an `Insufficient Balance` error at its report stage.
+- An OpenCode or ChatGPT agent whose first turn fails to start before reaching the provider (for example
+  `Unexpected server error. No upstream requests were relayed`) is retried once with a fresh OpenCode
+  server. If the second try fails the same way, the message says nothing reached the provider, that the
+  retry also failed, and to check the sign-in or API key in Settings → Providers.
+- A silent agent no longer holds a finished run for long: once every other agent of a run has
+  finished, an agent that stops sending events is stopped after 5 minutes instead of 15 (a run with
+  one agent is unchanged). The failure now says "Agent stopped responding" and why, not "exceeded run
+  budget". In a reviewed run one hung GLM turn kept a run open for about 42 minutes after the other
+  agents had finished or failed.
+- GLM sandbox: a system that lets bubblewrap start but refuses the nested user namespace the Claude Code
+  sandbox needs (`apply-seccomp: write /proc/self/setgroups ... Permission denied`) is now detected on the
+  first command, and the failure explains the likely cause and where to read more. `sentry setup` and
+  `sentry doctor` now test that nested step too and report `nested-user-namespaces-blocked` before a run
+  is wasted. New troubleshooting entry: "GLM sandbox starts but commands fail".
+- Run depth: a **Fast** run now plans at most 2 checks (was 3) and skips the deepening round and
+  the hazard sweep after them (a second pass on undecided checks still runs), so it is much shorter.
+  In one measured run those two extras were about 55% of a 36-minute Fast run, and a Fast run
+  without them took about 15 minutes with 3 checks. **Full** is unchanged.
+- Run option **Check for secrets** (on by default; CLI `run start --no-secrets`): turn it off for the
+  shortest run. No search is made and no secrets light is shown, and the run records that the check
+  was off. A Fast run without it takes about 5 minutes.
+- Secrets light: every QA run now makes each agent also search the project for hard-coded secrets
+  (passwords, API keys, tokens, private keys, credentials in connection strings). Each agent's box
+  on the run page shows a light: red when it found some, green when it searched and found none,
+  amber when it could not check fully. The agent's own explanation (the places and kinds, never the
+  values) is in the agent's Overview. Known secret formats are removed from agent messages, findings
+  and evidence before they are stored. The check adds one check per agent, so a run takes slightly
+  longer; re-test runs and simulations are unchanged.
+
+- Export findings: in **Findings by revision**, tick findings (or use **Export all in this
+  revision**) and save them as a Markdown report, as GitHub issues (a ZIP with one issue body per
+  finding, an `issues.json` and a README) or as a SARIF 2.1.0 file for GitHub code scanning. The
+  files are built from what the agents reported, with no AI, nothing is sent anywhere and nothing is
+  written into your project. CLI: `project export-findings`. Up to 500 findings per export;
+  re-testing is unchanged.
+
 ## [2.0.1] - 2026-11-10
 
 Update from 2.0.0. It adds run depth (Fast / Full), a default run time limit, per-agent reasoning

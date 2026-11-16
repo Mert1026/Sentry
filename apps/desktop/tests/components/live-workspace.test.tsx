@@ -274,6 +274,19 @@ describe('truthful run workspace', () => {
       expect(screen.getByLabelText('Web access: On').querySelector('svg')).not.toBeNull();
     });
 
+    it('shows a Secrets check tile only for a run that turned the check off', () => {
+      const off = mixed();
+      (off.run.configuration as { executionSafeguards: object }).executionSafeguards = {
+        webAccess: true,
+        secretsCheck: false,
+      };
+      render(<RunSummaryPanel snapshot={off} />);
+      expect(screen.getByLabelText('Secrets check: Off')).toBeTruthy();
+      cleanup();
+      render(<RunSummaryPanel snapshot={mixed()} />);
+      expect(screen.queryByLabelText(/Secrets check/)).toBeNull();
+    });
+
     it('counts agents by state and makes each count a button that focuses the first such agent', () => {
       const focus = vi.fn();
       render(<RunSummaryPanel snapshot={mixed()} onFocusAgent={focus} />);

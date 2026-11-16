@@ -89,6 +89,19 @@ describe('custom add-ons', () => {
     expect((await manager.setup())?.binds).toHaveLength(1);
   });
 
+  it('mounts the managed browser folder only after its installer finished', async () => {
+    const root = await dataRoot();
+    const manager = new ToolchainManager(root, runner([]));
+    const browser = join(root, 'tools', 'browser');
+    await mkdir(browser, { recursive: true });
+    await writeFile(join(browser, 'launch.mjs'), '');
+    expect(await manager.setup()).toBeUndefined();
+    await writeFile(join(browser, 'browser.json'), '{}');
+    const setup = await manager.setup();
+    expect(setup?.binds).toEqual([browser]);
+    expect(setup?.path).toEqual([]);
+  });
+
   it('adds an add-on even when no listed pack is installed', async () => {
     const root = await dataRoot();
     const manager = new ToolchainManager(root, runner([]));

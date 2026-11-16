@@ -5,6 +5,7 @@ import { StatusIcon, nodeStateClass } from '../StatusGlyph.js';
 import { dotClassForStatus } from '../ui/StatusPill.js';
 import { useI18n } from '../../lib/i18n.js';
 import { formatCount, formatElapsed, stageStateLabel } from '../../lib/agent-telemetry.js';
+import { SECRETS_LABEL } from '../../lib/secrets-light.js';
 
 const ACCENTS: Record<string, string> = {
   stack_muse_main: 'var(--muse)',
@@ -114,6 +115,16 @@ export function AgentCanvasNode({ data }: NodeProps): React.JSX.Element {
         <span className="metric-chip" title="Evidence records captured by this agent">
           {formatCount(view.evidenceCount) + ' evidence'}
         </span>
+        {view.secrets !== undefined ? (
+          <span
+            className={'metric-chip secrets-light ' + view.secrets.state}
+            title={t(SECRETS_LABEL[view.secrets.state])}
+            aria-label={t('Secrets in code') + ': ' + t(SECRETS_LABEL[view.secrets.state])}
+          >
+            <i aria-hidden="true" />
+            {t('Secrets')}
+          </span>
+        ) : null}
       </div>
       <Handle type="source" position={Position.Bottom} />
     </div>

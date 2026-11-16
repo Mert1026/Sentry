@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import type { AgentNodeView, TimelineItem } from '../lib/types.js';
 import { retestRows, type RetestItemInfo } from '../lib/retest-results.js';
+import { SECRETS_LABEL } from '../lib/secrets-light.js';
 import {
   formatCount,
   projectTimeline,
@@ -260,6 +261,27 @@ function OverviewTab({ view }: { view: AgentNodeView }): React.JSX.Element {
         <dt>Stage</dt>
         <dd>{view.currentStage === 'working' ? 'Working' : stageLabel(view.currentStage)}</dd>
       </dl>
+      {view.secrets !== undefined ? (
+        <div className={'secrets-card ' + view.secrets.state}>
+          <div className="metadata">Secrets in code</div>
+          <div className="secrets-card-state">
+            <span className={'secrets-light ' + view.secrets.state}>
+              <i aria-hidden="true" />
+            </span>
+            <strong>{SECRETS_LABEL[view.secrets.state]}</strong>
+          </div>
+          {view.secrets.explanation !== undefined ? (
+            <p className="wrap-anywhere" style={{ margin: '4px 0 0' }}>
+              {view.secrets.explanation}
+            </p>
+          ) : null}
+          <p className="faint" style={{ margin: '4px 0 0' }}>
+            This is what this agent reported after searching the project files. It names places and
+            kinds only; known secret formats are removed from agent text before it is stored. Treat
+            any secret it found as exposed and rotate it.
+          </p>
+        </div>
+      ) : null}
       <div>
         <div className="metadata">Current operation</div>
         <div className="wrap-anywhere">{view.currentOperation.title}</div>

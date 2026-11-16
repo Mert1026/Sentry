@@ -282,6 +282,18 @@ describe('tool shell wrapper egress', () => {
     expect(script).toContain('--setenv DOTNET_ROOT');
   });
 
+  it('mounts a bind-only setup (the managed browser) without touching PATH', () => {
+    const script = renderToolShellWrapper({
+      ...base,
+      hidePaths: ['/home/u'],
+      toolchains: { binds: ['/home/u/.local/share/sentry/tools/browser'], path: [], env: {} },
+    });
+    const hide = script.indexOf("--tmpfs '/home/u'");
+    const bind = script.indexOf("--ro-bind '/home/u/.local/share/sentry/tools/browser'");
+    expect(bind).toBeGreaterThan(hide);
+    expect(script).not.toContain('--setenv PATH');
+  });
+
   it('adds nothing without toolchains', () => {
     const script = renderToolShellWrapper(base);
     expect(script).not.toContain('--setenv PATH');

@@ -254,6 +254,10 @@ describe('DeepSeek QA prompt parity', () => {
     expect(asked).toEqual([root]);
     expect(seen[0]?.['PATH']).toBe('/data/toolchains/go/1.24/go/bin:/usr/bin');
     expect(seen[0]?.['GOROOT']).toBe('/data/toolchains/go/1.24/go');
+    // Every worker shell also gets the no-terminal settings (CI, DEBIAN_FRONTEND, UNZIP, ...).
+    expect(seen[0]?.['CI']).toBe('true');
+    expect(seen[0]?.['DEBIAN_FRONTEND']).toBe('noninteractive');
+    expect(seen[0]?.['UNZIP']).toBe('-o');
   });
   it('replaces the agent’s own plan with the host’s retest checks', async () => {
     const root = await mkdtemp(join(tmpdir(), 'sentry-ds-retest-'));

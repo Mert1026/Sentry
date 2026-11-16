@@ -378,6 +378,7 @@ Assert-Equal 'deploy-log-version-sanitized' (Get-SentryDeployLogPath -Distro 'Ub
 function Ensure-SentryOpenCode { param($Distro) return $script:MockTools.oc }
 function Ensure-SentryDeepSeek { param($Distro, $RepoRoot) return $script:MockTools.ds }
 function Ensure-SentryClaudeCode { param($Distro, $RepoRoot) return $script:MockTools.cc }
+function Ensure-SentryBrowser { param($Distro) return $true }
 function Invoke-SentryRuntimeDeploy { param($Distro, $RepoRoot, $ProductVersion, $Sha) return '9.9.9-test' }
 function Invoke-SentryRuntimeHandshake { param($Distro) return @{ protocolVersion = 1 } }
 function Sync-SentryDistroPreference { param($RepoRoot, $Distro) return $true }

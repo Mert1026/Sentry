@@ -71,6 +71,23 @@ A missing `systemd` binary set is repaired by setup (apt install) where
 possible; that is a different state from systemd being installed but
 disabled in `/etc/wsl.conf`, which setup enables and re-probes.
 
+## Agents report "no browser"
+
+Web-page checks need the managed headless browser that `sentry setup` / `sentry update` installs under
+`~/.local/share/sentry/tools/browser` (about 350 MB, no sudo). Setup prints `Headless browser for QA agents
+(managed)` when it works, or a warning with the reason when it does not (no network to the Chrome download
+host, a CPU other than x86_64, system libraries that could not be fetched). Agents then run without a
+browser and report browser checks as inconclusive. Fix the cause and rerun `sentry setup`; it is idempotent.
+To test it by hand inside WSL: `SENTRY_BROWSER_HOME=~/.local/share/sentry/tools/browser bash
+scripts/launcher/linux/install-browser.sh` prints `BROWSER_READY=...` or `BROWSER_FAILED=<reason>`.
+
+## An agent fails with "safety filter" / "flagged for possible cybersecurity risk"
+
+Symptom: a ChatGPT (or other OpenAI-backed) agent fails with `OPENCODE_PROVIDER_REFUSED`. The model provider's own content filter declined the request, usually because a security-testing run contains exploit
+payloads or vulnerability details. It is not an outage, a sign-in problem or a quota. Retrying the same run fails the same way. A single check the filter declines is reported inconclusive while the rest of
+the run carries on; this error means the filter declined the final report. What the agent concluded for each check is still kept in the run's Activity as `[not reported]` lines (unverified, never a finding).
+The provider's message may name its permissive-access program for authorized security work; follow it, or run the project with another agent. Sentry does not rephrase content to get past the filter.
+
 ## GLM sandbox: `socat` / `bubblewrap` missing
 
 The GLM sandbox runs fail-closed: if `socat` or `bubblewrap` is missing
@@ -98,6 +115,45 @@ sandbox to work around this (`sandbox.failIfUnavailable` stays on).
 
 > Windows `winget` commands run in **Windows PowerShell** only — never
 > inside Ubuntu. Conversely `sudo apt ...` runs **inside Ubuntu** only.
+
+## GLM sandbox starts but commands fail
+
+Symptom: a GLM run fails within seconds with `GLM_SANDBOX_UNAVAILABLE` and a diagnostic such as
+`apply-seccomp: write /proc/self/setgroups (nested userns is capability-restricted; caller must provide
+CAP_SYS_ADMIN): Permission denied`, although `socat` and `bubblewrap` are installed. `sentry setup` and
+`sentry doctor` report it as `SANDBOX_INIT_FAIL=nested-user-namespaces-blocked`.
+
+Cause: bubblewrap can start, but the system refuses a second (nested) user namespace inside it, which the
+Claude Code sandbox needs. On Ubuntu 24.04 and similar this is the AppArmor setting
+`kernel.apparmor_restrict_unprivileged_userns`. Check it inside Ubuntu:
+
+```bash
+cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns   # 1 means unprivileged user namespaces are restricted
+```
+
+Options (your choice; both change a system hardening setting, so decide with your administrator):
+install an AppArmor profile that allows `bwrap`, or turn the restriction off with
+`sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0` (make it permanent in
+`/etc/sysctl.d/`). Then rerun `sentry doctor`. Never disable Sentry's own sandbox to work around this.
+The OpenCode, DeepSeek and ChatGPT agents do not use this sandbox and are not affected, so a run with only
+those agents works without changing anything.
+
+## An agent fails at once with "Unexpected server error"
+
+Symptom: an OpenCode or ChatGPT agent fails within a second with `OPENCODE_START_FAILED`, a message such as
+`Unexpected server error. Check server logs for details`, and "No upstream requests were relayed during the
+turn". Nothing reached the provider, so nothing was billed. Sentry already retried the start once with a
+fresh OpenCode server. If it still fails, check the provider sign-in or API key in **Settings → Providers**
+(for the ChatGPT agent, sign in again), then start the run again. Other agents in the same run are not
+affected and keep going.
+
+## An agent investigated but has no report
+
+If an agent finishes its investigation and then fails while writing the report (for example `QUOTA (HTTP 402)
+Insufficient Balance`), its run shows as failed and has no findings. What each check concluded is kept in the
+agent's **Activity** as `[not reported] ...` lines behind a line that names the failure. They are the agent's
+own unverified statements, not findings: read them, fix the cause (top up the balance, retry later) and run
+again if you want a proper report.
 
 ## Per-tool probes (Ubuntu / WSL)
 

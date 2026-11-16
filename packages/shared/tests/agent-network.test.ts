@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEPENDENCY_CACHE_DIRNAME,
+  NON_INTERACTIVE_ENVIRONMENT,
   PACKAGE_REGISTRY_HOSTS,
   SDK_DOWNLOAD_HOSTS,
   agentNetworkPromptLines,
@@ -88,6 +89,35 @@ describe('agent network policy', () => {
     expect(SDK_DOWNLOAD_HOSTS.some((host) => host.includes('*'))).toBe(false);
     const on = agentNetworkPromptLines({ webAccess: false, toolDownloads: true }).join(' ');
     expect(on).toContain('official download hosts of language toolchains');
+    expect(on).toContain('can take a minute or two');
+    expect(on).toContain('retry it once');
+    expect(agentNetworkPromptLines({ webAccess: false }).join(' ')).not.toContain('minute or two');
     expect(agentNetworkPromptLines({ webAccess: false }).join(' ')).not.toContain('download hosts');
+  });
+
+  it('offers the managed headless browser only when one is installed', () => {
+    const launcher = '/home/u/.local/share/sentry/tools/browser/launch.mjs';
+    const withBrowser = agentNetworkPromptLines({
+      webAccess: false,
+      browserLauncher: launcher,
+    }).join(' ');
+    expect(withBrowser).toContain('A headless browser is already installed');
+    expect(withBrowser).toContain(JSON.stringify(launcher));
+    expect(withBrowser).toContain('do not download or install another one');
+    expect(agentNetworkPromptLines({ webAccess: false }).join(' ')).not.toContain(
+      'headless browser',
+    );
+  });
+
+  it('tells agents their shells have no terminal and gives the non-interactive settings', () => {
+    const text = agentNetworkPromptLines({ webAccess: false }).join(' ');
+    expect(text).toContain('run without a terminal');
+    expect(text).toContain('unzip -o');
+    expect(NON_INTERACTIVE_ENVIRONMENT).toMatchObject({
+      CI: 'true',
+      DEBIAN_FRONTEND: 'noninteractive',
+      GIT_TERMINAL_PROMPT: '0',
+      UNZIP: '-o',
+    });
   });
 });

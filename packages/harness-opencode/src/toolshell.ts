@@ -245,7 +245,9 @@ export function renderToolShellWrapper(spec: ToolShellSpec): string {
       ? []
       : [
           ...toolchains.binds.map((dir) => `  --ro-bind ${q(dir)} ${q(dir)} \\`),
-          `  --setenv PATH ${q(toolchains.path.join(':'))}":$PATH" \\`,
+          ...(toolchains.path.length === 0
+            ? []
+            : [`  --setenv PATH ${q(toolchains.path.join(':'))}":$PATH" \\`]),
           ...Object.entries(toolchains.env).map(
             ([name, value]) => `  --setenv ${name} ${q(value)} \\`,
           ),

@@ -323,4 +323,29 @@ describe('agent telemetry projector', () => {
     expect(recent.length).toBe(2);
     expect(recent[0]?.title).toContain('auth');
   });
+
+  it('shows the agent’s answer about secrets, and nothing when it gave none', () => {
+    const agentRun = makeAgentRun({ status: 'completed' });
+    const event = (message: string) => ({
+      type: 'agent.message',
+      agentRunId: agentRun.id,
+      timestamp: '2026-09-18T22:20:00.000Z',
+      message,
+    });
+    const project = (messages: string[]) =>
+      projectAgentTelemetry({
+        agentRun,
+        events: messages.map(event),
+        activities: [],
+        findings: [],
+        evidence: [],
+      });
+    expect(project(['[failed] Secrets in code: x — .env:2 (API key)']).secrets).toEqual({
+      state: 'found',
+      explanation: '.env:2 (API key)',
+    });
+    expect(project(['[passed] Secrets in code: x']).secrets).toEqual({ state: 'clear' });
+    expect(project(['[passed] Another check']).secrets).toBeUndefined();
+    expect(project([]).secrets).toBeUndefined();
+  });
 });

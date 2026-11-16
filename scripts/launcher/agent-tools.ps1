@@ -63,6 +63,26 @@ function Ensure-SentryDeepSeek {
   return $false
 }
 
+# Headless browser agents use to exercise real pages. Never gates readiness:
+# without it agents behave as before and report browser checks as inconclusive.
+function Ensure-SentryBrowser {
+  param([string]$Distro)
+  Write-SentryInfo 'Preparing the Sentry-managed headless browser for QA agents (first time downloads about 350 MB; no sudo)...'
+  $r = Invoke-SentryWslFile -Distro $Distro -ScriptName 'install-browser.sh' -TimeoutSec 900
+  Write-SentryLog ('browser install exit=' + $r.ExitCode) 'setup'
+  $out = [string]$r.Stdout
+  foreach ($line in ($out -split "`n")) {
+    $t = $line.Trim()
+    if ($t.StartsWith('BROWSER_READY=')) { Write-SentryOk 'Headless browser for QA agents (managed)'; return $true }
+    if ($t.StartsWith('BROWSER_FAILED=')) {
+      Write-SentryWarn ('Headless browser could not be prepared (' + $t.Substring(15) + '). Agents run without a browser; browser checks stay inconclusive.')
+      return $false
+    }
+  }
+  Write-SentryWarn 'Headless browser could not be prepared. Agents run without a browser; browser checks stay inconclusive.'
+  return $false
+}
+
 function Get-SentryManagedClaudePath {
   param([string]$CheckOutput)
   foreach ($line in (([string]$CheckOutput) -split "`n")) {

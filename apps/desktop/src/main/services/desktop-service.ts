@@ -18,7 +18,11 @@ import {
   parseAgentEffort,
   parseRunTimeLimit,
 } from '@qa/shared';
-import type { AgentStackDefinition } from '@qa/schemas';
+import {
+  FindingExportRequestSchema,
+  type AgentStackDefinition,
+  type FindingExportResultDto,
+} from '@qa/schemas';
 import type { DesktopOperation, RunSnapshot } from '../../shared/ipc-contract.js';
 import { toSafeError } from '../desktop-command-router.js';
 import type { ProviderCredentialService } from './provider-credentials.js';
@@ -48,6 +52,7 @@ const StartRunOptions = z
     runTimeoutMs: z.number().int().min(RUN_TIMEOUT_MS_MIN).max(RUN_TIMEOUT_MS_MAX).optional(),
     webAccess: z.boolean().optional(),
     toolDownloads: z.boolean().optional(),
+    secretsCheck: z.boolean().optional(),
     depth: z.enum(['fast', 'full']).optional(),
     useProfile: z.boolean().optional(),
     retest: z
@@ -230,6 +235,16 @@ export class DesktopApplicationService {
     return this.call('projects.toolchainSelection', { projectId: id });
   }
 
+  /** The selected findings as files, built by the runtime from what the agents reported. */
+  async exportFindings(projectId: string, request: unknown): Promise<FindingExportResultDto> {
+    const id = ProjectIdInput.parse(projectId);
+    const parsed = FindingExportRequestSchema.parse(request);
+    return this.call('projects.exportFindings', {
+      projectId: id,
+      ...parsed,
+    }) as Promise<FindingExportResultDto>;
+  }
+
   findingsByRevision(projectId: string): Promise<unknown> {
     const id = ProjectIdInput.parse(projectId);
     return this.call('projects.findingsByRevision', { projectId: id });
@@ -299,6 +314,7 @@ export class DesktopApplicationService {
         ...(runTimeoutMs === undefined ? {} : { runTimeoutMs }),
         ...(parsed.webAccess === true ? { webAccess: true } : {}),
         ...(parsed.toolDownloads === true ? { toolDownloads: true } : {}),
+        ...(parsed.secretsCheck === false ? { secretsCheck: false } : {}),
         ...(parsed.depth === undefined ? {} : { depth: parsed.depth }),
         ...(parsed.useProfile === true ? { useProfile: true } : {}),
         ...(parsed.retest === undefined ? {} : { retest: parsed.retest }),

@@ -303,6 +303,28 @@ describe('parallel three-agent execution', () => {
     expect(['timed_out', 'interrupted', 'failed']).toContain(byStack.get('stack_glm_main'));
   });
 
+  it('does not let one hung agent hold a finished run: it gets a shorter window and a plain message', async () => {
+    const f = await fixture();
+    const state: BarrierState = { entered: [], waiters: [] };
+    const started = Date.now();
+    // Fuse 6 s: the usual silence window is 6 s checked every 6 s (so 12 s for this agent); with its two
+    // peers finished it gets 2 s of patience and is stopped at the first check, at about 6 s.
+    const details = await runWith(
+      f,
+      barrierRegistry(state, new Map(), { stack_glm_main: 'hang' }),
+      6_000,
+    );
+    const elapsed = Date.now() - started;
+    expect(elapsed).toBeLessThan(10_000);
+    expect(details.run.status).toBe('partial');
+    const hung = details.agentRuns.find((agent) => agent.agentStackId === 'stack_glm_main');
+    expect(hung?.status).toBe('timed_out');
+    expect(hung?.failure?.code).toBe('RUN_TIMEOUT');
+    expect(hung?.failure?.message).toContain('Agent stopped responding');
+    expect(hung?.failure?.message).toContain('every other agent had already finished');
+    expect(hung?.failure?.message).not.toContain('exceeded run budget');
+  }, 30_000);
+
   it('carries no peer information in harness requests', async () => {
     const f = await fixture();
     const state: BarrierState = { entered: [], waiters: [] };

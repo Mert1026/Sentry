@@ -193,6 +193,7 @@ cmd_post_update() {
   local agents_out=""
   agents_out=$(sentry_provision_agents "$repo") || { printf '%s\n' "$agents_out"; return 1; }
   printf '%s\n' "$agents_out"
+  sentry_provision_browser "$repo"
   sentry_install_shim "$repo"
   sentry_config_set SENTRY_NODE_BINARY "$node_bin"
   sentry_config_set SENTRY_PNPM_BINARY "$pnpm_bin"

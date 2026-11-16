@@ -33,6 +33,7 @@ export function emitHumanSuccess(response: CliSuccessEnvelope, io: CliIo): void 
           'Real agent execution: yes (OpenCode, DeepSeek, GLM, ChatGPT)',
           'Re-test earlier findings: yes (run start --retest)',
           'Findings by revision: yes (project findings)',
+          'Findings export: yes (project export-findings)',
           'Project profile: yes (project profile, project profile-build)',
           'Toolchains: yes (toolchain status|install|remove)',
           'Run depth: yes (run start --depth fast|full)',
@@ -182,6 +183,18 @@ export function emitHumanSuccess(response: CliSuccessEnvelope, io: CliIo): void 
         'Run time limit: ' +
           describeRunLimit(response.data.ms) +
           (response.data.isDefault ? ' (the default)' : ''),
+      );
+      return;
+    case 'project.export-findings':
+      io.stdout(
+        'Exported ' +
+          response.data.findingCount +
+          (response.data.findingCount === 1 ? ' finding' : ' findings') +
+          ' as ' +
+          response.data.format +
+          ' to ' +
+          response.data.out +
+          (response.data.files.length > 1 ? ' (' + response.data.files.length + ' files)' : ''),
       );
       return;
     case 'run.export':

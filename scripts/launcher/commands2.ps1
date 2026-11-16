@@ -285,6 +285,7 @@ function Invoke-SentryPostUpdate {
   $oc = Ensure-SentryOpenCode -Distro $distro
   $ds = Ensure-SentryDeepSeek -Distro $distro -RepoRoot $RepoRoot
   $cc = Ensure-SentryClaudeCode -Distro $distro -RepoRoot $RepoRoot
+  [void](Ensure-SentryBrowser -Distro $distro)
   $updSandbox = Get-SentrySandboxStatus -Distro $distro
   $cc = ([bool]$cc) -and $updSandbox.Socat -and $updSandbox.Bwrap -and $updSandbox.InitOk
   if (-not $cc) { Write-SentryWarn 'GLM sandbox not fully ready (see sentry doctor).' }
@@ -330,12 +331,13 @@ function Show-SentryCliHelp {
   Write-Host '  project delete <project-id> --yes [--json]'
   Write-Host '  project revisions <project-id> [--json]'
   Write-Host '  project findings <project-id> [--json]'
+  Write-Host '  project export-findings <project-id> --format markdown|github-issues|sarif (--findings <run-id>:<finding-id>,... | --run <run-id> | --revision <rev-id>,...) --out <path> [--json]'
   Write-Host '  project profile <project-id> [--json]'
   Write-Host '  project profile-build <project-id> [--agents opencode,deepseek,glm,chatgpt] [--json]'
   Write-Host '  project doctor <project-id> [--json]'
   Write-Host '  agent list [--json]'
   Write-Host '  agent doctor opencode|deepseek|glm|chatgpt [--json]'
-  Write-Host '  run start <project-id> --mode full|targeted [--agents opencode,deepseek,glm,chatgpt] [--paths a,b] [--depth fast|full] [--wait] [--timeout-ms <ms>] [--web] [--tools] [--profile] [--revision <rev-id>] [--json]'
+  Write-Host '  run start <project-id> --mode full|targeted [--agents opencode,deepseek,glm,chatgpt] [--paths a,b] [--depth fast|full] [--wait] [--timeout-ms <ms>] [--web] [--tools] [--profile] [--no-secrets] [--revision <rev-id>] [--json]'
   Write-Host '  run start <project-id> --retest <run-id>:<finding-id>,... [--retest-with reporter|all] [--agents ...] [--wait] [--json]'
   Write-Host '  run list <project-id> [--json]'
   Write-Host '  run show <run-id> [--json]'
