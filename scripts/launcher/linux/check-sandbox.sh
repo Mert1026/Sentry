@@ -20,7 +20,16 @@ if command -v bwrap >/dev/null 2>&1; then
   # Minimal init smoke: proves user namespaces + mounts initialize by
   # running only /usr/bin/true (no model, no network, no secrets).
   if bwrap --dev-bind / / --proc /proc /usr/bin/true >/dev/null 2>&1; then
-    echo 'SANDBOX_INIT_OK'
+    # The Claude Code sandbox then creates a SECOND user namespace inside bubblewrap (its seccomp helper).
+    # Some systems allow the first and refuse the second ("nested userns is capability-restricted"), so
+    # every command would fail only at run time. Try the same step here. Without `unshare` we cannot tell,
+    # and the probe stays as it was.
+    if command -v unshare >/dev/null 2>&1 \
+      && ! bwrap --dev-bind / / --proc /proc unshare --user --map-root-user /usr/bin/true >/dev/null 2>&1; then
+      echo 'SANDBOX_INIT_FAIL=nested-user-namespaces-blocked (bubblewrap starts but this system refuses a second user namespace inside it, which the GLM sandbox needs; see docs/beta/troubleshooting.md, "GLM sandbox starts but commands fail")'
+    else
+      echo 'SANDBOX_INIT_OK'
+    fi
   else
     echo 'SANDBOX_INIT_FAIL=user-namespaces-or-mounts-unavailable'
   fi

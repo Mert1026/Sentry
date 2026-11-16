@@ -18,6 +18,7 @@ import {
   History,
   Tag,
   Brain,
+  KeyRound,
 } from 'lucide-react';
 import { CopyId } from '../components/CopyId.js';
 import { InfoTile } from '../components/InfoTile.js';
@@ -35,7 +36,10 @@ import { useProjectProfile } from '../lib/use-project-profile.js';
 import { ToolchainNeedsPanel } from '../components/ToolchainNeedsPanel.js';
 import { ToolchainRequestsPanel } from '../components/ToolchainRequestsPanel.js';
 import { useToolchainNeeds } from '../lib/use-toolchain-needs.js';
-import { RevisionFindingsPanel } from '../components/RevisionFindingsPanel.js';
+import {
+  RevisionFindingsPanel,
+  type PanelExportRequest,
+} from '../components/RevisionFindingsPanel.js';
 import { useFindingsByRevision } from '../lib/use-findings-by-revision.js';
 import { retestStartOptions } from '../lib/retest-options.js';
 import {
@@ -114,6 +118,8 @@ export function ProjectDetail(): React.JSX.Element {
   const [targetPaths, setTargetPaths] = React.useState('');
   const [webAccess, setWebAccess] = React.useState(false);
   const [toolDownloads, setToolDownloads] = React.useState(false);
+  // Each agent also searches the project for hard-coded secrets; turning it off makes a run shorter.
+  const [secretsCheck, setSecretsCheck] = React.useState(true);
   const [selectedRevisionId, setSelectedRevisionId] = React.useState<string | undefined>(undefined);
   const detail = useQuery({
     queryKey: ['project', projectId],
@@ -205,6 +211,7 @@ export function ProjectDetail(): React.JSX.Element {
     ...(effectiveStacks.length === 0 ? {} : { agentStackIds: effectiveStacks }),
     ...(webAccess ? { webAccess: true } : {}),
     ...(toolDownloads ? { toolDownloads: true } : {}),
+    ...(secretsCheck ? {} : { secretsCheck: false }),
     ...(useProfile ? { useProfile: true } : {}),
     ...(depth === 'fast' ? { depth: 'fast' } : {}),
   });
@@ -225,6 +232,23 @@ export function ProjectDetail(): React.JSX.Element {
       sentryApi().runs.start(projectId as string, startOptions('targeted') as never),
     onSuccess: onStarted,
     onError: onStartError,
+  });
+  // Save picked findings as a file (Markdown report, GitHub issues ZIP or SARIF).
+  const [exportNote, setExportNote] = React.useState<string | undefined>(undefined);
+  const exportFindings = useMutation({
+    mutationFn: (request: PanelExportRequest) =>
+      sentryApi().projects.saveFindingsExport(projectId as string, request),
+    onMutate: () => setExportNote(undefined),
+    onSuccess: (result) =>
+      setExportNote(
+        result.status === 'saved'
+          ? 'Saved ' +
+              result.findingCount +
+              (result.findingCount === 1 ? ' finding' : ' findings') +
+              ' to ' +
+              result.path
+          : undefined,
+      ),
   });
   // Re-test findings picked in "Findings by revision" on the CURRENT revision, whatever "Run revision" says.
   const startRetest = useMutation({
@@ -528,10 +552,12 @@ export function ProjectDetail(): React.JSX.Element {
                   <InfoPopover title="Run depth">
                     <p>
                       Full plans up to 8 checks (about one per 25 minutes of the run time limit, 6
-                      for the default 3 hours). Fast plans at most 3, so a run is shorter. Both use
-                      the same time limit and the same extra passes after the checks: a second pass
-                      on undecided checks, a deepening round and a hazard sweep. A Fast run covers
-                      less of the project, so it can find fewer problems.
+                      for the default 3 hours) and then makes extra passes: a second pass on
+                      undecided checks, a deepening round and a hazard sweep. Fast plans at most 2
+                      checks and skips the deepening round and the hazard sweep, so it is much
+                      shorter; a second pass on undecided checks still runs. Every run also checks
+                      for hard-coded secrets. A Fast run covers less of the project, so it can find
+                      fewer problems.
                     </p>
                     <p>The time limit is set in Settings → Runtime.</p>
                   </InfoPopover>
@@ -763,6 +789,13 @@ export function ProjectDetail(): React.JSX.Element {
                   onChange={setToolDownloads}
                   description="Allow OpenCode and Claude Code to download missing compilers and SDKs from supported official vendor sites during this run. These downloads are temporary and are discarded afterwards. For tools you expect to reuse, install a managed toolchain through Settings → Toolchains. Package registry access is handled separately."
                 />
+                <RunOptionToggle
+                  label="Check for secrets"
+                  icon={KeyRound}
+                  checked={secretsCheck}
+                  onChange={setSecretsCheck}
+                  description="Each agent also searches the project files for hard-coded passwords, API keys, tokens and private keys, and its box on the run page shows a light with what it found. This adds about a minute or two per agent. Turn it off for the shortest run: no search is made and no secrets light is shown."
+                />
               </div>
               <div className="project-options-help">
                 <InfoPopover title="Packages & toolchains" showLabel>
@@ -811,6 +844,12 @@ export function ProjectDetail(): React.JSX.Element {
             onRetest={(findings, who) => startRetest.mutate({ findings, who })}
             retesting={startRetest.isPending}
             retestError={startRetest.error instanceof Error ? startRetest.error.message : undefined}
+            onExport={(request) => exportFindings.mutate(request)}
+            exporting={exportFindings.isPending}
+            exportNote={exportNote}
+            exportError={
+              exportFindings.error instanceof Error ? exportFindings.error.message : undefined
+            }
           />
         </PageSection>
       </ProjectSectionPanel>

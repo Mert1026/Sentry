@@ -180,6 +180,38 @@ describe('project section navigation', () => {
     );
   });
 
+  it('checks for secrets by default: the switch is on and a start sends no secretsCheck', async () => {
+    const f = fixture();
+    const start = await screen.findByRole('button', { name: 'Start Full QA' });
+    await waitFor(() => expect((start as HTMLButtonElement).disabled).toBe(false));
+    expect(
+      (screen.getByRole('switch', { name: 'Check for secrets' }) as HTMLInputElement).checked,
+    ).toBe(true);
+    fireEvent.click(start);
+    const dialog = await screen.findByRole('dialog', { name: 'Confirm start full QA' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Start QA' }));
+    await waitFor(() => expect(f.api.runs.start).toHaveBeenCalledTimes(1));
+    expect(f.api.runs.start.mock.calls[0]?.[1]).not.toHaveProperty('secretsCheck');
+  });
+
+  it('sends secretsCheck:false when the secrets switch is turned off', async () => {
+    const f = fixture();
+    const start = await screen.findByRole('button', { name: 'Start Full QA' });
+    await waitFor(() => expect((start as HTMLButtonElement).disabled).toBe(false));
+    const secrets = screen.getByRole('switch', { name: 'Check for secrets' }) as HTMLInputElement;
+    fireEvent.click(secrets.closest('label') as HTMLLabelElement);
+    expect(secrets.checked).toBe(false);
+    fireEvent.click(start);
+    const dialog = await screen.findByRole('dialog', { name: 'Confirm start full QA' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Start QA' }));
+    await waitFor(() =>
+      expect(f.api.runs.start).toHaveBeenCalledWith(
+        'proj_alpha',
+        expect.objectContaining({ secretsCheck: false }),
+      ),
+    );
+  });
+
   it('opens on Run QA and preserves options when switching sections', async () => {
     fixture();
     await screen.findByLabelText('Run revision');

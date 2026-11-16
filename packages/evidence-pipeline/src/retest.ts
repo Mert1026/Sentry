@@ -1,3 +1,5 @@
+import { applySecretsCheck } from './secrets-check.js';
+
 /** Context key under which a retest run hands an agent the findings it must re-test. */
 export const RETEST_CONTEXT_KEY = 'retest';
 
@@ -62,14 +64,17 @@ export function isRetestContext(context: Readonly<Record<string, unknown>> | und
 
 /**
  * A retest run has no plan of its own: whatever the agent wrote, the checks are the host's, one per
- * finding, in order. Other runs are returned as they are.
+ * finding, in order. An ordinary QA run keeps the agent's own plan and gets the host's "Secrets in
+ * code" check added to it (the adapters call only this one hook for both).
  */
 export function applyRetestPlan<T extends { plannedChecks: string[] }>(
   plan: T,
   context: Readonly<Record<string, unknown>> | undefined,
 ): T {
   const items = itemsOf(context);
-  return items.length === 0 ? plan : { ...plan, plannedChecks: items.map(retestCheckName) };
+  return items.length === 0
+    ? applySecretsCheck(plan, context)
+    : { ...plan, plannedChecks: items.map(retestCheckName) };
 }
 
 /** True for a check that re-tests a finding (its name starts "Retest #n: "). */

@@ -297,11 +297,12 @@ export async function executeCommand(
       input.retest !== undefined ||
       input.useProfile === true ||
       input.toolDownloads === true ||
+      input.secretsCheck === false ||
       input.depth !== undefined ||
       input.revisionId !== undefined
     )
       throw new CliUsageError(
-        '--retest, --profile, --tools, --depth and --revision need Sentry Desktop (the direct development transport does not support them).',
+        '--retest, --profile, --tools, --no-secrets, --depth and --revision need Sentry Desktop (the direct development transport does not support them).',
       );
     const projectId = parseArgument(ProjectIdSchema, input.projectId, 'project-id');
     const registry = new HarnessAdapterRegistry()
@@ -475,6 +476,7 @@ export async function executeCommand(
   }
   if (
     input.command === 'project.findings' ||
+    input.command === 'project.export-findings' ||
     input.command === 'project.profile' ||
     input.command === 'project.profile-build' ||
     input.command === 'settings.show' ||

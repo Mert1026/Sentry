@@ -14,6 +14,7 @@ import {
   DEFAULT_OPENCODE_TURN_TIMEOUT_MS,
   describeTurnUpstreamActivity,
   DirectOpenCodeProcessLauncher,
+  isInstantStartFailure,
   OpenCodeHarnessAdapter,
   type OpenCodeClientFactory,
   type OpenCodeHarnessAdapterOptions,
@@ -1010,6 +1011,192 @@ describe('OpenCodeHarnessAdapter', () => {
     const events = await collect(adapter, input);
     expect(events.at(-1)?.type).toBe('run.failed');
     await adapter.dispose();
+  });
+
+  it('keeps what each check concluded when the report fails, as unverified activity and never as findings', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'sentry-opencode-unreported-'));
+    roots.push(root);
+    const input = await request(root);
+    const bad = { ...validReportV2(), findings: [{ title: 'Missing everything' }] };
+    const adapter = new OpenCodeHarnessAdapter({
+      ...logicalAdapterDefaults(),
+      clientFactory: scriptedFactory([
+        textTurn(validPlan()),
+        // The check turn runs no command, so it also gets the host's one follow-up nudge turn.
+        textTurn('Reproduced: the cart total is wrong when two coupons stack.'),
+        textTurn('Reproduced: the cart total is wrong when two coupons stack.'),
+        textTurn(JSON.stringify(bad)),
+      ]),
+    });
+    const events = await collect(adapter, input);
+    const last = events.at(-1);
+    expect(last).toMatchObject({ type: 'run.failed' });
+    const kept = events
+      .filter((event) => event.type === 'agent.message')
+      .map((event) => (event as { message: string }).message);
+    const header = kept.findIndex((message) => message.includes('report could not be produced'));
+    expect(header).toBeGreaterThanOrEqual(0);
+    expect(kept[header]).toContain('OPENCODE_INVALID_RESULT');
+    expect(kept[header + 1]).toBe(
+      '[not reported] Inspect README — Reproduced: the cart total is wrong when two coupons stack.',
+    );
+    // Nothing was turned into a finding or evidence.
+    expect(events.some((event) => event.type === 'finding.submitted')).toBe(false);
+    expect(events.some((event) => event.type === 'evidence.submitted')).toBe(false);
+    // The kept lines come before the terminal event.
+    expect(events.indexOf(last as HarnessEvent)).toBe(events.length - 1);
+    validateProtocol(events, input);
+    await adapter.dispose();
+  });
+
+  it('keeps nothing when the run fails before the investigation ends', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'sentry-opencode-unreported-none-'));
+    roots.push(root);
+    const input = await request(root);
+    const adapter = new OpenCodeHarnessAdapter({
+      ...logicalAdapterDefaults(),
+      clientFactory: async () => ({
+        startSession: async () => ({
+          runPrompt: async () => {
+            throw new Error('provider down');
+          },
+          abort: () => undefined,
+        }),
+        close: async () => undefined,
+      }),
+    });
+    const events = await collect(adapter, input);
+    expect(events.at(-1)).toMatchObject({ type: 'run.failed' });
+    expect(JSON.stringify(events)).not.toContain('report could not be produced');
+    await adapter.dispose();
+  });
+
+  describe('a first turn that fails to start', () => {
+    const startFailure = () =>
+      new OpenCodeHarnessError(
+        'OPENCODE_START_FAILED',
+        'OpenCode turn failed: {"name":"UnknownError","data":{"message":"Unexpected server error."}}',
+        true,
+      );
+
+    /** Clients are made one per OpenCode server: the first `failures` of them fail their first prompt. */
+    function flakyFactory(failures: number, then: OpenCodeClientFactory) {
+      let made = 0;
+      const factory: OpenCodeClientFactory = async (input) => {
+        made += 1;
+        if (made <= failures)
+          return {
+            startSession: async () => ({
+              runPrompt: async () => {
+                throw startFailure();
+              },
+              abort: () => undefined,
+            }),
+            close: async () => undefined,
+          };
+        return then(input);
+      };
+      return { factory, made: () => made };
+    }
+
+    it('is retried once with a fresh server, and the run then goes on', async () => {
+      const root = await mkdtemp(join(tmpdir(), 'sentry-opencode-startretry-'));
+      roots.push(root);
+      const input = await request(root);
+      const flaky = flakyFactory(
+        1,
+        scriptedFactory([
+          textTurn(validPlan()),
+          textTurn('Investigation complete.'),
+          textTurn(JSON.stringify(validReportV2())),
+        ]),
+      );
+      const adapter = new OpenCodeHarnessAdapter({
+        ...logicalAdapterDefaults(),
+        startRetryDelayMs: 1,
+        clientFactory: flaky.factory,
+      });
+      const events = await collect(adapter, input);
+      expect(events.at(-1)?.type).toBe('run.completed');
+      expect(flaky.made()).toBe(2);
+      const warning = events.find(
+        (event) => (event as { code?: string }).code === 'OPENCODE_START_RETRY',
+      ) as { message: string } | undefined;
+      expect(warning?.message).toContain('trying once more with a fresh OpenCode server');
+      validateProtocol(events, input);
+      await adapter.dispose();
+    });
+
+    it('fails with a plain message when the second try fails the same way', async () => {
+      const root = await mkdtemp(join(tmpdir(), 'sentry-opencode-startretry-twice-'));
+      roots.push(root);
+      const input = await request(root);
+      const flaky = flakyFactory(2, scriptedFactory([textTurn(validPlan())]));
+      const adapter = new OpenCodeHarnessAdapter({
+        ...logicalAdapterDefaults(),
+        startRetryDelayMs: 1,
+        clientFactory: flaky.factory,
+      });
+      const events = await collect(adapter, input);
+      const failed = events.at(-1) as {
+        type: string;
+        failure?: { code: string; message: string; retryable: boolean };
+      };
+      expect(failed.type).toBe('run.failed');
+      expect(failed.failure?.code).toBe('OPENCODE_START_FAILED');
+      expect(failed.failure?.message).toContain('A second automatic attempt failed the same way.');
+      // The message says nothing reached the provider and where to look.
+      expect(failed.failure?.message).toContain('No upstream requests were relayed');
+      expect(failed.failure?.message).toContain('Settings → Providers');
+      expect(flaky.made()).toBe(2);
+      await adapter.dispose();
+    });
+
+    it('is decided only for an instant failure that reached no provider', () => {
+      const instant = new OpenCodeHarnessError(
+        'OPENCODE_START_FAILED',
+        'OpenCode turn failed. No upstream requests were relayed during the turn.',
+        true,
+      );
+      expect(isInstantStartFailure(instant, 800)).toBe(true);
+      // Slow, so something was running: not an instant failure.
+      expect(isInstantStartFailure(instant, 90_000)).toBe(false);
+      // A request did reach the provider, so a retry could be billed twice.
+      expect(
+        isInstantStartFailure(
+          new OpenCodeHarnessError(
+            'OPENCODE_START_FAILED',
+            'Upstream requests relayed during the turn: chat/completionsx1.',
+            true,
+          ),
+          800,
+        ),
+      ).toBe(false);
+      // Not retryable, another code, or not an OpenCode error at all.
+      expect(
+        isInstantStartFailure(
+          new OpenCodeHarnessError(
+            'OPENCODE_START_FAILED',
+            'No upstream requests were relayed',
+            false,
+          ),
+          800,
+        ),
+      ).toBe(false);
+      expect(
+        isInstantStartFailure(
+          new OpenCodeHarnessError(
+            'OPENCODE_AUTH_FAILED',
+            'No upstream requests were relayed',
+            true,
+          ),
+          800,
+        ),
+      ).toBe(false);
+      expect(isInstantStartFailure(new Error('No upstream requests were relayed'), 800)).toBe(
+        false,
+      );
+    });
   });
 
   it('fails the run on an invalid report without weakening validation', async () => {

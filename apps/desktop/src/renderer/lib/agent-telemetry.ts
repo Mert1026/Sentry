@@ -3,6 +3,7 @@
  * Observable execution only. Never invents chain-of-thought, progress
  * percentages, or ETAs. Unknown telemetry → "Working".
  */
+import { secretsLightFrom } from './secrets-light.js';
 import type {
   ActivityLike,
   AgentNodeView,
@@ -470,6 +471,11 @@ export function projectAgentTelemetry(input: {
       e.type === 'tool.started' || e.type === 'tool.completed' || e.type === 'command.executed',
   ).length;
   const tests = events.filter((e) => e.type === 'test.result').length;
+  const secrets = secretsLightFrom(
+    events.flatMap((e) =>
+      e.type === 'agent.message' && e.message !== undefined ? [e.message] : [],
+    ),
+  );
   return {
     agentRunId: agentRun.id,
     agentStackId: agentRun.agentStackId,
@@ -498,6 +504,7 @@ export function projectAgentTelemetry(input: {
     cachedInputTokens: usage?.cachedInputTokens,
     totalTokens,
     severityCounts,
+    ...(secrets === undefined ? {} : { secrets }),
   };
 }
 

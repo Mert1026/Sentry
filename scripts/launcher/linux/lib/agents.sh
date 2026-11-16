@@ -118,3 +118,18 @@ sentry_provision_agents() {
   echo "AGENTS_CLAUDE=$cc_ready"
   return 0
 }
+
+# Headless browser agents use to exercise real pages. Never gates readiness:
+# a failure only means browser checks stay inconclusive.
+sentry_provision_browser() {
+  local repo="$1"
+  local out=""
+  out="$(bash "$repo/scripts/launcher/linux/install-browser.sh" 2>&1 || true)"
+  if printf '%s\n' "$out" | grep -q '^BROWSER_READY='; then
+    sentry_ok "Headless browser for QA agents (managed)"
+  else
+    local why="$(printf '%s\n' "$out" | sed -n 's/^BROWSER_FAILED=//p' | head -n 1)"
+    sentry_warn "Headless browser could not be prepared (${why:-unknown}). Agents run without a browser; browser checks stay inconclusive."
+  fi
+  return 0
+}

@@ -119,6 +119,8 @@ export interface AgentTelemetryCounts {
   readonly tests: number;
 }
 
+import type { SecretsLight } from './secrets-light.js';
+
 export interface AgentNodeView {
   readonly agentRunId: string;
   readonly agentStackId: string;
@@ -140,6 +142,8 @@ export interface AgentNodeView {
   readonly cachedInputTokens?: number | undefined;
   readonly totalTokens?: number | undefined;
   readonly severityCounts: Record<string, number>;
+  /** What this agent said about hard-coded secrets; absent when it did not report on that check. */
+  readonly secrets?: SecretsLight;
 }
 
 export interface TimelineItem {

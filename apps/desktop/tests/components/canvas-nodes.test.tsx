@@ -145,4 +145,35 @@ describe('canvas node components', () => {
     );
     expect(html).toContain('Waiting');
   });
+
+  it('shows the secrets light in the agent box only when the agent reported on it', () => {
+    const render = (secrets?: { state: 'found' | 'clear' | 'unclear' }) => {
+      const view = makeAgentNodeView({ status: 'completed', ...(secrets ? { secrets } : {}) });
+      return renderToStaticMarkup(
+        withFlow(
+          React.createElement(AgentCanvasNode, {
+            id: 'agent-x',
+            type: 'agentNode',
+            selected: false,
+            zIndex: 1,
+            isConnectable: false,
+            xPos: 0,
+            yPos: 0,
+            dragging: false,
+            data: {
+              label: view.displayName,
+              status: view.status,
+              kind: 'agent',
+              payload: { view, agentStackId: view.agentStackId },
+            },
+          } as never),
+        ),
+      );
+    };
+    expect(render()).not.toContain('secrets-light');
+    expect(render({ state: 'found' })).toContain('secrets-light found');
+    expect(render({ state: 'found' })).toContain('Secrets found');
+    expect(render({ state: 'clear' })).toContain('secrets-light clear');
+    expect(render({ state: 'unclear' })).toContain('secrets-light unclear');
+  });
 });

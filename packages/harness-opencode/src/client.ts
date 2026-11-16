@@ -1,6 +1,10 @@
 import type { AgentUsage } from '@qa/schemas';
 import { StringDecoder } from 'node:string_decoder';
-import { OpenCodeHarnessError, type OpenCodeHarnessErrorCode } from './errors.js';
+import {
+  OpenCodeHarnessError,
+  isProviderSafetyRefusal,
+  type OpenCodeHarnessErrorCode,
+} from './errors.js';
 import {
   DirectOpenCodeProcessLauncher,
   probeSystemdUser,
@@ -110,6 +114,25 @@ export function classifyOpenCodeTurnFailure(input: {
     return {
       code: 'OPENCODE_START_FAILED',
       message: 'OpenCode proxy rejected the request: ' + detail.slice(0, 300),
+      retryable: false,
+    };
+  }
+  // The provider's own safety filter declined the content: not an outage, a bad key or a limit, so
+  // a retry fails the same way and the generic "failed to start" wording would send the user to the
+  // wrong place. Keep the provider's own explanation, which can name its permissive-access program.
+  if (isProviderSafetyRefusal(detail)) {
+    const said = /"message":"([^"]{1,600})/.exec(detail)?.[1];
+    return {
+      code: 'OPENCODE_PROVIDER_REFUSED',
+      message:
+        'The model provider declined this request (' +
+        input.provider +
+        ' ' +
+        input.model +
+        '): its safety filter said the content was flagged for possible cybersecurity risk. ' +
+        'This is not an outage or a credential problem and retrying does not help. ' +
+        (said === undefined ? '' : 'The provider said: ' + said + ' ') +
+        'For authorized security testing, follow the provider’s instructions for permissive access, or run this project with another agent.',
       retryable: false,
     };
   }

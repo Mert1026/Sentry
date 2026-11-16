@@ -9,6 +9,7 @@ import {
   isRetestContext,
   retestItemsOf,
 } from './retest.js';
+import { SECRETS_CHECK_RULES, SECRETS_REPORT_GUIDANCE, isSecretsCheck } from './secrets-check.js';
 import {
   maxPlannedChecks,
   reportCheckAliases,
@@ -31,6 +32,15 @@ export const QA_SESSION_CONTRACT =
   'A finding needs a concrete incorrect product behavior, trigger, impact and grounded evidence. Seek counterexamples; zero findings is valid. ' +
   'Unavailable tools, missing Git history, denied sockets/systemd, platform restrictions and skipped tests are limitations, not product findings. ' +
   'Never invent outcomes, evidence keys or exit codes. Source inspection is not behavioral reproduction; source-only confidence is strong at most.';
+
+/**
+ * Sentry installs the project's dependencies into each agent's workspace before the run (a ready
+ * preparation). An agent that runs a plain install anyway makes the package manager delete and recreate
+ * node_modules, which in a measured run cost 135-145 s per agent and, once the tool timed out, left the
+ * workspace half rebuilt.
+ */
+export const NO_REINSTALL_RULE =
+  'Dependencies: a prepared workspace ALREADY has them (check with "ls node_modules"). Do NOT start with a full package-manager install (for example "pnpm install"): it deletes and recreates node_modules, takes minutes, and a tool timeout can leave the workspace unusable. Run or build only what you need, for example a scoped "pnpm --filter <package>... build". Install only after a command proves a specific dependency is missing.';
 
 /** Keeps severities comparable across agents: rate by what the defect does to the shipped product. */
 export const SEVERITY_CALIBRATION =
@@ -147,10 +157,13 @@ export function buildQaCheckInvestigationPrompt(
       description +
       '". Other checks get their own turns; do not work on them. Trace real callers and input validation; form a concrete hypothesis and seek a counterexample. Reproduce significant candidates through actual code with narrow tests when feasible. Copied logic or file reads do not prove reachable behavior.',
     ...(isRetestCheck(description) ? [RETEST_CHECK_RULES] : []),
+    ...(isSecretsCheck(description) ? [SECRETS_CHECK_RULES] : []),
     'Before concluding, attempt the hostile inputs that apply to this check, as synthetic fixtures inside the workspace (defensive tests of the owner’s own guards): malformed names and paths (backslashes, traversal, symlinks, empty entries), pre-existing or legacy state, lifecycle transitions (create, delete, forget, restart, retest), and encoded or quoted payloads. If a category cannot apply, note that in your closing instead of skipping it silently. A check whose repro failed during setup is blocked, not verified: simplify the repro (direct built-dist or compiled-source probe) and retry once before giving up. Proof-bearing runs must be single non-compound commands: write probes to a temp file INSIDE the workspace first (for example `.qa-tmp/probe.mjs`; never `/tmp`: the write tool and your shell see different `/tmp` directories, and writes outside the workspace are rejected), then run `node <file>` (or the one test command) as its own command — no `;`, `&&`, `||`, other pipes or redirects on a run this check will cite, or the host cannot certify it. A trailing `2>&1` is fine, and a trailing `| tail -N` or `| head -N` is fine only where the host runs commands under pipefail (otherwise it hides the real exit code).',
     'A failing run is signal, not noise. When a proof run exits non-zero, triage it before changing anything: read the actual assertion or error and decide whether it is a PRODUCT defect (report it as a finding candidate and reproduce it minimally) or a proven FIXTURE error (missing build, wrong import, wrong API shape — name the exact cause). Never loosen, delete or rewrite an assertion just to turn a run green; an assertion that disagrees with the code under test is a hypothesis to investigate, and behavior you call "by design" must be justified from the documented contract. Your tests must try to break the property, not restate that the guard exists. Prefer running the real code path over a stub of it. Re-running the same failing command three times fails the check turn.',
     REPRODUCED_VIOLATION_RULE,
     ...agentNetworkPromptLines(network),
+    // A prepared workspace already has its dependencies: a full install deletes and rebuilds node_modules.
+    NO_REINSTALL_RULE,
     'Missing tools: work down this order and stop at the first step that decides the check. (1) RUN IT: confirm an absent tool or dependency once with a single command; installs from the allowed package registries are permitted, so try ONE bootstrap of the missing tool or package manager from them (for example a pip or uv wheel from PyPI) and retry once, never in a loop. (2) REPLICA: if the real code still cannot run, run the same logic in a small stand-in with what exists (stdlib probes, mocks, or reading committed artifacts directly: a .docx or .xlsx is a zip of XML) and tag it [replica]; it shows the logic, not the real code path. (3) TRACE: only if nothing can run, walk the code by hand (input, each branch, the output you expect, where it would break) and tag it [traced]. Tag every item in your "Breaks attempted:" line as [executed], [replica] or [traced]. A replica or a trace never makes a check passed or a finding confirmed. Record the gap in your closing and in limitations.',
     'When this check is decided or concretely blocked, stop. End with 2-3 sentences: your conclusion for this check, the key operations that support it, and any remaining gap. Then one line starting "Breaks attempted:" listing each hostile input or transition you actually tried and its outcome. Then one last line starting "Leads:" naming, in a few words each separated by semicolons, anything suspicious you noticed OUTSIDE this check (an odd error, an unexpected result, code that looks wrong); write "Leads: none" if there is nothing. No final JSON report yet.',
     'Frozen plan: ' + JSON.stringify(plan),
@@ -385,6 +398,7 @@ export function buildQaReportPrompt(
     'STAGE 3 — REPORT ONLY. No tools, commands, reads or new QA. Serialize existing evidence into one compact raw JSON object, schemaVersion 2. No Markdown or commentary. Keep summary/details concise; do not replay the investigation. Environmental restrictions belong in limitations and inconclusive/not_run checks, not product findings.',
     reportCheckAliases(plan),
     DEPTH_COVERAGE_GUIDANCE,
+    ...(plan.plannedChecks.some(isSecretsCheck) ? [SECRETS_REPORT_GUIDANCE] : []),
     SEVERITY_CALIBRATION,
     'Items the investigator tagged [replica] or [traced] are not executed proof of the real code: they can support a suspected finding at strong confidence at most, never confirmed, and they cannot make a check passed. Say in the check details when a result rests on a replica or a trace.',
     'The ledger below is the ONLY authoritative source of operation keys and exit codes. null means unknown. Test evidence requires test:true. Never combine commands or invent outcomes. confirmed requires genuinely reproduced proof; strong requires grounded source or observed operations. code_reference supports strong at most; manual uses agent_reasoning only. Restrictions alone are limitations; report their mishandling only with a concrete product failure.',

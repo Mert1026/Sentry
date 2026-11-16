@@ -1496,6 +1496,15 @@ describe('DeepSeekHarnessAdapter', () => {
     expect(events).toContainEqual(
       expect.objectContaining({ type: 'warning', code: 'DEEPSEEK_REPORT_RETRY' }),
     );
+    // The investigation had finished, so its closing statements are kept as unverified activity.
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'agent.message',
+        message: expect.stringContaining(
+          'Investigation finished but the report could not be produced (DEEPSEEK_INVALID_RESULT)',
+        ),
+      }),
+    );
     // Exactly one investigation operation observed; the sneaky reporting
     // call never became one.
     expect(events.filter((e) => e.type === 'tool.started')).toHaveLength(1);

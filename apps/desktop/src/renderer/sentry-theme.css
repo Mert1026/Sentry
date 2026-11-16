@@ -1301,3 +1301,45 @@ details[open] > summary.disclosure::before {
 .cards.toolchain-cards {
   align-items: start;
 }
+
+/* Warning light for the "Secrets in code" check: red found, green clear, amber not fully checked. */
+.secrets-light {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.secrets-light i {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--text-muted, #8a8f8a);
+}
+.secrets-light.found i {
+  background: var(--danger, #a44442);
+  box-shadow: 0 0 6px var(--danger, #a44442);
+}
+.secrets-light.clear i {
+  background: var(--success, #3f7a3c);
+}
+.secrets-light.unclear i {
+  background: var(--warning, #8a6f2f);
+}
+.secrets-card {
+  border-left: 3px solid var(--text-muted, #8a8f8a);
+  padding: 6px 10px;
+}
+.secrets-card.found {
+  border-left-color: var(--danger, #a44442);
+}
+.secrets-card.clear {
+  border-left-color: var(--success, #3f7a3c);
+}
+.secrets-card.unclear {
+  border-left-color: var(--warning, #8a6f2f);
+}
+.secrets-card-state {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}

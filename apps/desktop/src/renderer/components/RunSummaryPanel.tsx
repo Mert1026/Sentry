@@ -2,6 +2,7 @@ import React from 'react';
 import {
   Activity,
   BookOpen,
+  KeyRound,
   CheckCircle2,
   Crosshair,
   Download,
@@ -48,6 +49,7 @@ export function RunSummaryPanel({
         executionSafeguards?: {
           webAccess?: boolean;
           toolDownloads?: boolean;
+          secretsCheck?: boolean;
           depth?: 'fast' | 'full';
           runTimeoutMs?: number;
         };
@@ -121,6 +123,9 @@ export function RunSummaryPanel({
             tone={downloadsOn ? 'on' : undefined}
             iconWhenNarrow
           />
+          {configuration?.executionSafeguards?.secretsCheck === false ? (
+            <Tile icon={KeyRound} label="Secrets check" value="Off" state="off" iconWhenNarrow />
+          ) : null}
           {profileUsage === undefined ? null : (
             <Tile
               icon={BookOpen}

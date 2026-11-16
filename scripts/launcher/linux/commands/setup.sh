@@ -154,6 +154,7 @@ cmd_setup() {
   local agents_out=""
   agents_out=$(sentry_provision_agents "$repo") || { printf '%s\n' "$agents_out"; return 1; }
   printf '%s\n' "$agents_out"
+  sentry_provision_browser "$repo"
   local oc_ready="$(printf '%s\n' "$agents_out" | sed -n 's/^AGENTS_OPENCODE=//p' | head -n 1)"
   local ds_ready="$(printf '%s\n' "$agents_out" | sed -n 's/^AGENTS_DEEPSEEK=//p' | head -n 1)"
   local cc_ready="$(printf '%s\n' "$agents_out" | sed -n 's/^AGENTS_CLAUDE=//p' | head -n 1)"

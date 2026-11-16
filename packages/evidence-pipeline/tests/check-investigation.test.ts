@@ -9,6 +9,7 @@ import {
   type CheckInvestigationHooks,
   type HazardFile,
   type InvestigationTurn,
+  SECRETS_CHECK_NAME,
 } from '../src/index.js';
 import type { ObservedOperation } from '../src/pipeline.js';
 
@@ -54,6 +55,7 @@ function harness(
     plan: { plannedChecks: ['Check A', 'Check B'] },
     depth: undefined,
     operations: ops,
+    network: { webAccess: false },
     contextBudget: new ContextBudget(200_000),
     event: eventOf,
     streamTurn: (text) =>
@@ -105,6 +107,21 @@ describe('investigateChecks', () => {
     expect(prompts.filter((p) => p.includes('EXECUTION REQUIRED'))).toHaveLength(2);
     expect(codes(events).filter((c) => c === 'QA_EXECUTION_NUDGE')).toHaveLength(2);
     expect(value.unprovenChecks).toEqual(['Check A', 'Check B']);
+  });
+
+  it('never nudges or marks unproven the read-only Secrets check, while other checks still are', async () => {
+    const { hooks, prompts } = harness(
+      (_text, ops) => {
+        addOp(ops, 'bash', "grep -rInE 'AKIA' . || true", 0);
+        return { text: 'Searched the tree, nothing found.' };
+      },
+      { plan: { plannedChecks: ['Check A', SECRETS_CHECK_NAME] } },
+    );
+    const { events, value } = await drain(investigateChecks(hooks));
+    // Check A ran only a grep, so it is nudged and unproven; the Secrets check is neither.
+    expect(prompts.filter((p) => p.includes('EXECUTION REQUIRED'))).toHaveLength(1);
+    expect(codes(events).filter((c) => c === 'QA_EXECUTION_NUDGE')).toHaveLength(1);
+    expect(value.unprovenChecks).toEqual(['Check A']);
   });
 
   it('does not nudge a turn whose executed probe failed', async () => {
@@ -374,8 +391,10 @@ describe('investigateChecks second pass', () => {
     undecided: string[];
     clockPerTurnMin: number;
     depth?: boolean;
+    profile?: 'fast' | 'full';
     leadsOnFirstPass?: boolean;
     hazards?: HazardFile[];
+    browserLauncher?: string;
   }) {
     const start = Date.now();
     const clock = { t: start };
@@ -383,7 +402,17 @@ describe('investigateChecks second pass', () => {
     const reportContexts: string[] = [];
     const { hooks } = harness(() => ({ text: 'unused' }), {
       plan: { plannedChecks: options.checks },
-      ...(options.depth === false ? {} : { depth: { deadlineAt: start + 172 * MIN } }),
+      ...(options.browserLauncher === undefined
+        ? {}
+        : { network: { webAccess: false, browserLauncher: options.browserLauncher } }),
+      ...(options.depth === false
+        ? {}
+        : {
+            depth: {
+              deadlineAt: start + 172 * MIN,
+              ...(options.profile === undefined ? {} : { profile: options.profile }),
+            },
+          }),
       now: () => clock.t,
       ...(options.hazards === undefined ? {} : { hazardFiles: async () => options.hazards! }),
       startReportContext: async (conclusions: string) => {
@@ -445,6 +474,29 @@ describe('investigateChecks second pass', () => {
     // the report is written from a fresh context carrying the updated statements
     expect(reportContexts.length).toBeGreaterThanOrEqual(1);
     expect(reportContexts[0]).toContain('second pass: Check B');
+  });
+
+  it('repeats the browser instructions in every follow-up pass, which starts a fresh session', async () => {
+    const launcher = '/home/u/.local/share/sentry/tools/browser/launch.mjs';
+    const withBrowser = scenario({
+      checks: ['Check A', 'Check B', 'Check C', 'Check D', 'Check E'],
+      undecided: ['Check B'],
+      clockPerTurnMin: 2,
+      browserLauncher: launcher,
+    });
+    await drain(investigateChecks(withBrowser.hooks));
+    const followUps = withBrowser.prompts.filter(
+      (p) => p.includes('SECOND PASS') || p.includes('DEEPENING PASS'),
+    );
+    expect(followUps.length).toBeGreaterThan(1);
+    for (const prompt of followUps) expect(prompt).toContain(JSON.stringify(launcher));
+    const without = scenario({
+      checks: ['Check A', 'Check B', 'Check C', 'Check D', 'Check E'],
+      undecided: ['Check B'],
+      clockPerTurnMin: 2,
+    });
+    await drain(investigateChecks(without.hooks));
+    expect(without.prompts.some((p) => p.includes('headless browser'))).toBe(false);
   });
 
   it('deepens the thinnest decided checks when most of the window is unused', async () => {
@@ -561,6 +613,37 @@ describe('investigateChecks second pass', () => {
     expect(normal).toContain('QA_DEEPEN_PASS');
     expect(normal).toContain('QA_HAZARD_SWEEP');
     expect(ordinary.prompts.length).toBeGreaterThan(3);
+  });
+
+  it('a Fast run stops after its checks: no deepening and no hazard sweep, where Full does both', async () => {
+    const situation = {
+      checks: ['Check A', 'Check B', 'Check C'],
+      undecided: [] as string[],
+      clockPerTurnMin: 2,
+      leadsOnFirstPass: true,
+      hazards: [{ file: 'packages/wipe/src/index.ts', hazards: ['deletes files'], score: 4 }],
+    };
+    const fast = scenario({ ...situation, profile: 'fast' });
+    const fastCodes = codes((await drain(investigateChecks(fast.hooks))).events);
+    for (const code of ['QA_DEEPEN_PASS', 'QA_HAZARD_SWEEP', 'QA_HAZARD_SWEEP_TURN'])
+      expect(fastCodes).not.toContain(code);
+    expect(fast.prompts).toHaveLength(3);
+    // The same situation as a Full run does both extras.
+    const full = scenario({ ...situation, profile: 'full' });
+    const fullCodes = codes((await drain(investigateChecks(full.hooks))).events);
+    expect(fullCodes).toContain('QA_DEEPEN_PASS');
+    expect(fullCodes).toContain('QA_HAZARD_SWEEP');
+  });
+
+  it('a Fast run still gives an undecided check its second pass', async () => {
+    const fast = scenario({
+      checks: ['Check A', 'Check B'],
+      undecided: ['Check B'],
+      clockPerTurnMin: 2,
+      profile: 'fast',
+    });
+    const { events } = await drain(investigateChecks(fast.hooks));
+    expect(codes(events)).toContain('QA_SECOND_PASS');
   });
 
   it('still gives an undecided retest check its second pass', async () => {

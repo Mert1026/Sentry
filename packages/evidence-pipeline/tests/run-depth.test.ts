@@ -26,10 +26,10 @@ describe('run depth profile', () => {
     expect(depthPolicy({})).toBeUndefined();
   });
 
-  it('a fast run plans at most 3 checks, whatever the window', () => {
-    expect(FAST_MAX_PLANNED_CHECKS).toBe(3);
+  it('a fast run plans at most 2 checks, whatever the window', () => {
+    expect(FAST_MAX_PLANNED_CHECKS).toBe(2);
     for (const hours of [3, 6, 24, 168])
-      expect(maxPlannedChecks(context(hours * HOUR, 'fast'), now)).toBe(3);
+      expect(maxPlannedChecks(context(hours * HOUR, 'fast'), now)).toBe(2);
   });
 
   it('a full run plans as many as the window allows, up to 8', () => {
