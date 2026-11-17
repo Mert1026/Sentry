@@ -133,10 +133,13 @@ describe('sandbox notes in the investigation prompt', () => {
   });
 
   it('explains Claude Code placeholders as non-files that are not to be reported', () => {
-    expect(CLAUDE_SANDBOX_PLACEHOLDER_NOTE).toContain('character device');
+    expect(CLAUDE_SANDBOX_PLACEHOLDER_NOTE).toContain('character devices');
     expect(CLAUDE_SANDBOX_PLACEHOLDER_NOTE).toContain('.mcp.json');
     expect(CLAUDE_SANDBOX_PLACEHOLDER_NOTE).toContain('secrets-check gaps');
+    // Both kinds the sandbox leaves: character devices and zero-byte stand-ins.
+    expect(CLAUDE_SANDBOX_PLACEHOLDER_NOTE).toContain('zero-byte regular files');
+    expect(CLAUDE_SANDBOX_PLACEHOLDER_NOTE).toContain('pnpm-lock.yaml');
     // A real file with the same name is still read normally.
-    expect(CLAUDE_SANDBOX_PLACEHOLDER_NOTE).toContain('treat it normally');
+    expect(CLAUDE_SANDBOX_PLACEHOLDER_NOTE).toContain('read it normally');
   });
 });
