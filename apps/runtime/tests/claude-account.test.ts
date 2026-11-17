@@ -6,7 +6,9 @@ import {
   ClaudeAccount,
   cleanTerminalText,
   findLoginUrl,
+  findLoginError,
   findToken,
+  terminalCommand,
 } from '../src/claude-account.js';
 
 const TOKEN = 'sk-ant-oat01-' + 'AbCdEfGhIj0123456789_-'.repeat(4) + 'Zz';
@@ -26,12 +28,13 @@ process.stdout.write('Paste code here if prompted > ');
 let input = '';
 process.stdin.on('data', (chunk) => {
   input += chunk.toString();
-  if (!input.includes('\\n')) return;
-  const code = input.split('\\n')[0].trim();
+  if (!/[\\r\\n]/.test(input)) return;
+  const code = input.split(/[\\r\\n]/)[0].trim();
   if (code !== 'good-code#state') {
     console.log('');
-    console.log('Invalid authorization code');
-    process.exit(1);
+    console.log('OAuth error: Request failed with status code 400Press Enter to retry.');
+    input = '';
+    return;
   }
   const token = process.env.FAKE_TOKEN;
   console.log('');
@@ -53,6 +56,7 @@ async function makeAccount(env: Record<string, string> = {}): Promise<ClaudeAcco
     dataRoot: dir,
     executable: () => process.execPath,
     argsPrefix: [script],
+    useTerminal: false,
     urlTimeoutMs: 4000,
     codeTimeoutMs: 6000,
   });
@@ -111,7 +115,28 @@ Paste code here > `),
   });
 
   it('finds no token in a refusal', () => {
-    expect(findToken('Invalid authorization code')).toBeUndefined();
+    expect(findToken('OAuth error: Request failed with status code 400')).toBeUndefined();
+  });
+});
+
+describe('running the sign-in in a terminal', () => {
+  it('wraps the program in a wide pseudo-terminal and quotes every argument', () => {
+    const { command, args } = terminalCommand(["/opt/it's/claude", 'setup-token']);
+    expect(command).toBe('script');
+    expect(args[0]).toBe('-qec');
+    expect(args[2]).toBe('/dev/null');
+    expect(args[1]).toContain('stty cols 1000');
+    // A quote inside a name is closed, escaped with a backslash, and reopened.
+    expect(args[1]).toContain(
+      "exec '/opt/it'" + String.fromCharCode(92) + "''s/claude' 'setup-token'",
+    );
+  });
+
+  it('reads the refusal Claude Code prints, without its retry prompt', () => {
+    expect(
+      findLoginError('x OAuth error: Request failed with status code 400Press Enter to retry.'),
+    ).toBe('OAuth error: Request failed with status code 400');
+    expect(findLoginError('Paste code here if prompted >')).toBeUndefined();
   });
 });
 
@@ -141,11 +166,13 @@ describe('Claude account sign-in', () => {
   it('keeps nothing and says why when the code is wrong', async () => {
     const a = await makeAccount();
     await a.startLogin();
-    await expect(a.submitCode('wrong#code')).rejects.toThrow(/Invalid authorization code/);
+    await expect(a.submitCode('wrong#code')).rejects.toThrow(
+      /OAuth error: Request failed with status code 400/,
+    );
     expect(await a.signedIn()).toBe(false);
     const status = await a.status();
     expect(status.login).toBe('failed');
-    expect(status.error).toContain('Invalid authorization code');
+    expect(status.error).toBe('OAuth error: Request failed with status code 400');
   });
 
   it('refuses a code when no sign-in is waiting, and a code with spaces', async () => {

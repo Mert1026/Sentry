@@ -29,6 +29,11 @@ export interface ClaudeAccountOptions {
   readonly executable: () => string;
   /** Test seam: arguments placed before `setup-token` (a stand-in script run by node). */
   readonly argsPrefix?: readonly string[];
+  /**
+   * Run the program in a pseudo-terminal (the default). Claude Code's sign-in only reads the pasted
+   * code from a terminal; a test with a stand-in script turns this off.
+   */
+  readonly useTerminal?: boolean;
   /** Test seam: extra environment for the stand-in script. */
   readonly extraEnv?: Readonly<Record<string, string>>;
   readonly urlTimeoutMs?: number;
@@ -54,6 +59,30 @@ const WRAP_WIDTH = 200;
 const MIN_TOKEN_LENGTH = 60;
 const HYPERLINK = new RegExp(`${ESC}\\]8;[^;]*;([^${BEL}${ESC}]+)(?:${BEL}|${ESC}\\\\)`);
 const URL_CHARS = /^[A-Za-z0-9_%.~:/?#@!$&'()*+,;=-]+$/;
+
+const shellQuote = (text: string): string => `'${text.replace(/'/g, `'\\''`)}'`;
+
+/**
+ * The program wrapped so it runs in a pseudo-terminal: util-linux `script` provides one, sized wide
+ * so a long link or token is not wrapped. Its own output is not kept (/dev/null).
+ */
+export function terminalCommand(program: readonly string[]): {
+  readonly command: string;
+  readonly args: string[];
+} {
+  const line = `stty cols 1000 rows 50; exec ${program.map(shellQuote).join(' ')}`;
+  return { command: 'script', args: ['-qec', line, '/dev/null'] };
+}
+
+/** Claude Code's refusal of a pasted code ("OAuth error: ..."), without its "Press Enter" prompt. */
+export function findLoginError(raw: string): string | undefined {
+  const found = /OAuth error:[^\n]*/.exec(cleanTerminalText(raw));
+  if (found === null) return undefined;
+  return found[0]
+    .replace(/Press Enter.*$/, '')
+    .trim()
+    .slice(0, 200);
+}
 
 export function cleanTerminalText(raw: string): string {
   return raw.replace(OSC, '').replace(CSI, '').replace(/\r/g, '');
@@ -173,22 +202,23 @@ export class ClaudeAccount {
     this.error = undefined;
     // Only what the program needs: no provider credentials from the runtime's environment, and a
     // throwaway config folder so nothing is read from or written to anyone's real Claude config.
-    const child = spawn(
-      this.options.executable(),
-      [...(this.options.argsPrefix ?? []), 'setup-token'],
-      {
-        env: {
-          PATH: process.env['PATH'] ?? '/usr/local/bin:/usr/bin:/bin',
-          HOME: this.configDir,
-          CLAUDE_CONFIG_DIR: this.configDir,
-          TERM: 'dumb',
-          NO_COLOR: '1',
-          BROWSER: 'none',
-          ...(this.options.extraEnv ?? {}),
-        },
-        stdio: ['pipe', 'pipe', 'pipe'],
+    const launch = this.options.useTerminal === false ? undefined : terminalCommand;
+    const program = [this.options.executable(), ...(this.options.argsPrefix ?? []), 'setup-token'];
+    const command =
+      launch === undefined
+        ? { command: program[0] ?? '', args: program.slice(1) }
+        : launch(program);
+    const child = spawn(command.command, command.args, {
+      env: {
+        PATH: process.env['PATH'] ?? '/usr/local/bin:/usr/bin:/bin',
+        HOME: this.configDir,
+        CLAUDE_CONFIG_DIR: this.configDir,
+        TERM: 'xterm-256color',
+        BROWSER: 'none',
+        ...(this.options.extraEnv ?? {}),
       },
-    );
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
     this.child = child;
     const take = (chunk: Buffer): void => {
       this.output += chunk.toString();
@@ -198,7 +228,14 @@ export class ClaudeAccount {
     child.stderr?.on('data', take);
     // Stdin errors (the program exited first) must not crash the runtime.
     child.stdin?.on('error', () => undefined);
-    child.on('error', (cause) => this.fail(child, cause.message));
+    child.on('error', (cause) =>
+      this.fail(
+        child,
+        (cause as NodeJS.ErrnoException).code === 'ENOENT'
+          ? 'The sign-in needs the `script` tool (util-linux) in the Linux runtime.'
+          : cause.message,
+      ),
+    );
     child.on('close', () => {
       if (this.child !== child) return;
       this.child = undefined;
@@ -242,18 +279,23 @@ export class ClaudeAccount {
         if (token !== undefined) {
           clearInterval(poll);
           resolve(token);
-        } else if (this.child !== child) clearInterval(poll);
-      }, 400);
+        } else if (findLoginError(this.output) !== undefined || this.child !== child) {
+          // Claude Code refused the code (it then waits for Enter to retry), or it ended.
+          clearInterval(poll);
+          resolve(undefined);
+        }
+      }, 300);
       setTimeout(() => {
         clearInterval(poll);
         resolve(undefined);
       }, this.codeTimeoutMs);
     });
-    child.stdin?.write(clean + '\n');
+    // Enter in a terminal is a carriage return.
+    child.stdin?.write(clean + '\r');
     const token = await result;
     this.waiter = undefined;
     if (token === undefined) {
-      const reason = lastUsefulLine(this.output);
+      const reason = findLoginError(this.output) ?? lastUsefulLine(this.output);
       this.fail(child, reason ?? 'The code was not accepted. Start the sign-in again.');
       throw new Error(this.error);
     }
