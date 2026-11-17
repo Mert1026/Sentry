@@ -574,6 +574,16 @@ export async function executeFrontendCommand(
                 .filter((value) => value.length > 0),
             }),
         ...(input.instructions === undefined ? {} : { instructions: input.instructions }),
+        ...(input.agentNotes === undefined
+          ? {}
+          : {
+              agentInstructions: Object.fromEntries(
+                Object.entries(input.agentNotes).map(([name, note]) => [
+                  stackIdForAgent(name),
+                  note,
+                ]),
+              ),
+            }),
         // A retest that leaves the agents to the findings sends none.
         ...(input.agents.length === 0
           ? {}

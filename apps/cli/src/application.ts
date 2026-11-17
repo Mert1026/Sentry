@@ -332,6 +332,16 @@ export async function executeCommand(
               }
             : {}),
           ...(input.instructions === undefined ? {} : { instructions: input.instructions }),
+          ...(input.agentNotes === undefined
+            ? {}
+            : {
+                agentInstructions: Object.fromEntries(
+                  Object.entries(input.agentNotes).map(([name, note]) => [
+                    'stack_' + name + '_main',
+                    note,
+                  ]),
+                ),
+              }),
           ...(input.runTimeoutMs === undefined ? {} : { runTimeoutMs: input.runTimeoutMs }),
           ...(input.webAccess === true ? { webAccess: true } : {}),
         });

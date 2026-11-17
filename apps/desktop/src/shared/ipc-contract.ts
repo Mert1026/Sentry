@@ -309,6 +309,8 @@ export interface SentryDesktopApi {
         mode: 'full' | 'targeted';
         includePaths?: string[];
         instructions?: string;
+        /** A note for single agents, by agent stack id (the agent gets the shared note first). */
+        agentInstructions?: Record<string, string>;
         agentStackIds?: string[];
         revisionId?: string;
         webAccess?: boolean;
@@ -332,6 +334,8 @@ export interface SentryDesktopApi {
         mode: 'full' | 'targeted';
         includePaths?: string[];
         instructions?: string;
+        /** A note for single agents, by agent stack id (the agent gets the shared note first). */
+        agentInstructions?: Record<string, string>;
         agentStackIds?: string[];
         revisionId?: string;
         webAccess?: boolean;

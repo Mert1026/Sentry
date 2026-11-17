@@ -54,6 +54,9 @@ export const DesktopChannelSchemas: Record<string, z.ZodTypeAny> = {
         .optional(),
       includePaths: z.array(z.string().min(1).max(500)).max(100).optional(),
       instructions: z.string().min(1).max(5000).optional(),
+      agentInstructions: z
+        .record(z.string().min(1).max(200), z.string().min(1).max(5000))
+        .optional(),
       agentStackIds: z.array(z.string().min(1).max(200)).min(1).max(10).optional(),
       runTimeoutMs: z.number().int().min(RUN_TIMEOUT_MS_MIN).max(RUN_TIMEOUT_MS_MAX).optional(),
       webAccess: z.boolean().optional(),
@@ -90,6 +93,9 @@ export const DesktopChannelSchemas: Record<string, z.ZodTypeAny> = {
         .optional(),
       includePaths: z.array(z.string().min(1).max(500)).max(100).optional(),
       instructions: z.string().min(1).max(5000).optional(),
+      agentInstructions: z
+        .record(z.string().min(1).max(200), z.string().min(1).max(5000))
+        .optional(),
       agentStackIds: z.array(z.string().min(1).max(200)).min(1).max(10).optional(),
       runTimeoutMs: z.number().int().min(RUN_TIMEOUT_MS_MIN).max(RUN_TIMEOUT_MS_MAX).optional(),
       webAccess: z.boolean().optional(),
@@ -369,6 +375,7 @@ export async function dispatchDesktopCommand(
         mode: parsed['mode'],
         includePaths: parsed['includePaths'],
         instructions: parsed['instructions'],
+        agentInstructions: parsed['agentInstructions'],
         agentStackIds: parsed['agentStackIds'],
         runTimeoutMs: parsed['runTimeoutMs'],
         webAccess: parsed['webAccess'],

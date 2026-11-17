@@ -110,7 +110,7 @@ function helpText(): string {
     '  qa settings effort <opencode|deepseek|glm|chatgpt> <level|default> [--json]',
     '  qa settings run-limit <default|3h|6h|none|90m|12h> [--json]',
     '  qa run simulate <project-id> [--scenario success|partial|all-fail|transport-loss|timeout|protocol-error] [--json]',
-    '  qa run start <project-id> --mode full --agents opencode,deepseek,glm [--wait] [--instructions <text>] [--timeout-ms <ms>] [--web] [--json]',
+    '  qa run start <project-id> --mode full --agents opencode,deepseek,glm [--wait] [--instructions <text>] [--agent-note <agent>=<text>] [--timeout-ms <ms>] [--web] [--json]',
     '  qa run start <project-id> --mode targeted --paths src/auth,src/middleware [--wait] [--instructions <text>] [--json]',
     '  qa run start <project-id> --retest <run-id>:<finding-id>,... [--retest-with reporter|all] [--agents ...] [--wait] [--json]   re-test earlier findings on the current revision',
     '  qa run start ... [--depth fast|full] [--profile] [--tools] [--revision <rev-id>]   --profile hands agents their project notes; --tools allows toolchain downloads',

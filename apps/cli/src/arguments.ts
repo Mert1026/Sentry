@@ -59,6 +59,8 @@ export type ParsedCliCommand =
       readonly agents: readonly AgentName[];
       readonly wait: boolean;
       readonly instructions?: string;
+      /** A note for single agents (`--agent-note opencode=text`); the agent also gets `instructions`. */
+      readonly agentNotes?: Readonly<Partial<Record<AgentName, string>>>;
       readonly runTimeoutMs?: number;
       readonly webAccess?: boolean;
       readonly paths?: string;
@@ -303,6 +305,7 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
       '--wait',
       '--no-wait',
       '--instructions',
+      '--agent-note',
       '--timeout-ms',
       '--paths',
       '--web',
@@ -317,7 +320,7 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
     const [projectId] = positional(tail);
     if (projectId === undefined || positional(tail).length !== 1) {
       fail(
-        'Usage: qa run start <project-id> --mode full|targeted [--agents opencode,deepseek,glm,chatgpt] --wait [--paths a,b] [--instructions text] | --retest <run-id>:<finding-id>,...',
+        'Usage: qa run start <project-id> --mode full|targeted [--agents opencode,deepseek,glm,chatgpt] --wait [--paths a,b] [--instructions text] [--agent-note <agent>=<text>] | --retest <run-id>:<finding-id>,...',
       );
     }
     const retestText = option(tail, '--retest');
@@ -352,8 +355,12 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
       if (new Set(findings.map((f) => f.runId + ':' + f.findingId)).size !== findings.length)
         fail('--retest lists a duplicate finding', '--retest');
       retest = { findings, who: retestWith === 'all' ? 'all' : 'reporter' };
-      if (option(tail, '--instructions') !== undefined || option(tail, '--paths') !== undefined)
-        fail('--retest takes no --instructions or --paths', '--retest');
+      if (
+        option(tail, '--instructions') !== undefined ||
+        option(tail, '--paths') !== undefined ||
+        tail.includes('--agent-note')
+      )
+        fail('--retest takes no --instructions, --agent-note or --paths', '--retest');
     }
     // Omitted --agents selects the stable real AgentStacks. A retest with the default
     // "reporter" choice leaves the agents to the findings (each goes to the agent that reported it).
@@ -393,6 +400,28 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
       fail('--wait and --no-wait are mutually exclusive', '--wait');
     const wait = tail.includes('--wait');
     const instructions = option(tail, '--instructions');
+    const agentNotes: Partial<Record<AgentName, string>> = {};
+    tail.forEach((value, index) => {
+      if (value !== '--agent-note') return;
+      const text = tail[index + 1];
+      if (text === undefined || text.startsWith('--'))
+        fail('--agent-note requires <agent>=<note>', '--agent-note');
+      const equals = text.indexOf('=');
+      const name = equals < 0 ? '' : text.slice(0, equals);
+      const note = equals < 0 ? '' : text.slice(equals + 1).trim();
+      if (!isAgentName(name) || note.length === 0)
+        fail(
+          '--agent-note looks like <agent>=<note>, with an agent of opencode, deepseek, glm or chatgpt',
+          '--agent-note',
+        );
+      if (!agents.includes(name))
+        fail('--agent-note names ' + name + ', which is not in --agents', '--agent-note');
+      if (agentNotes[name] !== undefined)
+        fail('--agent-note names ' + name + ' twice', '--agent-note');
+      if (note.length > 5000)
+        fail('--agent-note takes at most 5000 characters per agent', '--agent-note');
+      agentNotes[name] = note;
+    });
     const timeoutText = option(tail, '--timeout-ms');
     const runTimeoutMs = timeoutText === undefined ? undefined : Number(timeoutText);
     if (
@@ -423,6 +452,7 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
       agents,
       wait,
       ...(instructions === undefined ? {} : { instructions }),
+      ...(Object.keys(agentNotes).length === 0 ? {} : { agentNotes }),
       ...(runTimeoutMs === undefined ? {} : { runTimeoutMs }),
       ...(tail.includes('--web') ? { webAccess: true } : {}),
       ...(tail.includes('--tools') ? { toolDownloads: true } : {}),

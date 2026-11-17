@@ -87,6 +87,28 @@ async function harness() {
 }
 
 describe('desktop RPC adapter', () => {
+  it('forwards the notes for all agents and for single agents to the runtime', async () => {
+    const h = await harness();
+    const id = 'proj_01K7777777777777777777A8W1';
+    await h.service.startRun(id, {
+      mode: 'full',
+      instructions: 'Focus on login.',
+      agentInstructions: { stack_opencode_main: 'Check the parser.' },
+    });
+    const call = h.seen.filter((c) => c.method === 'runs.start').at(-1);
+    expect(call?.params).toMatchObject({
+      instructions: 'Focus on login.',
+      agentInstructions: { stack_opencode_main: 'Check the parser.' },
+    });
+    await h.service.startRun(id, { mode: 'full' });
+    const plain = h.seen.filter((c) => c.method === 'runs.start').at(-1);
+    expect(plain?.params).not.toHaveProperty('agentInstructions');
+    expect(plain?.params).not.toHaveProperty('instructions');
+    await expect(
+      h.service.startRun(id, { mode: 'full', agentInstructions: { stack_opencode_main: '' } }),
+    ).rejects.toThrow();
+  });
+
   it('forwards startRun without a simulation executionKind', async () => {
     const h = await harness();
     const operation = await h.service.startRun('proj_01K7777777777777777777A8W1', { mode: 'full' });

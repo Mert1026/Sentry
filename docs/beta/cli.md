@@ -135,6 +135,12 @@ default run time limit with `isDefault`.
 
 ### Secrets check
 
+`run start ... --instructions "text"` sends one note to every agent, as the **Notes for the agents** box
+does in the app; `--agent-note opencode="text"` (repeatable, one per agent that is in `--agents`) gives a
+single agent a note of its own on top of it, and an agent never sees another agent's note. Up to 5000
+characters each. The notes are saved with the run and appear in findings exports as "User description /
+note". A re-test run takes none.
+
 `run start ... --no-secrets` turns off each agent's "Secrets in code" check for that run: no search
 is made, no secrets light is shown, and the run records `secretsCheck: false` in its safeguards.
 Left out, every ordinary production run includes the check (it adds about a minute or two per

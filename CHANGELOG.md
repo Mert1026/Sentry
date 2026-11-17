@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+- Notes for the agents. Before a run, **Run QA** now has a **Notes for the agents** box: what to focus on,
+  known problems, things to leave alone. One note goes to every agent, or a switch gives each selected
+  agent a note of its own (an agent only ever sees its own). The agents treat it as your instruction but
+  still have to prove every finding, and a note cannot switch off the safety rules, the network limits or
+  the secrets check. A new run always starts with empty notes. The notes are saved with the run, shown in
+  the run summary and on each agent's page as **User description / note**, and included in findings
+  exports under the same heading (Markdown, JSON and plain text). Re-test runs take no notes. Behind the
+  box, the run API gained `agentInstructions` (a note per agent); `sentry cli run start --instructions`
+  keeps sending one note to everyone.
 - Export in **Findings by revision** now works, and saves one .md, .json or .txt file. Pressing Export
   failed with `Unknown runtime method: projects.exportFindings`: the runtime only accepts methods on
   its allowed list, and this one was never added to it, so the export (and `sentry cli project

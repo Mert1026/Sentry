@@ -6,6 +6,7 @@ import { ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { RunCanvas } from '../components/RunCanvas.js';
 import { AgentInspector } from '../components/AgentInspector.js';
 import { RunSummaryPanel } from '../components/RunSummaryPanel.js';
+import { notesForAgent } from '../lib/run-notes.js';
 import { CopyId } from '../components/CopyId.js';
 import { StatusPill } from '../components/ui/StatusPill.js';
 import { ToastStack, type ToastItem } from '../components/ui/Toast.js';
@@ -152,6 +153,7 @@ export function RunWorkspace(): React.JSX.Element {
           completedAt?: string | null;
           configuration?: {
             agentStackIds?: string[];
+            userNotes?: { shared?: string; agents?: Record<string, string> };
             retest?: {
               items: Array<{
                 n: number;
@@ -572,6 +574,11 @@ export function RunWorkspace(): React.JSX.Element {
                       ),
                       evidence: data.evidence.filter(
                         (e) => e.agentRunId === selectedAgent.agentRunId,
+                      ),
+                      userNote: notesForAgent(
+                        data.run.configuration?.userNotes,
+                        data.agentRuns.find((a) => a.id === selectedAgent.agentRunId)
+                          ?.agentStackId ?? '',
                       ),
                       ...(data.run.configuration?.retest === undefined
                         ? {}

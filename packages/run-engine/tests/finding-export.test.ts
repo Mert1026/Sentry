@@ -277,6 +277,95 @@ describe('Plain text report', () => {
   });
 });
 
+describe('User description / note in exports', () => {
+  // A quote and a real backslash: JSON has to escape both and give them back unchanged.
+  const TRICKY_NOTE = 'Say "hi" ' + String.fromCharCode(92) + ' there';
+  const AT = '2026-11-17T08:00:00.000Z';
+  const noted = (
+    n: number,
+    notes: Record<string, unknown> | undefined,
+    agent = 'stack_opencode_main',
+  ) =>
+    ({
+      ...finding({ n, sourceAgentStackId: agent } as never),
+      ...(notes === undefined ? {} : { userNotes: { createdAt: AT, ...notes } }),
+    }) as ExportedFinding;
+
+  it('puts what the user wrote once per run in the Markdown report, before the contents', () => {
+    const text = build('markdown', [
+      noted(1, { shared: 'Focus on login.', agents: { stack_opencode_main: 'Check the parser.' } }),
+      noted(2, { shared: 'Focus on login.', agents: { stack_opencode_main: 'Check the parser.' } }),
+    ]).files[0]!.content;
+    expect(text).toContain('## User description / note');
+    expect(text.indexOf('## User description / note')).toBeLessThan(text.indexOf('## Contents'));
+    expect(text.split('Focus on login.').length - 1).toBe(1);
+    expect(text).toContain('**For all agents**' + LF + LF + '> Focus on login.');
+    expect(text).toContain('**For `stack_opencode_main`**' + LF + LF + '> Check the parser.');
+  });
+
+  it('shows an agent’s own note only when that agent has a finding in the export', () => {
+    const text = build('markdown', [
+      noted(1, {
+        shared: 'Shared.',
+        agents: { stack_opencode_main: 'For OpenCode.', stack_deepseek_main: 'For DeepSeek.' },
+      }),
+    ]).files[0]!.content;
+    expect(text).toContain('For OpenCode.');
+    expect(text).not.toContain('For DeepSeek.');
+  });
+
+  it('is left out when nobody wrote a note', () => {
+    for (const format of ['markdown', 'text'] as const) {
+      const out = build(format, [noted(1, undefined)]).files[0]!.content;
+      expect(out.toLowerCase()).not.toContain('user description');
+    }
+    const document = JSON.parse(build('json', [noted(1, undefined)]).files[0]!.content) as {
+      userNotes: unknown[];
+    };
+    expect(document.userNotes).toEqual([]);
+  });
+
+  it('cannot add headings or sections to the report, because the note is quoted', () => {
+    const text = build('markdown', [
+      noted(1, { shared: 'Line one' + LF + '# Fake heading' + LF + '| a | b |' }),
+    ]).files[0]!.content;
+    expect(text).toContain('> Line one' + LF + '> # Fake heading' + LF + '> | a | b |');
+    expect(text.split(LF).filter((line) => line.startsWith('# '))).toEqual([
+      '# Sentry findings report',
+    ]);
+  });
+
+  it('appears in the plain text report, indented', () => {
+    const text = build('text', [
+      noted(1, { shared: 'Focus on login.', agents: { stack_opencode_main: 'Check the parser.' } }),
+    ]).files[0]!.content;
+    expect(text).toContain('USER DESCRIPTION / NOTE');
+    expect(text).toContain('Run run_00000000000000000000000001:');
+    expect(text).toContain('  For all agents:' + LF + '    Focus on login.');
+    expect(text).toContain('  For stack_opencode_main:' + LF + '    Check the parser.');
+  });
+
+  it('is a userNotes list in the JSON document, exactly as typed', () => {
+    const document = JSON.parse(
+      build('json', [noted(1, { shared: TRICKY_NOTE, agents: { stack_opencode_main: 'Own.' } })])
+        .files[0]!.content,
+    ) as {
+      userNotes: Array<{
+        runId: string;
+        forAllAgents: string | null;
+        forAgents: Record<string, string>;
+      }>;
+    };
+    expect(document.userNotes).toEqual([
+      {
+        runId: 'run_00000000000000000000000001',
+        forAllAgents: TRICKY_NOTE,
+        forAgents: { stack_opencode_main: 'Own.' },
+      },
+    ]);
+  });
+});
+
 describe('choosing findings from the stored records', () => {
   async function fixture() {
     const root = await mkdtemp(join(tmpdir(), 'sentry-finding-export-'));

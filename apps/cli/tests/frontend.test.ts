@@ -771,6 +771,71 @@ describe('cli frontend over the desktop broker', () => {
     }
   });
 
+  it('reads one note for everyone and notes for single agents, and refuses unclear ones', () => {
+    const base = ['run', 'start', PROJECT_ID, '--mode', 'full', '--agents', 'opencode,deepseek'];
+    expect(
+      parseCommand([
+        ...base,
+        '--instructions',
+        'Focus on login.',
+        '--agent-note',
+        'opencode=Check the parser.',
+        '--agent-note',
+        'deepseek=Look at the cache = fast path',
+      ]),
+    ).toMatchObject({
+      command: 'run.start',
+      instructions: 'Focus on login.',
+      agentNotes: {
+        opencode: 'Check the parser.',
+        deepseek: 'Look at the cache = fast path',
+      },
+    });
+    expect(parseCommand(base)).not.toHaveProperty('agentNotes');
+    expect(() => parseCommand([...base, '--agent-note', 'nonsense'])).toThrow(/<agent>=<note>/);
+    expect(() => parseCommand([...base, '--agent-note', 'opencode='])).toThrow(/<agent>=<note>/);
+    expect(() => parseCommand([...base, '--agent-note', 'gpt=hi'])).toThrow(/<agent>=<note>/);
+    expect(() => parseCommand([...base, '--agent-note', 'glm=hi'])).toThrow(/not in --agents/);
+    expect(() =>
+      parseCommand([...base, '--agent-note', 'opencode=a', '--agent-note', 'opencode=b']),
+    ).toThrow(/twice/);
+    expect(() => parseCommand([...base, '--agent-note', 'opencode=' + 'x'.repeat(5001)])).toThrow(
+      /at most 5000/,
+    );
+    expect(() => parseCommand([...base, '--agent-note'])).toThrow(/requires/);
+  });
+
+  it('sends the notes to Desktop under the agents’ stack ids', async () => {
+    const broker = await startFakeBroker((command) => {
+      if (command === 'runs:start') return { operationId: 'dop_test', runId: RUN_ID };
+      throw new Error('unexpected ' + command);
+    });
+    try {
+      await executeFrontendCommand(
+        parseCommand([
+          'run',
+          'start',
+          PROJECT_ID,
+          '--mode',
+          'full',
+          '--agents',
+          'opencode,deepseek',
+          '--instructions',
+          'Focus on login.',
+          '--agent-note',
+          'deepseek=Only for DeepSeek',
+        ]),
+        { createClient: () => clientFor(broker) },
+      );
+      expect(broker.seen.find((call) => call.command === 'runs:start')?.payload).toMatchObject({
+        instructions: 'Focus on login.',
+        agentInstructions: { stack_deepseek_main: 'Only for DeepSeek' },
+      });
+    } finally {
+      await broker.close();
+    }
+  });
+
   it('rejects malformed re-test and agent arguments', () => {
     expect(() => parseCommand(['run', 'start', PROJECT_ID, '--retest', 'nonsense'])).toThrow(
       /<run-id>:<finding-id>/,
@@ -783,7 +848,7 @@ describe('cli frontend over the desktop broker', () => {
     ).toThrow(/Unknown agent/);
     expect(() =>
       parseCommand(['run', 'start', PROJECT_ID, '--retest', 'a:b', '--paths', 'src']),
-    ).toThrow(/no --instructions or --paths/);
+    ).toThrow(/no --instructions, --agent-note or --paths/);
     expect(parseCommand(['agent', 'doctor', 'chatgpt'])).toEqual({
       command: 'agent.doctor',
       agent: 'chatgpt',

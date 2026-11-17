@@ -29,7 +29,10 @@ export interface RunLike {
   readonly createdAt: string;
   readonly startedAt?: string;
   readonly completedAt?: string | null;
-  readonly configuration?: { agentStackIds?: string[] };
+  readonly configuration?: {
+    agentStackIds?: string[];
+    userNotes?: { shared?: string; agents?: Record<string, string> };
+  };
 }
 
 export interface FindingLike {
