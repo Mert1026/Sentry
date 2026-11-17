@@ -27,7 +27,13 @@ console.log(ESC + ']8;id=1;' + url + ESC + '\\\\' + url + ESC + ']8;;' + ESC + '
 process.stdout.write('Paste code here if prompted > ');
 let input = '';
 process.stdin.on('data', (chunk) => {
-  input += chunk.toString();
+  const text = chunk.toString();
+  // Like Claude Code: a Enter that arrives in the same write as the code is part of the paste.
+  if (text.length > 1 && /[\\r\\n]/.test(text)) {
+    input += text.replace(/[\\r\\n]/g, '');
+    return;
+  }
+  input += text;
   if (!/[\\r\\n]/.test(input)) return;
   const code = input.split(/[\\r\\n]/)[0].trim();
   if (code !== 'good-code#state') {
@@ -62,6 +68,7 @@ async function makeAccount(env: Record<string, string> = {}): Promise<ClaudeAcco
     executable: () => process.execPath,
     argsPrefix: [script],
     useTerminal: false,
+    enterDelayMs: 50,
     urlTimeoutMs: 4000,
     codeTimeoutMs: 6000,
   });

@@ -34,6 +34,8 @@ export interface ClaudeAccountOptions {
    * code from a terminal; a test with a stand-in script turns this off.
    */
   readonly useTerminal?: boolean;
+  /** Pause between the pasted code and Enter (milliseconds). */
+  readonly enterDelayMs?: number;
   /** Test seam: extra environment for the stand-in script. */
   readonly extraEnv?: Readonly<Record<string, string>>;
   readonly urlTimeoutMs?: number;
@@ -296,8 +298,12 @@ export class ClaudeAccount {
         resolve(undefined);
       }, this.codeTimeoutMs);
     });
-    // Enter in a terminal is a carriage return.
-    child.stdin?.write(clean + '\r');
+    // The code goes in first and Enter after a pause, as two writes: Claude Code takes one long
+    // write for a paste and then treats the carriage return in it as part of the pasted text, so
+    // the code would sit there unsent. (A terminal's Enter is a carriage return.)
+    child.stdin?.write(clean);
+    await new Promise((resolve) => setTimeout(resolve, this.options.enterDelayMs ?? 600));
+    child.stdin?.write('\r');
     const token = await result;
     this.waiter = undefined;
     if (token === undefined) {
