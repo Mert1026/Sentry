@@ -284,7 +284,8 @@
 }
 .project-options-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* Always one row of four, whatever the window width: the tiles shrink instead of wrapping. */
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   margin-bottom: 12px;
 }
@@ -301,10 +302,10 @@
   align-items: center;
   text-align: center;
   min-width: 0;
-  min-height: 190px;
-  flex: 0 0 auto;
+  min-height: 170px;
+  flex: 1 1 auto;
   justify-content: center;
-  padding: 35px 14px 16px;
+  padding: 34px 12px 16px;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   background: var(--surface-1);
@@ -333,8 +334,8 @@
 .run-option-icon {
   display: grid;
   place-items: center;
-  width: 72px;
-  height: 72px;
+  width: clamp(48px, 5vw, 72px);
+  height: clamp(48px, 5vw, 72px);
   margin-bottom: 12px;
   border: 1px solid var(--border-default);
   border-radius: 14px;
@@ -359,16 +360,17 @@
 }
 .run-option-label {
   color: var(--text-secondary);
-  font-size: 18px;
-  line-height: 1.4;
+  font-size: clamp(14px, 1.4vw, 18px);
+  line-height: 1.35;
   font-weight: 600;
-  min-height: 44px;
+  min-height: 2.7em;
   display: grid;
   align-items: center;
   max-width: 250px;
+  overflow-wrap: anywhere;
 }
 .run-option-details {
-  margin-top: 8px;
+  margin: 0 0 12px;
   padding: 12px;
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
@@ -498,9 +500,6 @@
   .project-form-section {
     padding: 16px;
   }
-  .run-option-label {
-    font-size: 16px;
-  }
   .project-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
@@ -532,8 +531,17 @@
   .project-sections button svg {
     display: none;
   }
-  .project-options-grid {
-    grid-template-columns: minmax(0, 1fr);
+  .run-option-toggle {
+    min-height: 140px;
+    padding: 30px 6px 12px;
+  }
+  .run-option-state {
+    left: 8px;
+    top: 10px;
+    font-size: 11px;
+  }
+  .run-option-info {
+    right: 4px;
   }
   .project-form-heading small {
     max-width: 50%;
@@ -564,4 +572,64 @@
 }
 :root[data-reduced-motion='true'] .project-summary-card {
   animation: none;
+}
+
+/* Notes for the agents: a full-width module with a clear switch row and tidy fields. */
+.run-notes {
+  grid-column: 1/-1;
+}
+.run-notes .project-form-heading {
+  margin-bottom: 12px;
+}
+.run-notes-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 14px;
+  padding: 7px 12px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  color: var(--text-secondary);
+  font-size: 14px;
+  cursor: pointer;
+}
+.run-notes-switch:hover {
+  border-color: var(--border-strong);
+}
+.run-notes-switch input {
+  margin: 0;
+}
+.run-notes-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  gap: 14px;
+}
+.run-notes-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.run-notes-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+}
+.run-notes-label small {
+  color: var(--text-tertiary);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+.run-notes-field textarea {
+  width: 100%;
+  min-height: 96px;
+  padding: 10px 12px;
+  box-sizing: border-box;
+  resize: vertical;
+  line-height: 1.45;
 }

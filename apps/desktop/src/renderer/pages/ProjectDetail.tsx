@@ -750,39 +750,6 @@ export function ProjectDetail(): React.JSX.Element {
                       Open project setup <ArrowRight size={15} aria-hidden="true" />
                     </button>
                   }
-                  details={
-                    useProfile ? (
-                      <div aria-live="polite">
-                        <strong>Selected agents</strong>
-                        {olderRevision ? (
-                          <p>
-                            Profile compatibility with this revision is checked when the run starts.
-                          </p>
-                        ) : null}
-                        <ul>
-                          {selectedProfileAgents.map((stack) => {
-                            const agent = profileAgents.find(
-                              (item) => item.agentStackId === stack.id,
-                            );
-                            const status =
-                              agent?.state === 'none' || agent === undefined
-                                ? 'No profile'
-                                : olderRevision
-                                  ? 'Checked at run time'
-                                  : agent.state === 'fresh'
-                                    ? 'Profile will be used'
-                                    : 'Profile needs rebuilding';
-                            return (
-                              <li key={stack.id}>
-                                <span>{stack.displayName}</span>
-                                <span>{status}</span>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      </div>
-                    ) : undefined
-                  }
                   description={
                     !profileStatusKnown
                       ? 'Profile status is unavailable or still loading. Open Setup to check the agents’ profiles.'
@@ -811,6 +778,33 @@ export function ProjectDetail(): React.JSX.Element {
                   description="Each agent also searches the project files for hard-coded passwords, API keys, tokens and private keys, and its box on the run page shows a light with what it found. This adds about a minute or two per agent. Turn it off for the shortest run: no search is made and no secrets light is shown."
                 />
               </div>
+              {useProfile ? (
+                <div className="run-option-details" aria-live="polite">
+                  <strong>Selected agents</strong>
+                  {olderRevision ? (
+                    <p>Profile compatibility with this revision is checked when the run starts.</p>
+                  ) : null}
+                  <ul>
+                    {selectedProfileAgents.map((stack) => {
+                      const agent = profileAgents.find((item) => item.agentStackId === stack.id);
+                      const status =
+                        agent?.state === 'none' || agent === undefined
+                          ? 'No profile'
+                          : olderRevision
+                            ? 'Checked at run time'
+                            : agent.state === 'fresh'
+                              ? 'Profile will be used'
+                              : 'Profile needs rebuilding';
+                      return (
+                        <li key={stack.id}>
+                          <span>{stack.displayName}</span>
+                          <span>{status}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ) : null}
               <div className="project-options-help">
                 <InfoPopover title="Packages & toolchains" showLabel>
                   Package installs from registries are always allowed during a run. Managed

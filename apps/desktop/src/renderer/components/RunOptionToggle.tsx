@@ -11,7 +11,6 @@ export function RunOptionToggle({
   disabled = false,
   onChange,
   infoContent,
-  details,
 }: {
   label: string;
   description: string;
@@ -20,7 +19,6 @@ export function RunOptionToggle({
   disabled?: boolean;
   onChange: (checked: boolean) => void;
   infoContent?: React.ReactNode;
-  details?: React.ReactNode;
 }): React.JSX.Element {
   const [animationKey, setAnimationKey] = React.useState(0);
   return (
@@ -51,7 +49,6 @@ export function RunOptionToggle({
           {infoContent}
         </InfoPopover>
       </div>
-      {details !== undefined ? <div className="run-option-details">{details}</div> : null}
     </div>
   );
 }
