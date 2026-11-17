@@ -54,6 +54,11 @@ export const IPC_CHANNELS = [
   'openai:account-login',
   'openai:account-cancel-login',
   'openai:account-logout',
+  'claude:account-status',
+  'claude:account-login',
+  'claude:account-submit-code',
+  'claude:account-cancel-login',
+  'claude:account-logout',
   'system:active-runs',
   'runtime:status',
   'runtime:distros',
@@ -217,6 +222,14 @@ export interface OpenAiAccountStatus {
   readonly loginUrl?: string;
   readonly error?: string;
   readonly version: string;
+}
+
+export interface ClaudeAccountStatus {
+  readonly signedIn: boolean;
+  readonly login: 'idle' | 'waiting' | 'done' | 'failed';
+  /** Sign-in link while a login is waiting. */
+  readonly loginUrl?: string;
+  readonly error?: string;
 }
 
 export interface CustomAddonStatus {
@@ -440,6 +453,15 @@ export interface SentryDesktopApi {
     accountStatus(): Promise<OpenAiAccountStatus>;
     /** Starts the ChatGPT sign-in; resolves with the link to open in a browser. */
     accountLogin(): Promise<{ url: string }>;
+    accountCancelLogin(): Promise<{ cancelled: true }>;
+    accountLogout(): Promise<{ signedOut: true }>;
+  };
+  readonly claude: {
+    accountStatus(): Promise<ClaudeAccountStatus>;
+    /** Starts the Claude account sign-in; resolves with the link to open in a browser. */
+    accountLogin(): Promise<{ url: string }>;
+    /** Gives the code shown after signing in to the waiting sign-in. */
+    accountSubmitCode(code: string): Promise<{ signedIn: true }>;
     accountCancelLogin(): Promise<{ cancelled: true }>;
     accountLogout(): Promise<{ signedOut: true }>;
   };

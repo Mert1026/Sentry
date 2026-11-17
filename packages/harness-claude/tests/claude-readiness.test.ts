@@ -17,7 +17,7 @@ describe('Claude readiness semantics', () => {
     );
     await expect(
       createClaudeRegistration({ executable: process.execPath, environment }).preflight?.(),
-    ).rejects.toThrow(/ANTHROPIC_API_KEY/);
+    ).rejects.toThrow(/Anthropic API key/);
   });
   it('reports configured readiness without claiming live verification', async () => {
     const doctor = await doctorClaude({

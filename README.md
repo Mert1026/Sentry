@@ -102,13 +102,13 @@ Full steps: [release notes](docs/releases/v2.0.1.md#updating-from-v200).
 4. **Settings → Toolchains** (optional): install language runtimes and tools, see
    [Toolchains](#toolchains).
 
-| Agent    | Harness     | Default in runs | Credentials                                 |
-| -------- | ----------- | --------------- | ------------------------------------------- |
-| OpenCode | OpenCode    | yes             | OpenCode / OpenRouter provider settings     |
-| DeepSeek | DeepSeek    | yes             | DeepSeek API key                            |
-| GLM      | Claude Code | yes             | Z.AI GLM token                              |
-| ChatGPT  | OpenCode    | no (opt-in)     | API key or a signed-in ChatGPT account      |
-| Claude   | Claude Code | no (opt-in)     | Anthropic API key or a Claude account token |
+| Agent    | Harness     | Default in runs | Credentials                                     |
+| -------- | ----------- | --------------- | ----------------------------------------------- |
+| OpenCode | OpenCode    | yes             | OpenCode / OpenRouter provider settings         |
+| DeepSeek | DeepSeek    | yes             | DeepSeek API key                                |
+| GLM      | Claude Code | yes             | Z.AI GLM token                                  |
+| ChatGPT  | OpenCode    | no (opt-in)     | API key or a signed-in ChatGPT account          |
+| Claude   | Claude Code | no (opt-in)     | Anthropic API key or a signed-in Claude account |
 
 Optional per-run settings: **Allow web access** and **Allow tool and SDK downloads**.
 Package registries (npm, PyPI, crates.io, Go, RubyGems, Maven, NuGet, Packagist) are

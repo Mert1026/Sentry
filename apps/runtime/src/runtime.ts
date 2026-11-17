@@ -81,6 +81,7 @@ import {
 import { runtimeReleaseIdentity } from './distribution.js';
 import { ToolchainManager } from './toolchains.js';
 import { OpenAiAccount } from './openai-account.js';
+import { ClaudeAccount } from './claude-account.js';
 const releaseIdentity = runtimeReleaseIdentity();
 export const RUNTIME_VERSION = releaseIdentity?.version ?? '2.0.1';
 
@@ -543,6 +544,7 @@ export class SentryRuntimeHost {
   private readonly needsErrors = new Map<string, string>();
   private readonly toolchains: ToolchainManager;
   private readonly openAiAccount: OpenAiAccount;
+  private readonly claudeAccount: ClaudeAccount;
   private readonly activeImports = new Set<AbortController>();
   private readonly activeUpdates = new Set<AbortController>();
   private readonly notify: (event: string, payload?: unknown) => void;
@@ -565,6 +567,13 @@ export class SentryRuntimeHost {
     this.toolchains = new ToolchainManager(this.dataRoot);
     this.openAiAccount = new OpenAiAccount({ dataRoot: this.dataRoot });
     void this.refreshOpenAiAccountReady();
+    this.claudeAccount = new ClaudeAccount({
+      dataRoot: this.dataRoot,
+      // The same managed Claude Code binary the agents run; an explicit override wins.
+      executable: () =>
+        process.env['SENTRY_CLAUDE_BINARY']?.trim() || claudeManagedExecutablePath(this.dataRoot),
+    });
+    void this.refreshClaudeAccountToken();
     this.database = new SentryDatabase({ dataRoot: this.dataRoot });
     this.repository = new SentryRepository(this.database);
     this.lease = new RuntimeInstanceLease(this.repository);
@@ -652,6 +661,7 @@ export class SentryRuntimeHost {
     for (const build of this.needsBuilds.values()) build.abort();
     this.cancelAddProject();
     this.openAiAccount.dispose();
+    this.claudeAccount.dispose();
     this.lease.release();
     this.database.close();
   }
@@ -684,6 +694,16 @@ export class SentryRuntimeHost {
     process.env['SENTRY_OPENAI_ACCOUNT_READY'] = (await this.openAiAccount.signedIn()) ? '1' : '';
   }
 
+  /**
+   * Hand the stored Claude account token to the Claude agent's process (CLAUDE_CODE_OAUTH_TOKEN), or
+   * take it away after a sign-out. The token only ever lives in this runtime's memory and a private file.
+   */
+  private async refreshClaudeAccountToken(): Promise<void> {
+    const token = await this.claudeAccount.token();
+    if (token === undefined) delete process.env['CLAUDE_CODE_OAUTH_TOKEN'];
+    else process.env['CLAUDE_CODE_OAUTH_TOKEN'] = token;
+  }
+
   configure(params: unknown): unknown {
     const parsed = RuntimeConfigureParamsSchema.parse(params ?? {});
     // Each agent has its own reasoning effort; "default" removes it so the provider decides.
@@ -700,6 +720,9 @@ export class SentryRuntimeHost {
       if (level === undefined) continue;
       if (level === 'default') delete process.env[variable];
       else process.env[variable] = level;
+    }
+    if (parsed.claudeAuth !== undefined) {
+      process.env['SENTRY_ANTHROPIC_AUTH'] = parsed.claudeAuth;
     }
     if (parsed.openAiAuth !== undefined) {
       process.env['SENTRY_OPENAI_AUTH'] = parsed.openAiAuth;
@@ -751,9 +774,7 @@ export class SentryRuntimeHost {
     if (parsed.providers.anthropicApiKey !== undefined) {
       process.env['ANTHROPIC_API_KEY'] = parsed.providers.anthropicApiKey;
     }
-    if (parsed.providers.claudeOauthToken !== undefined) {
-      process.env['CLAUDE_CODE_OAUTH_TOKEN'] = parsed.providers.claudeOauthToken;
-    }
+
     // Full-state binary overrides: the desktop always pushes its complete
     // current set, so a present block with an absent key clears a stale
     // override (Clear button works without restart). A missing block
@@ -1765,6 +1786,23 @@ export class SentryRuntimeHost {
       case 'openai.accountLogout':
         return this.openAiAccount.logout().then(async () => {
           await this.refreshOpenAiAccountReady();
+          return { signedOut: true };
+        });
+      case 'claude.accountStatus':
+        return this.refreshClaudeAccountToken().then(() => this.claudeAccount.status());
+      case 'claude.accountLogin':
+        return this.claudeAccount.startLogin();
+      case 'claude.accountSubmitCode':
+        return this.claudeAccount.submitCode(requireString(params, 'code')).then(async () => {
+          await this.refreshClaudeAccountToken();
+          return { signedIn: true };
+        });
+      case 'claude.accountCancelLogin':
+        this.claudeAccount.cancelLogin();
+        return { cancelled: true };
+      case 'claude.accountLogout':
+        return this.claudeAccount.logout().then(async () => {
+          await this.refreshClaudeAccountToken();
           return { signedOut: true };
         });
       case 'toolchains.customStatus':

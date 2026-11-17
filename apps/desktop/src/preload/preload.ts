@@ -109,6 +109,13 @@ const api: SentryDesktopApi & {
     accountCancelLogin: () => invoke('openai:account-cancel-login', {}),
     accountLogout: () => invoke('openai:account-logout', {}),
   },
+  claude: {
+    accountStatus: () => invoke('claude:account-status', {}),
+    accountLogin: () => invoke('claude:account-login', {}),
+    accountSubmitCode: (code: string) => invoke('claude:account-submit-code', { code }),
+    accountCancelLogin: () => invoke('claude:account-cancel-login', {}),
+    accountLogout: () => invoke('claude:account-logout', {}),
+  },
   system: {
     info: () => invoke('system:info', {}),
     activeRuns: () => invoke('system:active-runs', {}),

@@ -2,7 +2,11 @@ import { spawn } from 'node:child_process';
 import { release } from 'node:os';
 import { nowIsoTimestamp } from '@qa/shared';
 import type { HarnessHealthResult } from '@qa/harness-protocol';
-import { buildClaudeChildEnvironment } from './environment.js';
+import {
+  buildClaudeChildEnvironment,
+  claudeAuthMode,
+  claudeCredentialKind,
+} from './environment.js';
 import { CLAUDE_CODE_TESTED_VERSION, classifyClaudeCodeVersion } from './sdk.js';
 import { ClaudeAgentHarnessError } from './errors.js';
 import { redactDiagnostic, secretValues } from './redaction.js';
@@ -91,21 +95,14 @@ export function validateClaudeEndpoint(_environment: NodeJS.ProcessEnv = process
   return { valid: true };
 }
 
-/** The two ways to sign in: an Anthropic API key, or a Claude Code OAuth token (claude setup-token). */
-export function claudeCredentialKind(
-  environment: NodeJS.ProcessEnv = process.env,
-): 'api-key' | 'oauth-token' | undefined {
-  if (environment.ANTHROPIC_API_KEY?.trim()) return 'api-key';
-  if (environment.CLAUDE_CODE_OAUTH_TOKEN?.trim()) return 'oauth-token';
-  return undefined;
-}
-
 /** Sentry uses an isolated Claude config directory, so host login state is not inherited. */
 export function assertClaudeAuthConfigured(environment: NodeJS.ProcessEnv = process.env): void {
   if (claudeCredentialKind(environment) === undefined) {
     throw new ClaudeAgentHarnessError(
       'CLAUDE_AUTH_FAILED',
-      'Claude credential is not configured. Set ANTHROPIC_API_KEY, or CLAUDE_CODE_OAUTH_TOKEN from `claude setup-token`.',
+      claudeAuthMode(environment) === 'account'
+        ? 'Claude account is not signed in. Use "Sign in with Claude" in Settings → Providers.'
+        : 'Claude credential is not configured. Add an Anthropic API key in Settings → Providers, or sign in with your Claude account.',
     );
   }
 }

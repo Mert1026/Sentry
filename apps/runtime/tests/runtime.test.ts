@@ -509,7 +509,7 @@ describe('runtime Claude agent settings', () => {
       'SENTRY_ANTHROPIC_MODEL',
       'SENTRY_GLM_MODEL',
       'ANTHROPIC_API_KEY',
-      'CLAUDE_CODE_OAUTH_TOKEN',
+      'SENTRY_ANTHROPIC_AUTH',
       'ANTHROPIC_AUTH_TOKEN',
     ];
     const saved = names.map((name) => process.env[name]);
@@ -518,11 +518,12 @@ describe('runtime Claude agent settings', () => {
       await host.recover();
       await host.configure({
         models: { claude: 'claude-sonnet-5-5' },
-        providers: { anthropicApiKey: 'sk-ant-test', claudeOauthToken: 'oauth-test' },
+        providers: { anthropicApiKey: 'sk-ant-test' },
+        claudeAuth: 'account',
       });
       expect(process.env['SENTRY_ANTHROPIC_MODEL']).toBe('claude-sonnet-5-5');
       expect(process.env['ANTHROPIC_API_KEY']).toBe('sk-ant-test');
-      expect(process.env['CLAUDE_CODE_OAUTH_TOKEN']).toBe('oauth-test');
+      expect(process.env['SENTRY_ANTHROPIC_AUTH']).toBe('account');
       // Nothing of GLM's changed.
       expect(process.env['SENTRY_GLM_MODEL']).toBe(saved[1]);
       expect(process.env['ANTHROPIC_AUTH_TOKEN']).toBe(saved[4]);

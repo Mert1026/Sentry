@@ -12,6 +12,30 @@
  *   sets `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` and verifies absence with a
  *   test-only sentinel (never the real credential).
  */
+/** Which sign-in the person chose (Settings → Providers): their API key, or their Claude account. */
+export function claudeAuthMode(
+  environment: NodeJS.ProcessEnv = process.env,
+): 'key' | 'account' | undefined {
+  const mode = environment.SENTRY_ANTHROPIC_AUTH?.trim().toLowerCase();
+  return mode === 'key' || mode === 'account' ? mode : undefined;
+}
+
+/**
+ * The credential this agent will use. The chosen sign-in decides: with "account" only the Claude
+ * account token counts, with "key" only the API key. With no choice made, an API key wins.
+ */
+export function claudeCredentialKind(
+  environment: NodeJS.ProcessEnv = process.env,
+): 'api-key' | 'oauth-token' | undefined {
+  const mode = claudeAuthMode(environment);
+  const key = Boolean(environment.ANTHROPIC_API_KEY?.trim());
+  const token = Boolean(environment.CLAUDE_CODE_OAUTH_TOKEN?.trim());
+  if (mode === 'account') return token ? 'oauth-token' : undefined;
+  if (mode === 'key') return key ? 'api-key' : undefined;
+  if (key) return 'api-key';
+  return token ? 'oauth-token' : undefined;
+}
+
 export interface ClaudeChildEnvironmentInput {
   readonly source?: NodeJS.ProcessEnv;
   readonly platform?: NodeJS.Platform;
@@ -257,6 +281,20 @@ export function buildClaudeChildEnvironment(
         ? 'C:\\Windows\\System32;C:\\Windows'
         : '/usr/local/bin:/usr/bin:/bin';
     allowed.set('PATH', fallbackPath);
+  }
+  // One sign-in at a time: the chosen one is forwarded, the other is not.
+  const kind = claudeCredentialKind(source);
+  const unused =
+    kind === 'api-key'
+      ? 'CLAUDE_CODE_OAUTH_TOKEN'
+      : kind === 'oauth-token'
+        ? 'ANTHROPIC_API_KEY'
+        : '';
+  for (const name of [...allowed.keys()]) {
+    if (unused !== '' && name.toUpperCase() === unused) {
+      allowed.delete(name);
+      blockedNames.push(name);
+    }
   }
   return {
     environment: Object.fromEntries(allowed),

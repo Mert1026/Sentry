@@ -2,10 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   assertClaudeAuthConfigured,
   assertClaudeEndpointConfigured,
-  claudeCredentialKind,
   validateClaudeEndpoint,
 } from '../src/discovery.js';
-import { buildClaudeChildEnvironment } from '../src/environment.js';
+import { buildClaudeChildEnvironment, claudeCredentialKind } from '../src/environment.js';
 
 describe('the Claude agent always uses Anthropic itself', () => {
   it('needs no endpoint: the route is fixed', () => {
@@ -47,7 +46,7 @@ describe('Claude credentials', () => {
   it("does not count the GLM agent's token as a Claude credential", () => {
     const env = { ANTHROPIC_AUTH_TOKEN: 'zai-token' } as NodeJS.ProcessEnv;
     expect(claudeCredentialKind(env)).toBeUndefined();
-    expect(() => assertClaudeAuthConfigured(env)).toThrow(/ANTHROPIC_API_KEY/);
+    expect(() => assertClaudeAuthConfigured(env)).toThrow(/Anthropic API key/);
   });
 
   it('passes the OAuth token to the parent process only', () => {
@@ -56,5 +55,43 @@ describe('Claude credentials', () => {
       platform: 'linux',
     });
     expect(child.environment['CLAUDE_CODE_OAUTH_TOKEN']).toBe('oauth-test');
+  });
+});
+
+describe('the chosen sign-in decides the credential', () => {
+  const both = {
+    PATH: '/usr/bin',
+    ANTHROPIC_API_KEY: 'sk-ant-key',
+    CLAUDE_CODE_OAUTH_TOKEN: 'oauth-token',
+  } as NodeJS.ProcessEnv;
+
+  it('account: only the Claude account token counts and only it is forwarded', () => {
+    const env = { ...both, SENTRY_ANTHROPIC_AUTH: 'account' } as NodeJS.ProcessEnv;
+    expect(claudeCredentialKind(env)).toBe('oauth-token');
+    const child = buildClaudeChildEnvironment({ source: env, platform: 'linux' });
+    expect(child.environment['CLAUDE_CODE_OAUTH_TOKEN']).toBe('oauth-token');
+    expect(child.environment['ANTHROPIC_API_KEY']).toBeUndefined();
+  });
+
+  it('key: only the API key counts and only it is forwarded', () => {
+    const env = { ...both, SENTRY_ANTHROPIC_AUTH: 'key' } as NodeJS.ProcessEnv;
+    expect(claudeCredentialKind(env)).toBe('api-key');
+    const child = buildClaudeChildEnvironment({ source: env, platform: 'linux' });
+    expect(child.environment['ANTHROPIC_API_KEY']).toBe('sk-ant-key');
+    expect(child.environment['CLAUDE_CODE_OAUTH_TOKEN']).toBeUndefined();
+  });
+
+  it('account chosen but not signed in: no credential, with a message that says so', () => {
+    const env = {
+      PATH: '/usr/bin',
+      ANTHROPIC_API_KEY: 'sk-ant-key',
+      SENTRY_ANTHROPIC_AUTH: 'account',
+    } as NodeJS.ProcessEnv;
+    expect(claudeCredentialKind(env)).toBeUndefined();
+    expect(() => assertClaudeAuthConfigured(env)).toThrow(/Sign in with Claude/);
+  });
+
+  it('no choice made: an API key wins over a token', () => {
+    expect(claudeCredentialKind(both)).toBe('api-key');
   });
 });

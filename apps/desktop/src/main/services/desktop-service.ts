@@ -185,6 +185,26 @@ export class DesktopApplicationService {
     return this.call('openai.accountLogout', {});
   }
 
+  claudeAccountStatus(): Promise<unknown> {
+    return this.call('claude.accountStatus', {});
+  }
+
+  claudeAccountLogin(): Promise<unknown> {
+    return this.call('claude.accountLogin', {});
+  }
+
+  claudeAccountSubmitCode(code: string): Promise<unknown> {
+    return this.call('claude.accountSubmitCode', { code });
+  }
+
+  claudeAccountCancelLogin(): Promise<unknown> {
+    return this.call('claude.accountCancelLogin', {});
+  }
+
+  claudeAccountLogout(): Promise<unknown> {
+    return this.call('claude.accountLogout', {});
+  }
+
   toolchainStatus(): Promise<unknown> {
     return this.call('toolchains.status', {});
   }
@@ -541,9 +561,7 @@ export class DesktopApplicationService {
     if (glmEndpoint !== undefined) providers['anthropicBaseUrl'] = glmEndpoint;
     // The Claude agent's own credentials; the GLM agent's token and endpoint above are separate.
     const claudeKey = get('ANTHROPIC_API_KEY');
-    const claudeOauth = get('CLAUDE_CODE_OAUTH_TOKEN');
     if (claudeKey !== undefined) providers['anthropicApiKey'] = claudeKey;
-    if (claudeOauth !== undefined) providers['claudeOauthToken'] = claudeOauth;
     const binaries: Record<string, string> = {};
     const opencodeBinary = get('SENTRY_OPENCODE_BINARY');
     const deepseekBinary = get('SENTRY_DEEPSEEK_BINARY');
@@ -561,12 +579,15 @@ export class DesktopApplicationService {
         : {};
     const openAiAuth =
       get('SENTRY_OPENAI_AUTH')?.trim().toLowerCase() === 'account' ? 'account' : 'key';
+    const claudeAuth =
+      get('SENTRY_ANTHROPIC_AUTH')?.trim().toLowerCase() === 'account' ? 'account' : 'key';
     return this.call('runtime.configure', {
       models,
       providers,
       binaries,
       ...provider,
       openAiAuth,
+      claudeAuth,
       reasoningEffort: Object.fromEntries(
         EFFORT_AGENTS.map((agent) => [
           agent,

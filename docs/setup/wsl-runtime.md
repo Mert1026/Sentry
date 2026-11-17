@@ -66,8 +66,8 @@ No secrets below — substitute your own values where indicated.
   `SENTRY_GLM_MODEL` (e.g. `glm-5.3-flash`), plus `OPENROUTER_API_KEY` /
   `DEEPSEEK_API_KEY` / `ANTHROPIC_AUTH_TOKEN` and `ANTHROPIC_BASE_URL` as applicable.
 - The Claude agent has its own settings: `SENTRY_ANTHROPIC_MODEL` (e.g. `claude-sonnet-5-5`) and
-  either `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`). It always
-  talks to Anthropic and never uses the GLM token or endpoint above.
+  either `ANTHROPIC_API_KEY` or a signed-in Claude account (Providers → Claude → Claude account →
+  Sign in with Claude). It always talks to Anthropic and never uses the GLM token or endpoint above.
 - Desktop pushes them into runtime memory via `runtime.configure` (no restart needed).
 - Secrets stay encrypted in Windows safeStorage; WSL keeps them memory-only.
 
