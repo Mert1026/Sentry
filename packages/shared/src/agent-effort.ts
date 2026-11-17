@@ -7,6 +7,7 @@ export const AGENT_EFFORT_LEVELS = {
   opencode: ['low', 'medium', 'high'],
   chatgpt: ['low', 'medium', 'high'],
   glm: ['low', 'medium', 'high', 'xhigh', 'max'],
+  claude: ['low', 'medium', 'high', 'xhigh', 'max'],
   deepseek: ['off', 'low', 'high', 'max'],
 } as const;
 
@@ -19,6 +20,7 @@ export const AGENT_EFFORT_SETTING: Readonly<Record<EffortAgent, string>> = {
   opencode: 'SENTRY_OPENCODE_REASONING',
   chatgpt: 'SENTRY_CHATGPT_REASONING',
   glm: 'SENTRY_GLM_REASONING',
+  claude: 'SENTRY_ANTHROPIC_REASONING',
   deepseek: 'SENTRY_DEEPSEEK_REASONING',
 };
 
