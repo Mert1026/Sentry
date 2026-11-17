@@ -36,6 +36,11 @@ process.stdin.on('data', (chunk) => {
     input = '';
     return;
   }
+  if (process.env.FAKE_NO_TOKEN === '1') {
+    console.log('(B' + '*'.repeat(60));
+    setTimeout(() => process.exit(0), 50);
+    return;
+  }
   const token = process.env.FAKE_TOKEN;
   console.log('');
   console.log('Your OAuth token (valid for 1 year):');
@@ -114,6 +119,11 @@ Paste code here > `),
     expect(findToken(short + '\nStore this token securely.')).toBe(short);
   });
 
+  it('drops character-set switches a terminal program prints between its text', () => {
+    const esc = String.fromCharCode(27);
+    expect(cleanTerminalText(`${esc}(Bhello ${esc}=world`)).toBe('hello world');
+  });
+
   it('finds no token in a refusal', () => {
     expect(findToken('OAuth error: Request failed with status code 400')).toBeUndefined();
   });
@@ -173,6 +183,21 @@ describe('Claude account sign-in', () => {
     const status = await a.status();
     expect(status.login).toBe('failed');
     expect(status.error).toBe('OAuth error: Request failed with status code 400');
+  });
+
+  it('says so plainly, and keeps a redacted trace, when no token comes back', async () => {
+    const a = await makeAccount({ FAKE_NO_TOKEN: '1' });
+    await a.startLogin();
+    const code = 'good-code#state';
+    // The program accepts the code but never prints a token, and ends.
+    await expect(a.submitCode(code)).rejects.toThrow(/did not return a token/);
+    const status = await a.status();
+    expect(status.error).not.toContain('***');
+    const trace = await readFile(join(dir, 'claude-account', 'last-login-output.txt'), 'utf8');
+    expect(trace).toContain('exit:');
+    expect(trace).toContain('Paste code here');
+    // The pasted code is not kept (the program only draws it as asterisks).
+    expect(trace).not.toContain('good-code');
   });
 
   it('refuses a code when no sign-in is waiting, and a code with spaces', async () => {

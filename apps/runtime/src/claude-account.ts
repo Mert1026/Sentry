@@ -49,7 +49,8 @@ const CSI = new RegExp(`${ESC}\\[[0-9;?]*[ -/]*[@-~]`, 'g');
 const URL_PATTERN = new RegExp(
   `https://(?:claude\\.com|claude\\.ai|console\\.anthropic\\.com)/[^\\s${ESC}]+`,
 );
-const TOKEN_START = /sk-ant-oat\d{2}-[A-Za-z0-9_-]+/;
+// Anthropic's tokens look like sk-ant-<kind><number>-<characters>; the sign-in token is the oat kind.
+const TOKEN_START = /sk-ant-[a-z]{2,6}\d{0,2}-[A-Za-z0-9_-]+/;
 /**
  * Claude Code wraps a very long line onto the next one (a sign-in link wraps by one character), at
  * a width that does not follow the terminal. A line this long, followed by a line of nothing but
@@ -84,8 +85,11 @@ export function findLoginError(raw: string): string | undefined {
     .slice(0, 200);
 }
 
+// Character-set and mode switches (ESC ( B and the like) that a terminal program prints between its text.
+const CHARSET = new RegExp(`${ESC}[()][0-9A-Za-z]|${ESC}[=>78MDEHc]`, 'g');
+
 export function cleanTerminalText(raw: string): string {
-  return raw.replace(OSC, '').replace(CSI, '').replace(/\r/g, '');
+  return raw.replace(OSC, '').replace(CSI, '').replace(CHARSET, '').replace(/\r/g, '');
 }
 
 /**
@@ -160,6 +164,7 @@ export class ClaudeAccount {
   private error: string | undefined;
   private configDir: string | undefined;
   private waiter: ((token: string | undefined) => void) | undefined;
+  private exit = '';
 
   constructor(private readonly options: ClaudeAccountOptions) {
     this.dir = join(options.dataRoot, 'claude-account');
@@ -236,8 +241,9 @@ export class ClaudeAccount {
           : cause.message,
       ),
     );
-    child.on('close', () => {
+    child.on('close', (code, signal) => {
       if (this.child !== child) return;
+      this.exit = 'code ' + String(code) + (signal === null ? '' : ', signal ' + signal);
       this.child = undefined;
       this.waiter?.(findToken(this.output));
     });
@@ -296,7 +302,12 @@ export class ClaudeAccount {
     this.waiter = undefined;
     if (token === undefined) {
       const reason = findLoginError(this.output) ?? lastUsefulLine(this.output);
-      this.fail(child, reason ?? 'The code was not accepted. Start the sign-in again.');
+      await this.writeTrace();
+      this.fail(
+        child,
+        reason ??
+          'Claude Code did not return a token. Start the sign-in again and paste the whole code.',
+      );
       throw new Error(this.error);
     }
     await writeFile(this.tokenFile, token + '\n', { mode: 0o600 });
@@ -309,6 +320,31 @@ export class ClaudeAccount {
     this.url = undefined;
     this.error = undefined;
     this.finish(child);
+  }
+
+  /**
+   * Keep a redacted copy of what Claude Code printed when a sign-in did not end in a token, so a
+   * format the matching does not know can be seen. Every run of 24 or more link or token
+   * characters is replaced by its length, so no code, token or link parameter is kept.
+   */
+  private async writeTrace(): Promise<void> {
+    const hide = (text: string): string =>
+      text.replace(/[A-Za-z0-9_%.~-]{24,}/g, (run) => '<' + String(run.length) + ' chars>');
+    const visible = hide(cleanTerminalText(this.output).slice(-6000));
+    const raw = hide(this.output.slice(-3000)).split(ESC).join('<ESC>').split(BEL).join('<BEL>');
+    const text =
+      'exit: ' +
+      (this.exit === '' ? 'still running' : this.exit) +
+      '\n--- visible\n' +
+      visible +
+      '\n--- raw (control characters shown)\n' +
+      raw +
+      '\n';
+    try {
+      await writeFile(join(this.dir, 'last-login-output.txt'), text, { mode: 0o600 });
+    } catch {
+      /* diagnostics only */
+    }
   }
 
   cancelLogin(): void {
@@ -359,11 +395,27 @@ export class ClaudeAccount {
 }
 
 /** The last line of the program's output that says something, without any token in it. */
+function isMasked(line: string): boolean {
+  const stars = (line.match(/\*/g) ?? []).length;
+  return stars >= 8 && stars * 2 >= line.length;
+}
+
+/**
+ * The last line of the output that reads like a complaint (error, failed, invalid, expired...). A
+ * link, a prompt or a masked line is never shown to the person as the reason.
+ */
 function lastUsefulLine(output: string): string | undefined {
   const lines = cleanTerminalText(output)
     .split('\n')
     .map((line) => line.trim())
-    .filter((line) => line.length > 0 && !TOKEN_START.test(line));
+    .filter(
+      (line) =>
+        line.length > 0 &&
+        !TOKEN_START.test(line) &&
+        !isMasked(line) &&
+        !/https?:\/\//.test(line) &&
+        /error|fail|invalid|denied|expired|refus|not (?:valid|allowed|available)/i.test(line),
+    );
   const line = lines[lines.length - 1];
   return line === undefined ? undefined : line.slice(0, 200);
 }
