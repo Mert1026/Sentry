@@ -57,6 +57,8 @@ export interface AgentInspectorData {
   readonly evidence?: readonly InspectorEvidence[];
   /** Present only for an agent of a retest run: the findings it was asked to re-test. */
   readonly retestItems?: readonly RetestItemInfo[];
+  /** What the user wrote to this agent before the run: the note for everyone and its own note. */
+  readonly userNote?: { readonly shared?: string; readonly own?: string };
 }
 
 export interface InspectorFinding {
@@ -176,7 +178,7 @@ export function AgentInspector({
       </div>
       <Tabs tabs={tabs} active={activeTab} onChange={setTab} label="Agent details" />
       <div style={{ minHeight: 0 }}>
-        {activeTab === 'overview' ? <OverviewTab view={view} /> : null}
+        {activeTab === 'overview' ? <OverviewTab view={view} userNote={data.userNote} /> : null}
         {activeTab === 'retest' && data.retestItems !== undefined ? (
           <RetestTab items={data.retestItems} events={data.events ?? []} />
         ) : null}
@@ -246,7 +248,13 @@ function RetestTab({
   );
 }
 
-function OverviewTab({ view }: { view: AgentNodeView }): React.JSX.Element {
+function OverviewTab({
+  view,
+  userNote,
+}: {
+  view: AgentNodeView;
+  userNote?: AgentInspectorData['userNote'];
+}): React.JSX.Element {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <dl className="kv">
@@ -261,6 +269,23 @@ function OverviewTab({ view }: { view: AgentNodeView }): React.JSX.Element {
         <dt>Stage</dt>
         <dd>{view.currentStage === 'working' ? 'Working' : stageLabel(view.currentStage)}</dd>
       </dl>
+      {userNote?.shared !== undefined || userNote?.own !== undefined ? (
+        <div className="user-note-card">
+          <div className="metadata">User description / note</div>
+          {userNote?.shared !== undefined ? (
+            <div>
+              <strong>For all agents</strong>
+              <p className="user-note-text wrap-anywhere">{userNote.shared}</p>
+            </div>
+          ) : null}
+          {userNote?.own !== undefined ? (
+            <div>
+              <strong>For this agent</strong>
+              <p className="user-note-text wrap-anywhere">{userNote.own}</p>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       {view.secrets !== undefined ? (
         <div className={'secrets-card ' + view.secrets.state}>
           <div className="metadata">Secrets in code</div>

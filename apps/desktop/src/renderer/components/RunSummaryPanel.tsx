@@ -18,6 +18,7 @@ import { StatusPill, dotClassForStatus } from './ui/StatusPill.js';
 import { AGENT_DISPLAY_NAMES, formatCount } from '../lib/agent-telemetry.js';
 import { InfoTile as Tile } from './InfoTile.js';
 import { describeRunLimit } from '../lib/run-time-limit.js';
+import { hasUserNotes } from '../lib/run-notes.js';
 
 export function RunSummaryPanel({
   snapshot,
@@ -46,6 +47,7 @@ export function RunSummaryPanel({
   const configuration = run['configuration'] as
     | {
         agentStackIds?: string[];
+        userNotes?: { shared?: string; agents?: Record<string, string> };
         executionSafeguards?: {
           webAccess?: boolean;
           toolDownloads?: boolean;
@@ -148,6 +150,27 @@ export function RunSummaryPanel({
           )}
         </div>
       </section>
+      {hasUserNotes(configuration?.userNotes) ? (
+        <section aria-label="User description / note">
+          <div className="section-title" style={{ marginBottom: 8 }}>
+            User description / note
+          </div>
+          <div className="user-note-card">
+            {configuration?.userNotes?.shared === undefined ? null : (
+              <div>
+                <strong>For all agents</strong>
+                <p className="user-note-text wrap-anywhere">{configuration.userNotes.shared}</p>
+              </div>
+            )}
+            {Object.entries(configuration?.userNotes?.agents ?? {}).map(([agentId, text]) => (
+              <div key={agentId}>
+                <strong>For {AGENT_DISPLAY_NAMES[agentId] ?? agentId}</strong>
+                <p className="user-note-text wrap-anywhere">{text}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
       <section aria-label="Results by agent">
         <div className="section-title" style={{ marginBottom: 8 }}>
           Results

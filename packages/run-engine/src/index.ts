@@ -33,6 +33,7 @@ import {
   HarnessRunRequestSchema,
   QARunSchema,
   RETEST_MAX_FINDINGS,
+  RUN_NOTE_MAX_CHARS,
   RunActivitySchema,
   RunRetestSchema,
   TargetSpecSchema,
@@ -83,10 +84,39 @@ export interface TargetedScope {
   readonly userInstructions?: string;
 }
 
+/**
+ * What one agent is told as the user's instructions: the run-wide text (the user's note for everyone,
+ * plus any scope text), then that agent's own note. `null` when there is nothing to say. An agent only
+ * ever gets its own note, never another agent's.
+ */
+export function instructionsForAgent(
+  configuration: QARun['configuration'],
+  agentStackId: string,
+  createdAt: string,
+): { message: string; createdAt: string } | null {
+  const shared = configuration.instructions;
+  const own = (configuration.userNotes?.agents as Record<string, string> | undefined)?.[
+    agentStackId
+  ];
+  if (own === undefined) return shared ?? null;
+  const message =
+    (shared === undefined ? '' : shared.message + ' ') + 'USER NOTE FOR THIS AGENT: ' + own;
+  return {
+    message,
+    createdAt: shared?.createdAt ?? configuration.userNotes?.createdAt ?? createdAt,
+  };
+}
+
 export interface RunOptions {
   readonly agentStackIds?: readonly AgentStackId[];
   readonly executionKind: 'simulation' | 'production';
+  /** One note for every agent of the run. */
   readonly instructions?: string;
+  /**
+   * A note for single agents, by agent stack id. An agent with its own note gets the run-wide one
+   * first and then its own; an agent never sees another agent's note.
+   */
+  readonly agentInstructions?: Readonly<Record<string, string>>;
   readonly runTimeoutMs?: number;
   /** Opt in to general web access for agents; package installs are always allowed. Omitted means off. */
   readonly webAccess?: boolean;
@@ -311,6 +341,26 @@ export class RunCoordinator {
       return registration;
     });
     if (selected.length === 0) throw new Error('At least one agent stack must be selected');
+    const agentNotes = Object.entries(options.agentInstructions ?? {}).filter(
+      ([, text]) => text.trim().length > 0,
+    );
+    for (const [stackId, text] of agentNotes) {
+      if (!selected.some((item) => item.stack.id === stackId))
+        throw new RunEngineError(
+          'INVALID_TARGET',
+          'A note was written for ' + stackId + ', which is not one of the selected agents.',
+        );
+      if (text.length > RUN_NOTE_MAX_CHARS)
+        throw new RunEngineError(
+          'INVALID_TARGET',
+          'The note for ' + stackId + ' is longer than ' + RUN_NOTE_MAX_CHARS + ' characters.',
+        );
+    }
+    if (retest !== undefined && (options.instructions !== undefined || agentNotes.length > 0))
+      throw new RunEngineError(
+        'INVALID_TARGET',
+        'A re-test takes no notes: it only re-checks the findings you chose.',
+      );
     // Phase 7 TARGETED validation (before any mutation): mode/target must
     // agree, and target paths must be project-relative (TargetSpecSchema
     // rejects absolute/.. entries; snapshot existence is checked after
@@ -429,6 +479,15 @@ export class RunCoordinator {
           ...(options.instructions === undefined
             ? {}
             : { instructions: { message: options.instructions, createdAt } }),
+          ...(options.instructions === undefined && agentNotes.length === 0
+            ? {}
+            : {
+                userNotes: {
+                  createdAt,
+                  ...(options.instructions === undefined ? {} : { shared: options.instructions }),
+                  ...(agentNotes.length === 0 ? {} : { agents: Object.fromEntries(agentNotes) }),
+                },
+              }),
           policy: { id: 'qa-standard', version: 1 },
           executionSafeguards: {
             runTimeoutMs:
@@ -549,6 +608,9 @@ export class RunCoordinator {
             : { executionSafeguards: run.configuration.executionSafeguards }),
           profileUsage,
           ...(run.configuration.retest === undefined ? {} : { retest: run.configuration.retest }),
+          ...(run.configuration.userNotes === undefined
+            ? {}
+            : { userNotes: run.configuration.userNotes }),
           ...(instructionMessage === undefined
             ? {}
             : { instructions: { message: instructionMessage, createdAt } }),
@@ -631,7 +693,11 @@ export class RunCoordinator {
                   },
                   snapshot,
                   projectContext: context,
-                  runInstructions: run.configuration.instructions ?? null,
+                  runInstructions: instructionsForAgent(
+                    run.configuration,
+                    registration.stack.id,
+                    createdAt,
+                  ),
                   qaPolicy: run.configuration.policy,
                   ...(retest === undefined
                     ? {}
@@ -1043,7 +1109,8 @@ export class RunCoordinator {
             (input.run.executionKind === 'simulation'
               ? 'SIMULATED QA. '
               : 'REAL QA. Independently inspect the supplied snapshot. ') +
-            (input.run.configuration.instructions?.message ?? 'No additional user instructions.'),
+            (instructionsForAgent(input.run.configuration, stack.id, '')?.message ??
+              'No additional user instructions.'),
           policyId: input.run.configuration.policy.id,
           policyVersion: input.run.configuration.policy.version,
           context: {

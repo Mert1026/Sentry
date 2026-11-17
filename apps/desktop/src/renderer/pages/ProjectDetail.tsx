@@ -47,7 +47,9 @@ import {
   ProjectSectionPanel,
   type ProjectSection,
 } from '../components/ProjectSections.js';
+import { RunNotes } from '../components/RunNotes.js';
 import { RunOptionToggle } from '../components/RunOptionToggle.js';
+import { EMPTY_RUN_NOTES, notesToOptions, type RunNotesDraft } from '../lib/run-notes.js';
 import { InfoPopover } from '../components/InfoPopover.js';
 import { BlockingOverlay } from '../components/BlockingOverlay.js';
 import './project-detail.css';
@@ -120,6 +122,8 @@ export function ProjectDetail(): React.JSX.Element {
   const [toolDownloads, setToolDownloads] = React.useState(false);
   // Each agent also searches the project for hard-coded secrets; turning it off makes a run shorter.
   const [secretsCheck, setSecretsCheck] = React.useState(true);
+  // Notes for the agents. Never remembered: every new run starts with an empty draft.
+  const [notes, setNotes] = React.useState<RunNotesDraft>(EMPTY_RUN_NOTES);
   const [selectedRevisionId, setSelectedRevisionId] = React.useState<string | undefined>(undefined);
   const detail = useQuery({
     queryKey: ['project', projectId],
@@ -214,11 +218,13 @@ export function ProjectDetail(): React.JSX.Element {
     ...(secretsCheck ? {} : { secretsCheck: false }),
     ...(useProfile ? { useProfile: true } : {}),
     ...(depth === 'fast' ? { depth: 'fast' } : {}),
+    ...notesToOptions(notes, effectiveStacks),
   });
   const onStarted = (operation: unknown): void => {
     const runId = (operation as { runId?: string }).runId;
     if (runId !== undefined) navigate('/runs/' + runId);
     setConfirmStart(undefined);
+    setNotes(EMPTY_RUN_NOTES);
     void queryClient.invalidateQueries({ queryKey: ['project-runs', projectId] });
   };
   const onStartError = (e: unknown): void => setError(e instanceof Error ? e.message : String(e));
@@ -697,6 +703,14 @@ export function ProjectDetail(): React.JSX.Element {
                 </p>
               ) : null}
             </div>
+            <RunNotes
+              agents={selectedProfileAgents.map((stack) => ({
+                id: stack.id,
+                displayName: stack.displayName,
+              }))}
+              value={notes}
+              onChange={setNotes}
+            />
             <div className="project-form-section project-options-module">
               <div className="project-info-title">
                 <h3 className="project-form-heading">Run options</h3>

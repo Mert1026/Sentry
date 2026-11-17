@@ -15,6 +15,7 @@ import {
   type Finding,
   type FindingExportFormat,
   type FindingExportSelection,
+  type RunUserNotes,
 } from '@qa/schemas';
 import { RunEngineError } from './errors.js';
 
@@ -50,6 +51,8 @@ export interface ExportedFinding {
   readonly revisionId: string | undefined;
   readonly revisionHash: string | undefined;
   readonly evidence: readonly Evidence[];
+  /** What the user wrote to the agents before this finding's run, when they wrote anything. */
+  readonly userNotes?: RunUserNotes | undefined;
 }
 
 const SEVERITY_ORDER = ['critical', 'high', 'medium', 'low', 'info'] as const;
@@ -170,6 +173,40 @@ function severityCounts(entries: readonly ExportedFinding[]): string {
 const REVIEW_NOTE =
   'These are reports written by AI agents. They are not merged or de-duplicated, and each one should be reviewed before anyone acts on it.';
 
+/** The notes the user wrote for the runs in an export: one group per run, in the order they appear. */
+interface RunNoteGroup {
+  readonly runId: string;
+  readonly shared: string | undefined;
+  /** Notes for single agents, only for agents that have a finding in the export. */
+  readonly agents: ReadonlyArray<readonly [string, string]>;
+}
+
+export function runNoteGroups(entries: readonly ExportedFinding[]): RunNoteGroup[] {
+  const groups: RunNoteGroup[] = [];
+  const seen = new Set<string>();
+  for (const entry of entries) {
+    if (seen.has(entry.runId)) continue;
+    seen.add(entry.runId);
+    const notes = entry.userNotes;
+    if (notes === undefined) continue;
+    const reporters = new Set(
+      entries
+        .filter((item) => item.runId === entry.runId)
+        .map((item) => item.finding.sourceAgentStackId),
+    );
+    const own = Object.entries(notes.agents ?? {}).flatMap(
+      ([agent, text]): Array<readonly [string, string]> =>
+        text !== undefined && reporters.has(agent as never) ? [[agent, text] as const] : [],
+    );
+    if (notes.shared === undefined && own.length === 0) continue;
+    groups.push({ runId: entry.runId, shared: notes.shared, agents: own });
+  }
+  return groups;
+}
+
+const NOTES_HEADING = 'User description / note';
+const NOTES_INTRO = 'What the user wrote to the agents before the run.';
+
 export function markdownReport(input: {
   readonly projectName: string;
   readonly entries: readonly ExportedFinding[];
@@ -199,6 +236,16 @@ export function markdownReport(input: {
   if (entries.length === 0) {
     lines.push('No findings were selected.', '');
     return lines.join('\n');
+  }
+  const noteGroups = runNoteGroups(entries);
+  if (noteGroups.length > 0) {
+    lines.push('## ' + NOTES_HEADING, '', NOTES_INTRO, '');
+    for (const group of noteGroups) {
+      lines.push('### Run ' + inlineCode(group.runId), '');
+      if (group.shared !== undefined) lines.push('**For all agents**', '', quote(group.shared), '');
+      for (const [agent, text] of group.agents)
+        lines.push('**For ' + inlineCode(agent) + '**', '', quote(text), '');
+    }
   }
   lines.push('## Contents', '', '| # | Severity | Title |', '| --- | --- | --- |');
   entries.forEach((entry, index) =>
@@ -345,6 +392,17 @@ export function textReport(input: {
     lines.push('No findings were selected.', '');
     return lines.join('\n');
   }
+  const noteGroups = runNoteGroups(entries);
+  if (noteGroups.length > 0) {
+    lines.push(rule, NOTES_HEADING.toUpperCase(), rule, NOTES_INTRO, '');
+    for (const group of noteGroups) {
+      lines.push('Run ' + oneLine(group.runId) + ':');
+      if (group.shared !== undefined) lines.push('  For all agents:', indented(group.shared, 4));
+      for (const [agent, text] of group.agents)
+        lines.push('  For ' + oneLine(agent) + ':', indented(text, 4));
+      lines.push('');
+    }
+  }
   entries.forEach((entry, index) => {
     lines.push(
       rule,
@@ -381,6 +439,11 @@ export function jsonReport(input: {
     note: REVIEW_NOTE,
     findingCount: input.entries.length,
     severityCounts: counts,
+    userNotes: runNoteGroups(input.entries).map((group) => ({
+      runId: group.runId,
+      forAllAgents: group.shared ?? null,
+      forAgents: Object.fromEntries(group.agents),
+    })),
     findings: input.entries.map((entry, index) => ({
       number: index + 1,
       id: entry.finding.id,
@@ -450,6 +513,7 @@ export function collectFindingsForExport(
       revisionId: revision.id,
       revisionHash: revision.hash,
       evidence: evidenceFor(runId, finding),
+      userNotes: repository.getRun(runId as never)?.configuration.userNotes,
     };
   };
   const requireRun = (runId: string) => {

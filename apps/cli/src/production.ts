@@ -29,7 +29,7 @@ export function productionHelp(): string {
     '  project doctor <project-id> [--json]',
     '  agent list [--json]',
     '  agent doctor opencode|deepseek|glm|chatgpt [--json]',
-    '  run start <project-id> --mode full|targeted [--agents opencode,deepseek,glm,chatgpt] [--paths a,b] [--depth fast|full] [--wait] [--timeout-ms <ms>] [--web] [--tools] [--profile] [--no-secrets] [--revision <rev-id>] [--json]',
+    '  run start <project-id> --mode full|targeted [--agents opencode,deepseek,glm,chatgpt] [--paths a,b] [--depth fast|full] [--wait] [--timeout-ms <ms>] [--web] [--tools] [--profile] [--no-secrets] [--instructions <text>] [--agent-note <agent>=<text>] [--revision <rev-id>] [--json]',
     '  run start <project-id> --retest <run-id>:<finding-id>,... [--retest-with reporter|all] [--agents ...] [--wait] [--json]',
     '  run list <project-id> [--json]',
     '  run show <run-id> [--json]',

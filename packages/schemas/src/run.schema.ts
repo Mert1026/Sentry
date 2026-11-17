@@ -47,10 +47,31 @@ export const RunRetestSchema = z
   .strict();
 export type RunRetest = z.infer<typeof RunRetestSchema>;
 
+/** Longest note one agent (or the whole run) takes. */
+export const RUN_NOTE_MAX_CHARS = 5000;
+
+/**
+ * What the user wrote to the agents before the run, exactly as typed: one note for every agent, a
+ * note for single agents, or both. Kept with the run so it shows on the run page and in exports.
+ * `instructions` is what the agents were actually sent (these notes plus any scope text).
+ */
+export const RunUserNotesSchema = z
+  .object({
+    createdAt: IsoTimestampSchema,
+    shared: z.string().min(1).max(RUN_NOTE_MAX_CHARS).optional(),
+    agents: z.record(AgentStackIdSchema, z.string().min(1).max(RUN_NOTE_MAX_CHARS)).optional(),
+  })
+  .strict()
+  .refine((notes) => notes.shared !== undefined || Object.keys(notes.agents ?? {}).length > 0, {
+    message: 'User notes need a shared note or a note for at least one agent',
+  });
+export type RunUserNotes = z.infer<typeof RunUserNotesSchema>;
+
 export const QARunConfigurationSchema = z
   .object({
     agentStackIds: z.array(AgentStackIdSchema).min(1),
     instructions: RunInstructionsSchema.optional(),
+    userNotes: RunUserNotesSchema.optional(),
     policy: z.object({ id: z.string().min(1).max(100), version: z.number().int().min(1) }).strict(),
     executionProfileId: z.string().min(1).max(100).optional(),
     executionSafeguards: ExecutionSafeguardsSchema.optional(),
