@@ -45,17 +45,43 @@ const URL_PATTERN = new RegExp(
   `https://(?:claude\\.com|claude\\.ai|console\\.anthropic\\.com)/[^\\s${ESC}]+`,
 );
 const TOKEN_START = /sk-ant-oat\d{2}-[A-Za-z0-9_-]+/;
-/** Claude Code wraps long lines at the terminal width (80 columns when there is no terminal). */
-const WRAP_WIDTH = 70;
+/**
+ * Claude Code wraps a very long line onto the next one (a sign-in link wraps by one character), at
+ * a width that does not follow the terminal. A line this long, followed by a line of nothing but
+ * link or token characters, is one piece of text.
+ */
+const WRAP_WIDTH = 200;
 const MIN_TOKEN_LENGTH = 60;
+const HYPERLINK = new RegExp(`${ESC}\\]8;[^;]*;([^${BEL}${ESC}]+)(?:${BEL}|${ESC}\\\\)`);
+const URL_CHARS = /^[A-Za-z0-9_%.~:/?#@!$&'()*+,;=-]+$/;
 
 export function cleanTerminalText(raw: string): string {
   return raw.replace(OSC, '').replace(CSI, '').replace(/\r/g, '');
 }
 
-/** The sign-in link in the program's output, once it has printed one. */
+/**
+ * The sign-in link in the program's output, once it has printed one. The terminal hyperlink that
+ * Claude Code prints carries the whole link, so that is used first; the visible text is the
+ * fallback, joined where it wrapped.
+ */
 export function findLoginUrl(raw: string): string | undefined {
-  return URL_PATTERN.exec(cleanTerminalText(raw))?.[0];
+  const linked = HYPERLINK.exec(raw)?.[1];
+  if (linked !== undefined && URL_PATTERN.test(linked)) return linked;
+  const lines = cleanTerminalText(raw).split('\n');
+  for (let index = 0; index < lines.length; index += 1) {
+    const found = URL_PATTERN.exec(lines[index] ?? '');
+    if (found === null) continue;
+    let url = found[0];
+    let line = (lines[index] ?? '').trimEnd();
+    let next = index + 1;
+    while (line.length >= WRAP_WIDTH && URL_CHARS.test((lines[next] ?? '').trim())) {
+      url += (lines[next] ?? '').trim();
+      line = (lines[next] ?? '').trimEnd();
+      next += 1;
+    }
+    return url;
+  }
+  return undefined;
 }
 
 /**

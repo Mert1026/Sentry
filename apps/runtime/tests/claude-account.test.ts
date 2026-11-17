@@ -14,7 +14,7 @@ const TOKEN = 'sk-ant-oat01-' + 'AbCdEfGhIj0123456789_-'.repeat(4) + 'Zz';
 /**
  * A stand-in for `claude setup-token`, written the way the real one behaves with no terminal: a
  * banner, the sign-in link twice (a terminal hyperlink repeats it), a prompt for the pasted code,
- * then, for the right code, the token wrapped at 80 columns.
+ * then, for the right code, the token.
  */
 const FAKE_CLAUDE = `
 const ESC = String.fromCharCode(27);
@@ -36,7 +36,7 @@ process.stdin.on('data', (chunk) => {
   const token = process.env.FAKE_TOKEN;
   console.log('');
   console.log('Your OAuth token (valid for 1 year):');
-  for (let i = 0; i < token.length; i += 80) console.log(token.slice(i, i + 80));
+  console.log(token);
   console.log('Store this token securely.');
   setTimeout(() => process.exit(0), 50);
 });
@@ -77,9 +77,32 @@ describe('reading the program output', () => {
     expect(cleanTerminalText(raw)).toBe(url);
   });
 
+  it('takes the whole link from the terminal hyperlink when the visible text wrapped', () => {
+    const esc = String.fromCharCode(27);
+    const bel = String.fromCharCode(7);
+    const url = 'https://claude.com/cai/oauth/authorize?code=true&state=' + 'a'.repeat(300) + 'Z';
+    // The visible copy of the link is cut one character short, as Claude Code prints it.
+    const raw = `${esc}]8;id=1;${url}${bel}${url.slice(0, -1)}
+${url.slice(-1)}${esc}]8;;${bel}`;
+    expect(findLoginUrl(raw)).toBe(url);
+  });
+
+  it('joins a wrapped link from the visible text when there is no hyperlink', () => {
+    const url = 'https://claude.com/cai/oauth/authorize?code=true&state=' + 'a'.repeat(300) + 'Z';
+    expect(
+      findLoginUrl(`${url.slice(0, -1)}
+${url.slice(-1)}
+
+Paste code here > `),
+    ).toBe(url);
+  });
+
   it('joins a token that was wrapped onto several lines', () => {
-    const wrapped = [TOKEN.slice(0, 80), TOKEN.slice(80)].join('\n');
-    expect(findToken('Your token:\n' + wrapped + '\nStore it safely.')).toBe(TOKEN);
+    const long = 'sk-ant-oat01-' + 'AbCdEfGhIj'.repeat(30);
+    const wrapped = [long.slice(0, 210), long.slice(210)].join('\n');
+    expect(findToken('Your token:\n' + wrapped + '\nStore it safely.')).toBe(long);
+    // An ordinary token is on one line, and the word after it is not part of it.
+    expect(findToken(TOKEN + '\nDone')).toBe(TOKEN);
   });
 
   it('does not take the next sentence for part of a short token', () => {
