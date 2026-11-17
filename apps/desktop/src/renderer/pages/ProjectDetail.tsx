@@ -233,7 +233,7 @@ export function ProjectDetail(): React.JSX.Element {
     onSuccess: onStarted,
     onError: onStartError,
   });
-  // Save picked findings as a file (Markdown report, GitHub issues ZIP or SARIF).
+  // Save picked findings as one file (Markdown, JSON or plain text).
   const [exportNote, setExportNote] = React.useState<string | undefined>(undefined);
   const exportFindings = useMutation({
     mutationFn: (request: PanelExportRequest) =>

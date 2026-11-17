@@ -272,7 +272,7 @@ describe('findings export through the service', () => {
     });
     const before = h.seen.length;
     await expect(h.service.exportFindings(id, { format: 'pdf', selection })).rejects.toThrow();
-    await expect(h.service.exportFindings('', { format: 'sarif', selection })).rejects.toThrow();
+    await expect(h.service.exportFindings('', { format: 'text', selection })).rejects.toThrow();
     // Nothing reached the runtime for a request that was refused.
     expect(h.seen).toHaveLength(before);
   });

@@ -12,7 +12,6 @@ import {
   createFakeHarnessRegistry,
   exportFindings,
   oneLine,
-  slug,
   type ExportedFinding,
 } from '../src/index.js';
 
@@ -52,7 +51,7 @@ function finding(overrides: Partial<Finding> & { n: number }): ExportedFinding {
   };
 }
 
-const build = (format: 'markdown' | 'github-issues' | 'sarif', entries: ExportedFinding[]) =>
+const build = (format: 'markdown' | 'json' | 'text', entries: ExportedFinding[]) =>
   buildFindingExport({
     format,
     projectName: 'Sample project',
@@ -136,131 +135,145 @@ describe('Markdown report', () => {
   });
 });
 
-describe('GitHub issues', () => {
-  it('makes one body file per finding, a list of titles and labels, and instructions', () => {
-    const result = build('github-issues', [
-      finding({ n: 1, severity: 'high', title: 'Crash on empty input' }),
-      finding({ n: 2, severity: 'low', title: '../../etc/passwd: weird title!' }),
-    ]);
-    expect(result.suggestedName).toBe('sentry-github-issues.zip');
-    const paths = result.files.map((file) => file.path);
-    expect(paths).toEqual([
-      'README.md',
-      'issues.json',
-      'issues/001-crash-on-empty-input.md',
-      'issues/002-etc-passwd-weird-title.md',
-    ]);
-    // File names never contain a path climb or an unsafe character.
-    for (const path of paths) {
-      expect(path).not.toContain('..');
-      expect(path).toMatch(/^[a-z0-9/._-]+$|^README\.md$|^issues\.json$/i);
-    }
-    const index = JSON.parse(result.files[1]!.content) as Array<{
-      file: string;
-      title: string;
-      labels: string[];
-    }>;
-    expect(index[0]).toMatchObject({
-      file: 'issues/001-crash-on-empty-input.md',
-      title: '[HIGH] Crash on empty input',
-      labels: ['bug', 'sentry', 'severity:high', 'category:logic'],
-    });
-    const body = result.files[2]!.content;
-    expect(body).toContain('Reported by Sentry.');
-    expect(body).not.toMatch(/^# /m);
-    expect(result.files[0]!.content).toContain('gh issue create');
-    expect(result.files[0]!.content).toContain('Nothing here has been sent to GitHub.');
-  });
-
-  it('turns a title into a short safe slug', () => {
-    expect(slug('Hello, World!')).toBe('hello-world');
-    expect(slug('   ')).toBe('finding');
-    expect(slug('Ünïcode ✓ title')).toBe('unicode-title');
-    expect(slug('x'.repeat(200)).length).toBeLessThanOrEqual(50);
-    expect(oneLine('a' + LF + 'b   c')).toBe('a b c');
-  });
-});
-
-describe('SARIF', () => {
-  const sarif = (entries: ExportedFinding[]) =>
-    JSON.parse(build('sarif', entries).files[0]!.content) as {
-      $schema: string;
-      version: string;
-      runs: Array<{
-        tool: { driver: { name: string; version: string; rules: Array<{ id: string }> } };
-        results: Array<{
-          ruleId: string;
-          ruleIndex: number;
-          level: string;
-          message: { text: string };
-          locations: Array<{
-            physicalLocation: {
-              artifactLocation: { uri: string; uriBaseId: string };
-              region?: { startLine: number; endLine?: number };
-            };
-            logicalLocations?: Array<{ name: string }>;
-          }>;
-          partialFingerprints: Record<string, string>;
-          properties: Record<string, unknown>;
+describe('JSON report', () => {
+  const parse = (entries: ExportedFinding[]) =>
+    JSON.parse(build('json', entries).files[0]!.content) as {
+      generator: { name: string; version: string };
+      generatedAt: string;
+      project: string;
+      findingCount: number;
+      severityCounts: Record<string, number>;
+      findings: Array<{
+        number: number;
+        id: string;
+        severity: string;
+        title: string;
+        description: string;
+        reportedBy: string;
+        revisionId: string | null;
+        locations: Array<{
+          path: string;
+          startLine: number | null;
+          endLine: number | null;
+          symbol: string | null;
         }>;
+        reproductionSteps: string[];
+        evidence: Array<{ strength: string; description: string | null; command?: string }>;
       }>;
     };
 
-  it('is a valid SARIF 2.1.0 log with one result per finding', () => {
-    const log = sarif([
-      finding({ n: 1, severity: 'critical', category: 'security' as never }),
-      finding({ n: 2, severity: 'medium' }),
-      finding({ n: 3, severity: 'low' }),
-      finding({ n: 4, severity: 'info' }),
+  it('is one .json file with a generator, the counts and one object per finding, worst first', () => {
+    const result = build('json', [
+      finding({ n: 1, severity: 'low', title: 'Minor' } as never),
+      finding({ n: 2, severity: 'high', title: 'Serious' } as never),
     ]);
-    expect(build('sarif', []).suggestedName).toBe('sentry-findings.sarif');
-    expect(log.version).toBe('2.1.0');
-    expect(log.$schema).toContain('sarif-2.1.0');
-    const run = log.runs[0]!;
-    expect(run.tool.driver).toMatchObject({ name: 'Sentry', version: '2.0.1' });
-    expect(run.results.map((result) => result.level)).toEqual(['error', 'warning', 'note', 'note']);
-    for (const result of run.results) {
-      // Every result points at a rule that exists, by index and by id.
-      expect(run.tool.driver.rules[result.ruleIndex]?.id).toBe(result.ruleId);
-      expect(result.partialFingerprints['sentryFindingId/v1']).toMatch(/^find_/);
-    }
-    expect(run.results[0]!.properties).toMatchObject({
-      severity: 'critical',
-      confidence: 'confirmed',
-      runId: 'run_00000000000000000000000001',
-    });
+    expect(result.files.map((file) => file.path)).toEqual(['sentry-findings.json']);
+    expect(result.suggestedName).toBe('sentry-findings.json');
+    expect(result.mimeType).toBe('application/json');
+    const document = parse([
+      finding({ n: 1, severity: 'low', title: 'Minor' } as never),
+      finding({ n: 2, severity: 'high', title: 'Serious' } as never),
+    ]);
+    expect(document.generator).toEqual({ name: 'Sentry', version: '2.0.1' });
+    expect(document.generatedAt).toBe(GENERATED_AT);
+    expect(document.project).toBe('Sample project');
+    expect(document.findingCount).toBe(2);
+    expect(document.severityCounts).toEqual({ high: 1, low: 1 });
+    expect(document.findings.map((item) => [item.number, item.severity, item.title])).toEqual([
+      [1, 'high', 'Serious'],
+      [2, 'low', 'Minor'],
+    ]);
+    expect(document.findings[0]!.reportedBy).toBe('stack_opencode_main');
+    expect(document.findings[0]!.locations).toEqual([
+      { path: 'src/app.ts', startLine: 10, endLine: null, symbol: null },
+    ]);
+    expect(document.findings[0]!.reproductionSteps).toEqual(['Do the thing', 'Look at the result']);
   });
 
-  it('keeps locations relative to the project, encoded, with their lines and symbol', () => {
-    const entry = finding({
-      n: 1,
-      locations: [
-        { relativePath: 'src/my dir/file #1.ts', startLine: 5, endLine: 9, symbol: 'run' },
-        { relativePath: 'README.md' },
-      ] as never,
-    });
-    const [first, second] = sarif([entry]).runs[0]!.results[0]!.locations;
-    expect(first!.physicalLocation.artifactLocation).toEqual({
-      uri: 'src/my%20dir/file%20%231.ts',
-      uriBaseId: '%SRCROOT%',
-    });
-    expect(first!.physicalLocation.region).toEqual({ startLine: 5, endLine: 9 });
-    expect(first!.logicalLocations).toEqual([{ name: 'run' }]);
-    expect(second!.physicalLocation.region).toBeUndefined();
-    const text = build('sarif', [entry]).files[0]!.content;
-    expect(text).not.toContain('file:');
-    expect(text).not.toMatch(/"uri": "\//);
+  it('keeps text exactly as reported, because JSON escapes it safely', () => {
+    const tricky = 'Line one' + LF + '# not a heading ' + '"quoted"' + ' \\ backslash';
+    const document = parse([finding({ n: 1, description: tricky } as never)]);
+    expect(document.findings[0]!.description).toBe(tricky);
   });
 
-  it('puts the title and description in one single-line message', () => {
-    const log = sarif([finding({ n: 1, title: 'A' + LF + 'B', description: 'C' + LF + 'D' })]);
-    expect(log.runs[0]!.results[0]!.message.text).toBe('A B: C D');
+  it('includes evidence with the command that ran', () => {
+    const entry = finding({ n: 1 });
+    const evidence = {
+      type: 'command',
+      strength: 'reproduced_failure',
+      description: 'It failed',
+      command: { command: 'node a.mjs', exitCode: 1 },
+    } as unknown as Evidence;
+    const document = parse([{ ...entry, evidence: [evidence] }]);
+    expect(document.findings[0]!.evidence).toEqual([
+      {
+        strength: 'reproduced_failure',
+        description: 'It failed',
+        command: 'node a.mjs',
+        exitCode: 1,
+      },
+    ]);
   });
 
-  it('is an empty but valid log when nothing was selected', () => {
-    const log = sarif([]);
-    expect(log.runs[0]!.results).toEqual([]);
-    expect(log.runs[0]!.tool.driver.rules).toEqual([]);
+  it('is an empty but valid document when nothing was selected', () => {
+    const document = parse([]);
+    expect(document.findingCount).toBe(0);
+    expect(document.findings).toEqual([]);
+    expect(document.severityCounts).toEqual({});
+  });
+});
+
+describe('Plain text report', () => {
+  it('is one .txt file with a header, the counts and a numbered block per finding, worst first', () => {
+    const result = build('text', [
+      finding({ n: 1, severity: 'low', title: 'Minor' } as never),
+      finding({ n: 2, severity: 'high', title: 'Serious' } as never),
+    ]);
+    expect(result.files.map((file) => file.path)).toEqual(['sentry-findings.txt']);
+    expect(result.suggestedName).toBe('sentry-findings.txt');
+    expect(result.mimeType).toBe('text/plain');
+    const text = result.files[0]!.content;
+    expect(text.startsWith('SENTRY FINDINGS REPORT')).toBe(true);
+    expect(text).toContain('Project:   Sample project');
+    expect(text).toContain('Findings:  2 (1 high, 1 low)');
+    expect(text.indexOf('[1] HIGH - Serious')).toBeGreaterThan(-1);
+    expect(text.indexOf('[1] HIGH - Serious')).toBeLessThan(text.indexOf('[2] LOW - Minor'));
+    expect(text).toContain('NOTE: These are reports written by AI agents.');
+    expect(text).toContain('Where:' + LF + '  - src/app.ts:10');
+    expect(text).toContain('Description:' + LF + '    Description 2');
+    expect(text).toContain('  1. Do the thing');
+  });
+
+  it('uses no Markdown markup and keeps free text from adding fake sections', () => {
+    const text = build('text', [
+      finding({
+        n: 1,
+        title: 'Bad' + LF + '[9] CRITICAL - fake',
+        description: 'a' + LF + '======',
+      } as never),
+    ]).files[0]!.content;
+    expect(text).not.toContain('**');
+    expect(text).not.toContain('## ');
+    // The title stays on one line, so it cannot start a second numbered block.
+    expect(text.split(LF).filter((line) => line.startsWith('[9]'))).toEqual([]);
+    // Description lines are indented, so a pasted rule line cannot pass for a real one.
+    expect(text).toContain('    ======');
+  });
+
+  it('shows evidence, including the command and its exit code', () => {
+    const entry = finding({ n: 1 });
+    const evidence = {
+      type: 'command',
+      strength: 'reproduced_failure',
+      description: 'It failed',
+      command: { command: 'node a.mjs', exitCode: 1 },
+    } as unknown as Evidence;
+    const text = build('text', [{ ...entry, evidence: [evidence] }]).files[0]!.content;
+    expect(text).toContain('  - reproduced failure: It failed (ran node a.mjs, exit code 1)');
+  });
+
+  it('says so when nothing was selected', () => {
+    expect(build('text', []).files[0]!.content).toContain('No findings were selected.');
   });
 });
 
@@ -287,7 +300,7 @@ describe('choosing findings from the stored records', () => {
     const first = await runs.run(added.project.id, { executionKind: 'simulation' });
     return { database, repository, added, first };
   }
-  const options = (format: 'markdown' | 'github-issues' | 'sarif') => ({
+  const options = (format: 'markdown' | 'json' | 'text') => ({
     format,
     toolVersion: '2.0.1',
     generatedAt: GENERATED_AT,
@@ -299,7 +312,7 @@ describe('choosing findings from the stored records', () => {
     const stored = f.repository.listFindings(f.first.run.id);
     expect(stored.length).toBeGreaterThan(1);
     const all = exportFindings(f.repository, id, {
-      ...options('sarif'),
+      ...options('json'),
       selection: { runId: f.first.run.id },
     });
     expect(all.findingCount).toBe(stored.length);

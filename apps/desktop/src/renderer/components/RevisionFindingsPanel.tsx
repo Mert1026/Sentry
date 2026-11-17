@@ -22,15 +22,15 @@ export type RetestSelection = { runId: string; findingId: string };
 
 /** Most findings one export takes (the same limit the runtime applies). */
 export const EXPORT_LIMIT = 500;
-export type ExportFormat = 'markdown' | 'github-issues' | 'sarif';
+export type ExportFormat = 'markdown' | 'json' | 'text';
 export type PanelExportRequest = {
   format: ExportFormat;
   selection: { findings: RetestSelection[] } | { revisionIds: string[] };
 };
 const EXPORT_FORMATS: ReadonlyArray<{ value: ExportFormat; label: string }> = [
-  { value: 'markdown', label: 'Markdown report' },
-  { value: 'github-issues', label: 'GitHub issues (ZIP)' },
-  { value: 'sarif', label: 'SARIF (GitHub code scanning)' },
+  { value: 'markdown', label: 'Markdown (.md)' },
+  { value: 'json', label: 'JSON (.json)' },
+  { value: 'text', label: 'Plain text (.txt)' },
 ];
 
 function formatWhen(iso: string): string {
@@ -234,12 +234,11 @@ export function RevisionFindingsPanel({
               }}
             >
               <InfoPopover title="Exporting findings">
-                Save the selected findings as a file. A Markdown report is one readable document.
-                GitHub issues is a ZIP with one issue body per finding, an issues.json with titles
-                and labels, and a README. SARIF is a file GitHub code scanning can read. Everything
-                is built from what the agents reported, with no AI involved, nothing is sent
-                anywhere and nothing is written into your project. These are agent reports: review
-                each one before acting on it.
+                Save the selected findings as one file. Markdown (.md) is a readable report, JSON
+                (.json) is structured data for scripts and other tools, and plain text (.txt) opens
+                in any editor. Everything is built from what the agents reported, with no AI
+                involved, nothing is sent anywhere and nothing is written into your project. These
+                are agent reports: review each one before acting on it.
               </InfoPopover>
               <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <span>Export as</span>

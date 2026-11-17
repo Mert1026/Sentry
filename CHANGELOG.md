@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+- Export in **Findings by revision** now works, and saves one .md, .json or .txt file. Pressing Export
+  failed with `Unknown runtime method: projects.exportFindings`: the runtime only accepts methods on
+  its allowed list, and this one was never added to it, so the export (and `sentry cli project
+export-findings`) could not run at all. The list and the handlers are now checked against each
+  other by a test. The export formats are Markdown (.md), JSON (.json) and plain text (.txt),
+  replacing GitHub issues (ZIP) and SARIF, so every export is a single file.
 - The hazard sweep no longer scans what an agent unpacked into its workspace. After the planned checks,
   Sentry probes the riskiest-looking source files, but it walked the live workspace, so a Go SDK an
   agent had downloaded into a plain `go/` folder outranked the five real project files. In a reviewed
@@ -61,9 +67,8 @@
   longer; re-test runs and simulations are unchanged.
 
 - Export findings: in **Findings by revision**, tick findings (or use **Export all in this
-  revision**) and save them as a Markdown report, as GitHub issues (a ZIP with one issue body per
-  finding, an `issues.json` and a README) or as a SARIF 2.1.0 file for GitHub code scanning. The
-  files are built from what the agents reported, with no AI, nothing is sent anywhere and nothing is
+  revision**) and save them as one file: a Markdown report (.md), a JSON document (.json) or plain
+  text (.txt). The files are built from what the agents reported, with no AI, nothing is sent anywhere and nothing is
   written into your project. CLI: `project export-findings`. Up to 500 findings per export;
   re-testing is unchanged.
 

@@ -89,7 +89,7 @@ export type ParsedCliCommand =
   | (BaseCommand<'project.findings'> & { readonly projectId: string })
   | (BaseCommand<'project.export-findings'> & {
       readonly projectId: string;
-      readonly format: 'markdown' | 'github-issues' | 'sarif';
+      readonly format: 'markdown' | 'json' | 'text';
       readonly selection:
         | {
             readonly findings: ReadonlyArray<{
@@ -457,15 +457,14 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
   if (area === 'project' && action === 'export-findings') {
     assertFlags(tail, ['--format', '--findings', '--run', '--revision', '--out', '--json']);
     const usage =
-      'Usage: qa project export-findings <project-id> --format markdown|github-issues|sarif (--findings <run-id>:<finding-id>,... | --run <run-id> | --revision <rev-id>,...) --out <path>';
+      'Usage: qa project export-findings <project-id> --format markdown|json|text (--findings <run-id>:<finding-id>,... | --run <run-id> | --revision <rev-id>,...) --out <path>';
     const [projectId] = positional(tail);
     if (projectId === undefined || positional(tail).length !== 1) fail(usage);
     const format = option(tail, '--format');
-    if (format !== 'markdown' && format !== 'github-issues' && format !== 'sarif')
-      fail('--format must be markdown, github-issues or sarif', '--format');
+    if (format !== 'markdown' && format !== 'json' && format !== 'text')
+      fail('--format must be markdown, json or text', '--format');
     const out = option(tail, '--out');
-    if (out === undefined)
-      fail('--out is required: a file, or a folder for github-issues', '--out');
+    if (out === undefined) fail('--out is required: the file to write', '--out');
     const findingsText = option(tail, '--findings');
     const runText = option(tail, '--run');
     const revisionText = option(tail, '--revision');

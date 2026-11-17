@@ -617,7 +617,7 @@ export const ProjectFindingsResultSchema = z
 export const ProjectExportFindingsResultSchema = z
   .object({
     projectId: z.string().min(1).max(200),
-    format: z.enum(['markdown', 'github-issues', 'sarif']),
+    format: z.enum(['markdown', 'json', 'text']),
     findingCount: z.number().int().min(0),
     out: z.string().min(1).max(2000),
     files: z.array(z.string().min(1).max(2000)).max(1000),

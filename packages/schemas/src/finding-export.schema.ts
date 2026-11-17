@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
-/** The file formats findings can be exported as. */
-export const FINDING_EXPORT_FORMATS = ['markdown', 'github-issues', 'sarif'] as const;
+/** The file formats findings can be exported as: Markdown (.md), JSON (.json), plain text (.txt). */
+export const FINDING_EXPORT_FORMATS = ['markdown', 'json', 'text'] as const;
 export type FindingExportFormat = (typeof FINDING_EXPORT_FORMATS)[number];
 
 /** Most findings one export takes. */
