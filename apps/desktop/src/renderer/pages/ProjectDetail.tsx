@@ -414,8 +414,7 @@ export function ProjectDetail(): React.JSX.Element {
       ) : null}
       {record?.managedCopy.state === 'locked_for_run' ? (
         <div className="inline-notice tone-warning" role="status">
-          Project is in use by {record?.managedCopy.lockedByQARunId ?? 'an active run'}. Update
-          cannot start until the run finishes.
+          {`Project is in use by ${record?.managedCopy.lockedByQARunId ?? 'an active run'}. Update cannot start until the run finishes.`}
         </div>
       ) : null}
       <div className="project-summary" aria-label="Project overview">

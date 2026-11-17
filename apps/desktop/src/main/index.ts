@@ -100,7 +100,10 @@ function registerDialogIpc(): void {
       const info = await bootstrapped.host.runtimeEnvironmentInfo();
       const root = sourcePathForDialog(record.project.sourcePath, process.platform, info.distro);
       const result = await dialog.showOpenDialog(mainWindow, {
-        title: kind === 'files' ? 'Choose project files' : 'Choose a project folder',
+        title: translateMainCopy(
+          kind === 'files' ? 'Choose project files' : 'Choose a project folder',
+          readAppLanguage(app.getPath('userData')),
+        ),
         defaultPath: root,
         properties: kind === 'files' ? ['openFile', 'multiSelections'] : ['openDirectory'],
       });
@@ -275,10 +278,11 @@ async function boot(): Promise<void> {
     requestSavePath: async ({ suggestedFilename, filters }) => {
       const win = mainWindow;
       if (win === undefined) return null;
+      const language = readAppLanguage(app.getPath('userData'));
       const result = await dialog.showSaveDialog(win, {
         defaultPath: suggestedFilename,
         filters: filters.map((filter) => ({
-          name: filter.name,
+          name: translateMainCopy(filter.name, language),
           extensions: [...filter.extensions],
         })),
         properties: ['createDirectory', 'showOverwriteConfirmation'],

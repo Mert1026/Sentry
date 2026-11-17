@@ -1,6 +1,7 @@
 import React from 'react';
 import enMessages from '../locales/en.json';
 import bgMessages from '../locales/bg.json';
+import { translatePatterns } from './i18n-patterns.js';
 import {
   getLanguage,
   setLanguage,
@@ -70,6 +71,12 @@ const STATUS_BG: Readonly<Record<string, string>> = {
   not_built: 'не е създаден',
   not_started: 'не е стартиран',
   stale: 'остарял',
+  critical: 'критична',
+  high: 'висока',
+  medium: 'средна',
+  low: 'ниска',
+  info: 'информационна',
+  uncategorized: 'некатегоризирана',
 };
 // "timed_out" and "timed out" are the same status.
 for (const key of Object.keys(STATUS_BG))
@@ -649,7 +656,8 @@ function translateCore(trimmed: string): string {
     return `${currentRevisionMatch[1] ?? ''} · ${currentRevisionMatch[2] ?? ''} · текуща`;
   }
 
-  return trimmed;
+  // Text built from parts: counts, names, "Label: value" pairs, sentences with a value inside.
+  return translatePatterns(trimmed, translateCore);
 }
 
 export function translateText(text: string, language: AppLanguage = getLanguage()): string {

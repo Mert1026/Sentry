@@ -140,7 +140,7 @@ export function Toolchains(): React.JSX.Element {
           </label>
           <span className="metadata tc-count">
             {(status.data ?? []).filter((pack) => packMatches(pack, query, installedOnly)).length}{' '}
-            of {(status.data ?? []).length} packs
+            {`of ${(status.data ?? []).length} packs`}
           </span>
         </div>
         {CATEGORIES.map((category) => {
@@ -287,7 +287,7 @@ export function Toolchains(): React.JSX.Element {
                               onClick={() => installAll(pack)}
                               aria-label={'Install all ' + pack.label + ' versions'}
                             >
-                              Install all ({missing})
+                              {`Install all (${missing})`}
                             </button>
                           ) : null}
                         </div>
