@@ -187,7 +187,18 @@ export interface AgentNetworkPromptOptions {
   readonly webToolsAvailable?: boolean;
   /** Absolute path of the Sentry-managed headless browser launcher, when installed. */
   readonly browserLauncher?: string;
+  /** Extra lines about the agent's own sandbox, added to its investigation prompt. */
+  readonly sandboxNotes?: readonly string[];
 }
+
+/**
+ * Claude Code's sandbox write-protects some paths by mounting an empty character device over them,
+ * so names that are not in the project show up in the workspace as unreadable device nodes. An
+ * agent that is not told reports them as unreadable files, secrets-check gaps and an inconsistent
+ * workspace (run_01M7NNTB12 and run_01M7NNYVQ9), and spends commands listing them.
+ */
+export const CLAUDE_SANDBOX_PLACEHOLDER_NOTE =
+  'Sandbox placeholders: this sandbox write-protects some paths by mounting an empty character device over them, so names such as `scripts`, `.github`, `.vscode`, `.idea`, `.mcp.json`, `.git/hooks` and shell dotfiles (`.bashrc`, `.gitconfig`) can appear in listings even though the project has no such file. When `ls -l` shows one of them as a character device (it starts with `c`), it is a placeholder, not a project file and not part of the snapshot. Leave placeholders out of file counts, do not read or search them, and do not report them as unreadable files, secrets-check gaps or an inconsistent workspace. A real project file or directory with one of these names is read-only but readable: treat it normally.';
 
 /** How to use the Sentry-managed headless browser. Also appended to the follow-up passes. */
 export function browserPromptLine(launcher: string): string {
@@ -211,6 +222,7 @@ export function agentNetworkPromptLines(options: AgentNetworkPromptOptions): str
     'Shell commands run without a terminal and nothing can answer a question: a command that stops to ask one waits until the run is cut off. Pass the non-interactive flag for every command that can prompt (for example `unzip -o`, `apt-get -y`, `cp -f`, `rm -f`, `mv -f`, `ssh -o BatchMode=yes`, `npx --yes`), and never start an editor, a pager or an interactive shell.',
   ];
   if (options.browserLauncher !== undefined) lines.push(browserPromptLine(options.browserLauncher));
+  lines.push(...(options.sandboxNotes ?? []));
   if (options.webAccess && options.webToolsAvailable !== false)
     lines.push(
       'Web access is enabled for this run: you may use web fetch/search for documentation, changelogs and security advisories, and must cite what you used. Never send source code, secrets or workspace contents to a website.',

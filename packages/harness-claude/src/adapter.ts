@@ -10,6 +10,7 @@ import {
   nowIsoTimestamp,
   dependencyCacheEnvironment,
   webAccessEnabled,
+  CLAUDE_SANDBOX_PLACEHOLDER_NOTE,
   allowedAgentHosts,
   toolDownloadsEnabled,
   withToolchains,
@@ -1755,6 +1756,7 @@ export class ClaudeAgentHarnessAdapter implements HarnessAdapter {
           webAccess: webAccessEnabled(request.executionSafeguards),
           toolDownloads: toolDownloadsEnabled(request.executionSafeguards),
           ...browserNetworkOption(),
+          sandboxNotes: [CLAUDE_SANDBOX_PLACEHOLDER_NOTE],
         },
         event: (body) => event(request.agentRunId, body),
         streamTurn: (turnText) =>

@@ -320,6 +320,9 @@ describe('Claude ordered stage prompt behavior', () => {
       expect(investigation).toContain('Work ONLY on this check');
       expect(investigation).toContain('counterexample');
       expect(investigation).toContain('Small fixture');
+      // The sandbox's placeholder entries are explained, so they are not reported as findings or gaps.
+      expect(investigation).toContain('Sandbox placeholders');
+      expect(investigation).toContain('character device');
       expect(investigation).not.toContain(QA_SESSION_CONTRACT);
       expect(reporting).toContain('No tools');
       expect(reporting).toContain('ONLY authoritative source');
