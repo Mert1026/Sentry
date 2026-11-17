@@ -1139,6 +1139,104 @@ describe('turning the secrets check off from the CLI', () => {
   });
 });
 
+describe('toolchain needs, target suggestions and custom add-ons through the CLI', () => {
+  it('reads the new commands and refuses unclear ones', () => {
+    for (const action of ['suggest-targets', 'toolchain-needs', 'toolchain-selection'] as const) {
+      expect(parseCommand(['project', action, PROJECT_ID])).toEqual({
+        command: 'project.' + action,
+        projectId: PROJECT_ID,
+      });
+      expect(() => parseCommand(['project', action])).toThrow(/Usage/);
+      expect(() => parseCommand(['project', action, PROJECT_ID, '--bogus'])).toThrow(
+        /Unknown option/,
+      );
+    }
+    expect(
+      parseCommand(['project', 'toolchain-assess', PROJECT_ID, '--agents', 'opencode,glm']),
+    ).toEqual({
+      command: 'project.toolchain-assess',
+      projectId: PROJECT_ID,
+      agents: ['opencode', 'glm'],
+    });
+    expect(parseCommand(['project', 'toolchain-assess', PROJECT_ID])).not.toHaveProperty('agents');
+    expect(() =>
+      parseCommand(['project', 'toolchain-assess', PROJECT_ID, '--agents', 'gpt']),
+    ).toThrow(/Unknown agent/);
+    expect(parseCommand(['toolchain', 'custom', 'status'])).toEqual({
+      command: 'toolchain.custom-status',
+    });
+    expect(parseCommand(['toolchain', 'custom', 'remove', 'mytool', '--yes'])).toEqual({
+      command: 'toolchain.custom-remove',
+      name: 'mytool',
+    });
+    expect(() => parseCommand(['toolchain', 'custom', 'remove', 'mytool'])).toThrow(/--yes/);
+    // Installing a custom add-on runs the caller's shell command, so it is not a CLI command.
+    expect(() => parseCommand(['toolchain', 'custom', 'install', 'mytool'])).toThrow(/Usage/);
+  });
+
+  it('calls the matching Desktop channel for each command', async () => {
+    const broker = await startFakeBroker((command) => ({ answeredBy: command }));
+    try {
+      const run = (args: string[]) =>
+        executeFrontendCommand(parseCommand(args), { createClient: () => clientFor(broker) });
+      expect(await run(['project', 'suggest-targets', PROJECT_ID])).toMatchObject({
+        command: 'project.suggest-targets',
+        data: { projectId: PROJECT_ID, suggestions: { answeredBy: 'projects:suggest-targets' } },
+      });
+      expect(await run(['project', 'toolchain-needs', PROJECT_ID])).toMatchObject({
+        data: { needs: { answeredBy: 'projects:toolchain-needs' } },
+      });
+      expect(await run(['project', 'toolchain-selection', PROJECT_ID])).toMatchObject({
+        data: { selection: { answeredBy: 'projects:toolchain-selection' } },
+      });
+      expect(
+        await run(['project', 'toolchain-assess', PROJECT_ID, '--agents', 'opencode,deepseek']),
+      ).toMatchObject({ data: { assessment: { answeredBy: 'projects:assess-toolchains' } } });
+      expect(broker.seen.at(-1)?.payload).toEqual({
+        projectId: PROJECT_ID,
+        agentStackIds: ['stack_opencode_main', 'stack_deepseek_main'],
+      });
+      expect(await run(['toolchain', 'custom', 'status'])).toMatchObject({
+        command: 'toolchain.custom-status',
+        data: { addons: { answeredBy: 'toolchains:custom-status' } },
+      });
+      expect(await run(['toolchain', 'custom', 'remove', 'mytool', '--yes'])).toMatchObject({
+        command: 'toolchain.custom-remove',
+        data: { name: 'mytool' },
+      });
+      expect(broker.seen.at(-1)).toMatchObject({
+        command: 'toolchains:custom-remove',
+        payload: { name: 'mytool' },
+      });
+      const channels = broker.seen.map((call) => call.command);
+      expect(channels).not.toContain('toolchains:custom-install');
+    } finally {
+      await broker.close();
+    }
+  });
+
+  it('says so in capabilities, so scripts can detect the commands', async () => {
+    const broker = await startFakeBroker(() => ({}));
+    try {
+      const result = await executeFrontendCommand(parseCommand(['capabilities']), {
+        createClient: () => clientFor(broker),
+      });
+      expect(result).toMatchObject({
+        data: {
+          features: {
+            suggestTargets: true,
+            toolchainNeeds: true,
+            customAddons: true,
+            runNotes: true,
+          },
+        },
+      });
+    } finally {
+      await broker.close();
+    }
+  });
+});
+
 describe('exporting findings through the CLI', () => {
   const RUN_ID = 'run_01K7777777777777777777A8W1';
   const FINDING_ID = 'find_01K7777777777777777777A8WA';

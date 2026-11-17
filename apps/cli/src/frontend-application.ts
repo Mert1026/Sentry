@@ -312,6 +312,10 @@ export async function executeFrontendCommand(
           findingsExport: true,
           projectProfile: true,
           toolchains: true,
+          suggestTargets: true,
+          toolchainNeeds: true,
+          customAddons: true,
+          runNotes: true,
         },
         agentStacks: [
           { id: 'opencode', displayName: 'OpenCode QA Agent', harness: 'opencode' },
@@ -470,6 +474,50 @@ export async function executeFrontendCommand(
             ? {}
             : { agentStackIds: input.agents.map((name) => stackIdForAgent(name)) }),
         }),
+      });
+    }
+    if (input.command === 'project.suggest-targets') {
+      return success(input.command, {
+        projectId: input.projectId,
+        suggestions: await broker.request('projects:suggest-targets', {
+          projectId: input.projectId,
+        }),
+      });
+    }
+    if (input.command === 'project.toolchain-needs') {
+      return success(input.command, {
+        projectId: input.projectId,
+        needs: await broker.request('projects:toolchain-needs', { projectId: input.projectId }),
+      });
+    }
+    if (input.command === 'project.toolchain-selection') {
+      return success(input.command, {
+        projectId: input.projectId,
+        selection: await broker.request('projects:toolchain-selection', {
+          projectId: input.projectId,
+        }),
+      });
+    }
+    if (input.command === 'project.toolchain-assess') {
+      return success(input.command, {
+        projectId: input.projectId,
+        assessment: await broker.request('projects:assess-toolchains', {
+          projectId: input.projectId,
+          ...(input.agents === undefined
+            ? {}
+            : { agentStackIds: input.agents.map((name) => stackIdForAgent(name)) }),
+        }),
+      });
+    }
+    if (input.command === 'toolchain.custom-status') {
+      return success(input.command, {
+        addons: await broker.request('toolchains:custom-status', {}),
+      });
+    }
+    if (input.command === 'toolchain.custom-remove') {
+      return success(input.command, {
+        name: input.name,
+        result: await broker.request('toolchains:custom-remove', { name: input.name }),
       });
     }
     if (input.command === 'settings.show') {

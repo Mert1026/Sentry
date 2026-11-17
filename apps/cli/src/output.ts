@@ -36,6 +36,10 @@ export function emitHumanSuccess(response: CliSuccessEnvelope, io: CliIo): void 
           'Findings export: yes (project export-findings)',
           'Project profile: yes (project profile, project profile-build)',
           'Toolchains: yes (toolchain status|install|remove)',
+          'Target suggestions: yes (project suggest-targets)',
+          'Toolchain needs: yes (project toolchain-needs|toolchain-selection|toolchain-assess)',
+          'Custom add-ons: yes (toolchain custom status|remove)',
+          'Notes for the agents: yes (run start --instructions, --agent-note)',
           'Run depth: yes (run start --depth fast|full)',
           'Settings: yes (settings show|effort|run-limit)',
           'Run cancellation: yes',
@@ -156,7 +160,15 @@ export function emitHumanSuccess(response: CliSuccessEnvelope, io: CliIo): void 
     case 'toolchain.status':
     case 'toolchain.install':
     case 'toolchain.remove':
+    case 'toolchain.custom-status':
+    case 'project.suggest-targets':
+    case 'project.toolchain-needs':
+    case 'project.toolchain-selection':
+    case 'project.toolchain-assess':
       io.stdout(JSON.stringify(response.data, null, 2));
+      return;
+    case 'toolchain.custom-remove':
+      io.stdout('Removed the custom add-on ' + response.data.name);
       return;
     case 'project.findings':
       io.stdout(formatFindingsByRevision(response.data.revisions));

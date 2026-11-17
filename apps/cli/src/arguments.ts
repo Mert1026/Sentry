@@ -111,6 +111,15 @@ export type ParsedCliCommand =
   | BaseCommand<'settings.show'>
   | (BaseCommand<'settings.set-effort'> & { readonly agent: AgentName; readonly value: string })
   | (BaseCommand<'settings.set-run-limit'> & { readonly value: string })
+  | (BaseCommand<'project.suggest-targets'> & { readonly projectId: string })
+  | (BaseCommand<'project.toolchain-needs'> & { readonly projectId: string })
+  | (BaseCommand<'project.toolchain-selection'> & { readonly projectId: string })
+  | (BaseCommand<'project.toolchain-assess'> & {
+      readonly projectId: string;
+      readonly agents?: readonly AgentName[];
+    })
+  | BaseCommand<'toolchain.custom-status'>
+  | (BaseCommand<'toolchain.custom-remove'> & { readonly name: string })
   | BaseCommand<'toolchain.status'>
   | (BaseCommand<'toolchain.install'> & { readonly packId: string; readonly version: string })
   | (BaseCommand<'toolchain.remove'> & { readonly packId: string; readonly version: string })
@@ -198,6 +207,12 @@ export function commandHint(args: readonly string[]): CliCommand | 'unknown' {
     'toolchain.status',
     'toolchain.install',
     'toolchain.remove',
+    'toolchain.custom-status',
+    'toolchain.custom-remove',
+    'project.suggest-targets',
+    'project.toolchain-needs',
+    'project.toolchain-selection',
+    'project.toolchain-assess',
     'settings.show',
     'settings.set-effort',
     'settings.set-run-limit',
@@ -568,6 +583,73 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
       projectId,
       ...(agents === undefined ? {} : { agents: agents as AgentName[] }),
     };
+  }
+  if (
+    area === 'project' &&
+    (action === 'suggest-targets' ||
+      action === 'toolchain-needs' ||
+      action === 'toolchain-selection')
+  ) {
+    assertFlags(tail, []);
+    const [projectId] = assertPositionals(tail, 1, 'qa project ' + action + ' <project-id>');
+    return {
+      command:
+        action === 'suggest-targets'
+          ? 'project.suggest-targets'
+          : action === 'toolchain-needs'
+            ? 'project.toolchain-needs'
+            : 'project.toolchain-selection',
+      projectId: projectId as string,
+    };
+  }
+  if (area === 'project' && action === 'toolchain-assess') {
+    assertFlags(tail, ['--agents']);
+    const [projectId] = positional(tail);
+    if (projectId === undefined || positional(tail).length !== 1)
+      fail(
+        'Usage: qa project toolchain-assess <project-id> [--agents opencode,deepseek,glm,chatgpt]',
+      );
+    const agentsText = option(tail, '--agents');
+    const agents =
+      agentsText === undefined
+        ? undefined
+        : agentsText
+            .split(',')
+            .map((value) => value.trim())
+            .filter((value) => value.length > 0);
+    if (agents !== undefined && agents.length === 0)
+      fail('--agents requires at least one agent stack', '--agents');
+    for (const name of agents ?? []) {
+      if (!isAgentName(name))
+        fail(
+          'Unknown agent: ' + name + ' (expected opencode, deepseek, glm, or chatgpt)',
+          '--agents',
+        );
+    }
+    return {
+      command: 'project.toolchain-assess',
+      projectId,
+      ...(agents === undefined ? {} : { agents: agents as AgentName[] }),
+    };
+  }
+  if (area === 'toolchain' && action === 'custom') {
+    const [what, ...rest] = tail;
+    if (what === 'status') {
+      assertFlags(rest, []);
+      assertPositionals(rest, 0, 'qa toolchain custom status');
+      return { command: 'toolchain.custom-status' };
+    }
+    if (what === 'remove') {
+      assertFlags(rest, ['--yes']);
+      const [name] = assertPositionals(
+        rest.filter((value) => value !== '--yes'),
+        1,
+        'qa toolchain custom remove <name> --yes',
+      );
+      if (!rest.includes('--yes')) fail('Removing a custom add-on requires --yes', '--yes');
+      return { command: 'toolchain.custom-remove', name: name as string };
+    }
+    fail('Usage: qa toolchain custom status | qa toolchain custom remove <name> --yes');
   }
   if (area === 'settings' && action === 'show') {
     assertFlags(tail, []);
