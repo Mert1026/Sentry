@@ -150,7 +150,7 @@ export function Dashboard(): React.JSX.Element {
                       project.currentRevisionId !== '' ? (
                         <span className="mono" title={project.currentRevisionId}>
                           {' '}
-                          · rev {project.currentRevisionId.slice(0, 12)}
+                          {`· rev ${project.currentRevisionId.slice(0, 12)}`}
                         </span>
                       ) : null}
                     </div>

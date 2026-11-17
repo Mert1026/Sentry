@@ -116,6 +116,14 @@ const MAIN_COPY: Record<string, MainCopy> = {
     en: 'QA execution is disabled. See docs/setup/wsl-runtime.md for setup instructions.',
     bg: 'Изпълнението на QA е деактивирано. Вижте docs/setup/wsl-runtime.md за инструкции за настройка.',
   },
+  // Native file dialogs.
+  'Markdown files': { en: 'Markdown files', bg: 'Markdown файлове' },
+  'JSON files': { en: 'JSON files', bg: 'JSON файлове' },
+  'Log files': { en: 'Log files', bg: 'Журнални файлове' },
+  'Text files': { en: 'Text files', bg: 'Текстови файлове' },
+  'All files': { en: 'All files', bg: 'Всички файлове' },
+  'Choose project files': { en: 'Choose project files', bg: 'Изберете файлове от проекта' },
+  'Choose a project folder': { en: 'Choose a project folder', bg: 'Изберете папка на проекта' },
   'Fix the data root (SENTRY_DATA_ROOT) and retry.': {
     en: 'Fix the data root (SENTRY_DATA_ROOT) and retry.',
     bg: 'Поправете корена на данните (SENTRY_DATA_ROOT) и опитайте отново.',

@@ -503,7 +503,7 @@ function FindingsTab({
         <FindingCard key={finding.id} finding={finding} evidence={evidence} />
       ))}
       {visible.length === 0 ? (
-        <p className="muted">No {severity.toLowerCase()} findings from this agent.</p>
+        <p className="muted">{`No ${severity.toLowerCase()} findings from this agent.`}</p>
       ) : null}
     </div>
   );
@@ -578,7 +578,9 @@ function ActivityTab({
           </div>
         ))}
       </div>
-      {visible.length === 0 ? <p className="muted">No {filter.toLowerCase()} activity.</p> : null}
+      {visible.length === 0 ? (
+        <p className="muted">{`No ${filter.toLowerCase()} activity.`}</p>
+      ) : null}
       {selectedEvent !== undefined && events?.[selectedEvent] !== undefined ? (
         <EventDetail
           event={events[selectedEvent] as Record<string, unknown>}

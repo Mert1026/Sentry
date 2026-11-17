@@ -185,7 +185,7 @@ export function CustomAddons({ listedIds }: { listedIds: readonly string[] }): R
             {addon.installed && addon.sizeMb !== undefined ? (
               <span className="metadata">{addon.sizeMb} MB</span>
             ) : null}
-            <span className="metadata mono">PATH: {addon.pathEntries.join(', ')}</span>
+            <span className="metadata mono">{`PATH: ${addon.pathEntries.join(', ')}`}</span>
             {addon.installed ? (
               <button
                 disabled={remove.isPending}

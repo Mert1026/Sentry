@@ -158,8 +158,7 @@ export function Environment(): React.JSX.Element {
             <dl className="kv" style={{ marginTop: 10 }}>
               <dt>Runtime</dt>
               <dd className="mono">
-                Node {hello.nodeVersion} · Protocol v{hello.protocolVersion} · Sentry{' '}
-                {hello.runtimeVersion}
+                {`Node ${hello.nodeVersion} · Protocol v${hello.protocolVersion} · Sentry ${hello.runtimeVersion}`}
               </dd>
               <dt>Platform</dt>
               <dd className="mono">

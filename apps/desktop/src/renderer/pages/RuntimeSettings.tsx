@@ -152,7 +152,7 @@ export function RuntimeSettings(): React.JSX.Element {
                 >
                   {(info?.distros ?? []).map((d) => (
                     <option key={d.name} value={d.name}>
-                      {d.name} (WSL{d.version}, {d.state})
+                      {`${d.name} (WSL${d.version}, ${d.state})`}
                     </option>
                   ))}
                 </select>
