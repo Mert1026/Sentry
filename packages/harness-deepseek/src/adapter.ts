@@ -23,6 +23,7 @@ import {
 import {
   limitPhase,
   investigateChecks,
+  listHazardCandidates,
   scanHazardFiles,
   reportAttemptDeadline,
   promisePhase,
@@ -955,6 +956,8 @@ export class DeepSeekHarnessAdapter implements HarnessAdapter {
 
   async *run(request: HarnessRunRequest): AsyncIterable<HarnessEvent> {
     yield event(request.agentRunId, { type: 'run.started' });
+    // The hazard sweep may only look at files that existed before the agent started working.
+    const originalSource = await listHazardCandidates(request.workspace.runtimePath);
     if (depthPolicy(request.task.context) !== undefined) {
       yield event(request.agentRunId, {
         type: 'agent.message',
@@ -1204,7 +1207,7 @@ export class DeepSeekHarnessAdapter implements HarnessAdapter {
           ) + '\n',
         startReportContext,
         cancelled: () => this.cancelled,
-        hazardFiles: () => scanHazardFiles(request.workspace.runtimePath),
+        hazardFiles: () => scanHazardFiles(request.workspace.runtimePath, 40, originalSource),
         isTurnTimeout: (cause) => cause instanceof DeepSeekTurnTimeoutError,
         onInterrupted: () => this.liveOpenOperations.clear(),
       });

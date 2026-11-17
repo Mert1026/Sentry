@@ -34,6 +34,7 @@ import {
   buildRecoveryReportContext,
   streamObservedWork,
   investigateChecks,
+  listHazardCandidates,
   scanHazardFiles,
   buildQaPlanningPrompt,
   applyBlockedChecks,
@@ -1009,6 +1010,8 @@ export class OpenCodeHarnessAdapter implements HarnessAdapter {
 
   async *run(request: HarnessRunRequest): AsyncIterable<HarnessEvent> {
     yield event(request.agentRunId, { type: 'run.started' });
+    // The hazard sweep may only look at files that existed before the agent started working.
+    const originalSource = await listHazardCandidates(request.workspace.runtimePath);
     if (depthPolicy(request.task.context) !== undefined) {
       yield event(request.agentRunId, {
         type: 'agent.message',
@@ -1338,7 +1341,7 @@ export class OpenCodeHarnessAdapter implements HarnessAdapter {
         startReportContext,
         cancelled: () =>
           entry.controller.signal.aborted || this.cancelledRuns.has(request.agentRunId),
-        hazardFiles: () => scanHazardFiles(request.workspace.runtimePath),
+        hazardFiles: () => scanHazardFiles(request.workspace.runtimePath, 40, originalSource),
         isTurnTimeout: (cause) => cause instanceof OpenCodeTurnTimeoutError,
         // A turn on an aborted session reports a cancel failure even though nobody
         // cancelled the run (the loop rechecks `cancelled`). With banked work that is
