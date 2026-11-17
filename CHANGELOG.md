@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- The CLI now has what the app has. New commands: `project suggest-targets` (paths for a targeted run),
+  `project toolchain-needs`, `project toolchain-selection` and `project toolchain-assess` (the Setup tab's
+  toolchain needs; the last one asks the agents and uses provider budget), and `toolchain custom status|remove`
+  (custom add-ons). Installing a custom add-on stays app-only on purpose, because it runs a shell command the
+  caller supplies. `sentry doctor` now reports the headless browser agents use (PASS with the Chrome version
+  once it rendered a test page just now, or a warning if it is missing or unusable), and `capabilities` lists
+  the new features so scripts can detect them.
 - Notes for the agents. Before a run, **Run QA** now has a **Notes for the agents** box: what to focus on,
   known problems, things to leave alone. One note goes to every agent, or a switch gives each selected
   agent a note of its own (an agent only ever sees its own). The agents treat it as your instruction but

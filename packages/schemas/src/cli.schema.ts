@@ -55,6 +55,12 @@ export const CLI_COMMANDS = [
   'toolchain.status',
   'toolchain.install',
   'toolchain.remove',
+  'toolchain.custom-status',
+  'toolchain.custom-remove',
+  'project.suggest-targets',
+  'project.toolchain-needs',
+  'project.toolchain-selection',
+  'project.toolchain-assess',
   'settings.show',
   'settings.set-effort',
   'settings.set-run-limit',
@@ -566,6 +572,10 @@ export const CapabilitiesResultSchema = z
         settings: z.literal(true).optional(),
         projectProfile: z.literal(true).optional(),
         toolchains: z.literal(true).optional(),
+        suggestTargets: z.literal(true).optional(),
+        toolchainNeeds: z.literal(true).optional(),
+        customAddons: z.literal(true).optional(),
+        runNotes: z.literal(true).optional(),
       })
       .strict(),
     // Additive Phase 4 extension: stable stack identities with their
@@ -628,6 +638,27 @@ export const ProjectProfileResultSchema = z
   .object({ projectId: z.string().min(1).max(200), profile: z.unknown() })
   .strict();
 export const ToolchainStatusResultSchema = z.object({ toolchains: z.unknown() }).strict();
+/** Paths Sentry suggests for a targeted run. */
+export const ProjectSuggestTargetsResultSchema = z
+  .object({ projectId: z.string().min(1).max(200), suggestions: z.unknown() })
+  .strict();
+/** What the project's toolchain-needs analysis found so far. */
+export const ProjectToolchainNeedsResultSchema = z
+  .object({ projectId: z.string().min(1).max(200), needs: z.unknown() })
+  .strict();
+/** Which toolchains a run on this project would be given. */
+export const ProjectToolchainSelectionResultSchema = z
+  .object({ projectId: z.string().min(1).max(200), selection: z.unknown() })
+  .strict();
+/** The agents' answer to "which toolchains does this project need?" (uses provider budget). */
+export const ProjectToolchainAssessResultSchema = z
+  .object({ projectId: z.string().min(1).max(200), assessment: z.unknown() })
+  .strict();
+/** The custom add-ons (programs installed with the person's own shell command). */
+export const ToolchainCustomStatusResultSchema = z.object({ addons: z.unknown() }).strict();
+export const ToolchainCustomRemoveResultSchema = z
+  .object({ name: z.string().min(1).max(60), result: z.unknown() })
+  .strict();
 export const ToolchainChangeResultSchema = z
   .object({
     packId: z.string().min(1).max(40),
@@ -689,6 +720,12 @@ export const CliResultSchemas = {
   'toolchain.status': ToolchainStatusResultSchema,
   'toolchain.install': ToolchainChangeResultSchema,
   'toolchain.remove': ToolchainChangeResultSchema,
+  'toolchain.custom-status': ToolchainCustomStatusResultSchema,
+  'toolchain.custom-remove': ToolchainCustomRemoveResultSchema,
+  'project.suggest-targets': ProjectSuggestTargetsResultSchema,
+  'project.toolchain-needs': ProjectToolchainNeedsResultSchema,
+  'project.toolchain-selection': ProjectToolchainSelectionResultSchema,
+  'project.toolchain-assess': ProjectToolchainAssessResultSchema,
   'settings.show': SettingsShowResultSchema,
   'settings.set-effort': SettingsSetEffortResultSchema,
   'settings.set-run-limit': SettingsSetRunLimitResultSchema,

@@ -73,6 +73,9 @@ disabled in `/etc/wsl.conf`, which setup enables and re-probes.
 
 ## Agents report "no browser"
 
+`sentry doctor` shows whether it is there: `Headless browser` is PASS (Chrome version, and it rendered a test page just
+now), or a warning saying not installed / installed but unusable.
+
 Web-page checks need the managed headless browser that `sentry setup` / `sentry update` installs under
 `~/.local/share/sentry/tools/browser` (about 350 MB, no sudo). Setup prints `Headless browser for QA agents
 (managed)` when it works, or a warning with the reason when it does not (no network to the Chrome download

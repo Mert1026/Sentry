@@ -164,6 +164,27 @@ sentry cli project export-findings proj_ID --format text --findings run_ID:find_
   same findings give the same files, ordered by severity. Review each one before acting on it.
 - `capabilities` reports `features.findingsExport: true`.
 
+### Target suggestions, toolchain needs and custom add-ons
+
+```text
+sentry cli project suggest-targets proj_ID
+sentry cli project toolchain-needs proj_ID
+sentry cli project toolchain-selection proj_ID
+sentry cli project toolchain-assess proj_ID [--agents opencode,deepseek,glm,chatgpt]
+sentry cli toolchain custom status
+sentry cli toolchain custom remove NAME --yes
+```
+
+- `suggest-targets` lists the paths Sentry suggests for a targeted run (`run start --mode targeted --paths ...`).
+- `toolchain-needs` shows what the toolchain-needs analysis found, and `toolchain-selection` which toolchains a
+  run on the project would be given. Both only read.
+- `toolchain-assess` asks the agents which toolchains the project needs, like the **Setup** tab's button. It uses
+  provider budget, so it takes `--agents` like `profile-build`.
+- `toolchain custom status` lists the custom add-ons, and `toolchain custom remove` deletes one (`--yes` is
+  required). Installing a custom add-on is only possible in the app: it runs a shell command the caller
+  supplies, so Desktop does not accept it from the CLI.
+- `capabilities` reports `features.suggestTargets`, `toolchainNeeds`, `customAddons` and `runNotes`.
+
 ### Re-testing earlier findings, profiles, toolchains
 
 ```text

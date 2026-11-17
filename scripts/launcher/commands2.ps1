@@ -85,6 +85,12 @@ function Invoke-SentryDoctor {
     elseif ($clt.Contains('2.1.276')) { &$add 'Claude Code' 'FAIL' 'known-incompatible 2.1.276; Sentry-managed 2.1.270 required' }
     elseif ($clt.Contains('windows-mount')) { &$add 'Claude Code' 'FAIL' 'Windows mount on PATH; Sentry-managed native binary required' }
     else { &$add 'Claude Code' 'FAIL' 'no usable 2.1.270 binary' }
+    $br = Invoke-SentryWslFile -Distro $distro -ScriptName 'check-browser.sh' -TimeoutSec 90
+    $brt = [string]$br.Stdout
+    if ($brt -match 'BROWSER_OK\s+(\S+)') { &$add 'Headless browser' 'PASS' ('Chrome ' + $Matches[1] + ' rendered a test page (agents use it for browser checks)') }
+    elseif ($brt.Contains('BROWSER_MISSING')) { &$add 'Headless browser' 'WARN' 'not installed: agents report browser checks as inconclusive (run: sentry setup)' }
+    elseif ($brt.Contains('BROWSER_BROKEN')) { &$add 'Headless browser' 'WARN' ('installed but unusable: ' + (($brt -split "`n" | Where-Object { $_ -match 'BROWSER_BROKEN' } | Select-Object -First 1) -replace 'BROWSER_BROKEN\s*','').Trim() + ' (run: sentry setup)') }
+    else { &$add 'Headless browser' 'WARN' 'could not check (run: sentry setup)' }
     Add-SentryCredentialReport -Add $add -RepoRoot $RepoRoot
   }
   Show-SentryDoctorResults $results
@@ -347,6 +353,11 @@ function Show-SentryCliHelp {
   Write-Host '  run export <run-id> --format log|json --out <path> [--json]'
   Write-Host '  toolchain status [--json]'
   Write-Host '  toolchain install|remove <pack-id> <version> [--json]'
+  Write-Host '  project suggest-targets <project-id> [--json]'
+  Write-Host '  project toolchain-needs|toolchain-selection <project-id> [--json]'
+  Write-Host '  project toolchain-assess <project-id> [--agents opencode,deepseek,glm,chatgpt] [--json]'
+  Write-Host '  toolchain custom status [--json]'
+  Write-Host '  toolchain custom remove <name> --yes [--json]'
   Write-Host '  settings show [--json]'
   Write-Host '  settings effort <opencode|deepseek|glm|chatgpt> <level|default> [--json]'
   Write-Host '  settings run-limit <default|3h|6h|none|90m|12h> [--json]'

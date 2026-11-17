@@ -461,6 +461,55 @@ describe('findings export channels', () => {
     expect(call?.params).toEqual({ projectId, format: 'json', selection });
   });
 
+  it('lets external clients read toolchain needs and manage add-ons, but never install a custom one', async () => {
+    const h = await harness(true);
+    for (const channel of [
+      'projects:suggest-targets',
+      'projects:toolchain-needs',
+      'projects:toolchain-selection',
+      'projects:assess-toolchains',
+      'toolchains:custom-status',
+      'toolchains:custom-remove',
+    ])
+      expect(isCliAllowed(channel), channel).toBe(true);
+    // A custom add-on is a shell command the caller supplies: only the app's own window may start one.
+    for (const channel of ['toolchains:custom-install', 'providers:save', 'openai:account-login'])
+      expect(isCliAllowed(channel), channel).toBe(false);
+    await expect(
+      dispatchDesktopCommand(
+        h.service,
+        'toolchains:custom-install',
+        { name: 'tool', command: 'curl https://example.com | sh' },
+        {},
+        { external: true },
+      ),
+    ).rejects.toMatchObject({ code: 'CLI_COMMAND_FORBIDDEN' });
+    await dispatchDesktopCommand(h.service, 'toolchains:custom-status', {}, {}, { external: true });
+    await dispatchDesktopCommand(
+      h.service,
+      'toolchains:custom-remove',
+      { name: 'tool' },
+      {},
+      { external: true },
+    );
+    await dispatchDesktopCommand(
+      h.service,
+      'projects:toolchain-needs',
+      { projectId },
+      {},
+      { external: true },
+    );
+    const methods = h.seen.map((call) => call.method);
+    expect(methods).toEqual(
+      expect.arrayContaining([
+        'toolchains.customStatus',
+        'toolchains.customRemove',
+        'projects.toolchainNeeds',
+      ]),
+    );
+    expect(methods).not.toContain('toolchains.customInstall');
+  });
+
   it('accepts a run or revisions as the selection, and refuses anything else', async () => {
     const h = await harness(true);
     const run = (payload: unknown) =>

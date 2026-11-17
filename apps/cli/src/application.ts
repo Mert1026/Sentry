@@ -494,7 +494,13 @@ export async function executeCommand(
     input.command === 'settings.set-run-limit' ||
     input.command === 'toolchain.status' ||
     input.command === 'toolchain.install' ||
-    input.command === 'toolchain.remove'
+    input.command === 'toolchain.remove' ||
+    input.command === 'toolchain.custom-status' ||
+    input.command === 'toolchain.custom-remove' ||
+    input.command === 'project.suggest-targets' ||
+    input.command === 'project.toolchain-needs' ||
+    input.command === 'project.toolchain-selection' ||
+    input.command === 'project.toolchain-assess'
   )
     throw new CliUsageError(
       input.command +
