@@ -1080,10 +1080,10 @@ describe('exporting findings through the CLI', () => {
   const REV_ID = 'rev_01K7777777777777777777779B';
 
   it('reads the selection from the options and refuses unclear ones', () => {
-    const base = ['project', 'export-findings', PROJECT_ID, '--format', 'sarif', '--out', 'x'];
+    const base = ['project', 'export-findings', PROJECT_ID, '--format', 'json', '--out', 'x'];
     expect(parseCommand([...base, '--findings', RUN_ID + ':' + FINDING_ID])).toMatchObject({
       command: 'project.export-findings',
-      format: 'sarif',
+      format: 'json',
       selection: { findings: [{ runId: RUN_ID, findingId: FINDING_ID }] },
     });
     expect(parseCommand([...base, '--run', RUN_ID])).toMatchObject({
@@ -1103,22 +1103,19 @@ describe('exporting findings through the CLI', () => {
       parseCommand(['project', 'export-findings', PROJECT_ID, '--run', RUN_ID, '--out', 'x']),
     ).toThrow(/--format/);
     expect(() =>
-      parseCommand([
-        'project',
-        'export-findings',
-        PROJECT_ID,
-        '--run',
-        RUN_ID,
-        '--format',
-        'sarif',
-      ]),
+      parseCommand(['project', 'export-findings', PROJECT_ID, '--run', RUN_ID, '--format', 'text']),
     ).toThrow(/--out/);
     expect(() =>
       parseCommand([...base.slice(0, 4), 'html', '--out', 'x', '--run', RUN_ID]),
     ).toThrow(/--format/);
+    for (const removed of ['sarif', 'github-issues']) {
+      expect(() =>
+        parseCommand([...base.slice(0, 4), removed, '--out', 'x', '--run', RUN_ID]),
+      ).toThrow(/markdown, json or text/);
+    }
   });
 
-  it('writes one file as it is and several into a folder, never outside it', async () => {
+  it('writes the report as one file, whatever the format, and refuses anything else', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'sentry-cli-export-'));
     const files: Array<{ path: string; content: string }> = [];
     const broker = await startFakeBroker((command) => {
@@ -1143,22 +1140,28 @@ describe('exporting findings through the CLI', () => {
         selection: { runId: RUN_ID },
       });
 
-      files.length = 0;
-      files.push(
-        { path: 'README.md', content: 'read me\n' },
-        { path: 'issues/001-first.md', content: 'body ✓\n' },
-      );
-      const folder = join(dir, 'issues-out');
-      await run([...common, '--format', 'github-issues', '--out', folder]);
-      expect(await readFile(join(folder, 'issues', '001-first.md'), 'utf8')).toBe('body ✓\n');
-      expect(await readFile(join(folder, 'README.md'), 'utf8')).toBe('read me\n');
+      for (const [format, name, content] of [
+        ['json', 'findings.json', '{"findings":[]}\n'],
+        ['text', 'findings.txt', 'body ✓\n'],
+      ] as const) {
+        files.length = 0;
+        files.push({ path: 'sentry-findings.' + (format === 'json' ? 'json' : 'txt'), content });
+        const target = join(dir, name);
+        await run([...common, '--format', format, '--out', target]);
+        expect(await readFile(target, 'utf8')).toBe(content);
+        expect(broker.seen.at(-1)?.payload).toMatchObject({ format });
+      }
 
+      // An export is one file: Desktop answering with several, or none, is refused.
       files.length = 0;
-      files.push({ path: 'a.md', content: '1' }, { path: '../escape.md', content: '2' });
+      files.push({ path: 'a.md', content: '1' }, { path: 'b.md', content: '2' });
       await expect(
-        run([...common, '--format', 'github-issues', '--out', join(dir, 'safe')]),
-      ).rejects.toThrow(/unsafe file name/);
-      await expect(readFile(join(dir, 'escape.md'), 'utf8')).rejects.toThrow();
+        run([...common, '--format', 'markdown', '--out', join(dir, 'two.md')]),
+      ).rejects.toThrow(/more than one export file|no export files/);
+      files.length = 0;
+      await expect(
+        run([...common, '--format', 'markdown', '--out', join(dir, 'none.md')]),
+      ).rejects.toThrow(/no export files/);
     } finally {
       await broker.close();
       await rm(dir, { recursive: true, force: true });

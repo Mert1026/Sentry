@@ -310,10 +310,10 @@ describe('exporting findings', () => {
       true,
     );
     fireEvent.click(screen.getByRole('checkbox', { name: 'Select: Wrong status' }));
-    fireEvent.change(screen.getByLabelText('Export as'), { target: { value: 'sarif' } });
+    fireEvent.change(screen.getByLabelText('Export as'), { target: { value: 'json' } });
     fireEvent.click(screen.getByRole('button', { name: 'Export 1 selected' }));
     expect(onExport).toHaveBeenCalledWith({
-      format: 'sarif',
+      format: 'json',
       selection: { findings: [{ runId: 'run_2', findingId: 'f2' }] },
     });
   });

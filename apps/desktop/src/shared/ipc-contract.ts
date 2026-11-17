@@ -277,8 +277,8 @@ export interface SentryDesktopApi {
     /** Every revision with runs, newest first: each agent's runs and raw findings, kept apart. */
     findingsByRevision(projectId: string): Promise<FindingsByRevision>;
     /**
-     * Save the selected findings as a file: opens the native Save As dialog, then writes a Markdown
-     * report, a SARIF file or (for GitHub issues) a ZIP. The renderer only names the findings and the
+     * Save the selected findings as one file: opens the native Save As dialog, then writes a Markdown
+     * (.md), JSON (.json) or plain text (.txt) report. The renderer only names the findings and the
      * format; the destination always comes from the dialog.
      */
     saveFindingsExport(

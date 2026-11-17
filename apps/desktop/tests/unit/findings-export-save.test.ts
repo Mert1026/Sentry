@@ -1,40 +1,11 @@
-import { inflateRawSync } from 'node:zlib';
-import { crc32 } from 'node:zlib';
 import { describe, expect, it, vi } from 'vitest';
 import type { FindingExportResultDto } from '@qa/schemas';
-import { buildZip, assertSafeZipName } from '../../src/main/services/zip.js';
 import {
   findingsExportBytes,
   saveFindingsExport,
   saveOptionsForFindingsExport,
 } from '../../src/main/services/findings-export-save.js';
 import { isSavedExport } from '../../src/main/services/export-save.js';
-
-/** A tiny ZIP reader, so the tests check the real byte layout rather than our own writer. */
-function readZip(buffer: Buffer): Array<{ name: string; text: string; crcOk: boolean }> {
-  const endAt = buffer.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
-  expect(endAt).toBeGreaterThanOrEqual(0);
-  const count = buffer.readUInt16LE(endAt + 10);
-  let pointer = buffer.readUInt32LE(endAt + 16);
-  const out: Array<{ name: string; text: string; crcOk: boolean }> = [];
-  for (let index = 0; index < count; index += 1) {
-    expect(buffer.readUInt32LE(pointer)).toBe(0x02014b50);
-    const method = buffer.readUInt16LE(pointer + 10);
-    const crc = buffer.readUInt32LE(pointer + 16);
-    const size = buffer.readUInt32LE(pointer + 20);
-    const nameLength = buffer.readUInt16LE(pointer + 28);
-    const offset = buffer.readUInt32LE(pointer + 42);
-    const name = buffer.subarray(pointer + 46, pointer + 46 + nameLength).toString('utf8');
-    expect(buffer.readUInt32LE(offset)).toBe(0x04034b50);
-    const localNameLength = buffer.readUInt16LE(offset + 26);
-    const start = offset + 30 + localNameLength;
-    const raw = buffer.subarray(start, start + size);
-    const data = method === 0 ? raw : inflateRawSync(raw);
-    out.push({ name, text: data.toString('utf8'), crcOk: crc32(data) === crc });
-    pointer += 46 + nameLength;
-  }
-  return out;
-}
 
 const markdown: FindingExportResultDto = {
   format: 'markdown',
@@ -43,66 +14,22 @@ const markdown: FindingExportResultDto = {
   suggestedName: 'sentry-findings.md',
   mimeType: 'text/markdown',
 };
-const issues: FindingExportResultDto = {
-  format: 'github-issues',
-  files: [
-    { path: 'README.md', content: 'read me\n' },
-    { path: 'issues.json', content: '[]\n' },
-    { path: 'issues/001-first.md', content: 'Ünïcode body ✓\n' },
-  ],
-  findingCount: 1,
-  suggestedName: 'sentry-github-issues.zip',
-  mimeType: 'application/zip',
+const json: FindingExportResultDto = {
+  format: 'json',
+  files: [{ path: 'sentry-findings.json', content: '{"findings":[]}\n' }],
+  findingCount: 2,
+  suggestedName: 'sentry-findings.json',
+  mimeType: 'application/json',
+};
+const text: FindingExportResultDto = {
+  format: 'text',
+  files: [{ path: 'sentry-findings.txt', content: 'Ünïcode report ✓\n' }],
+  findingCount: 2,
+  suggestedName: 'sentry-findings.txt',
+  mimeType: 'text/plain',
 };
 
-describe('ZIP writer', () => {
-  it('writes entries a real unzip can read back, with correct checksums and UTF-8 names', () => {
-    const files = [
-      { path: 'a.txt', content: 'hello' },
-      { path: 'dir/b ünï.md', content: 'second ✓\n'.repeat(50) },
-      { path: 'empty.txt', content: '' },
-    ];
-    const entries = readZip(buildZip(files, new Date('2026-11-14T10:20:30Z')));
-    expect(entries.map((entry) => entry.name)).toEqual(files.map((file) => file.path));
-    expect(entries.map((entry) => entry.text)).toEqual(files.map((file) => file.content));
-    expect(entries.every((entry) => entry.crcOk)).toBe(true);
-  });
-
-  it('is the same bytes for the same files and time', () => {
-    const files = [{ path: 'a.txt', content: 'x' }];
-    const when = new Date('2026-11-14T10:20:30Z');
-    expect(buildZip(files, when).equals(buildZip(files, when))).toBe(true);
-  });
-
-  it('refuses names that could climb out of the folder it is unpacked in, and duplicates', () => {
-    for (const bad of [
-      '',
-      '/etc/passwd',
-      '../escape.txt',
-      'a/../../b',
-      'a//b',
-      './a',
-      'C:/Windows/x',
-      'a\\b',
-      'a/b/',
-      'x'.repeat(301),
-      'line' + String.fromCharCode(10) + 'break',
-    ]) {
-      expect(() => assertSafeZipName(bad), JSON.stringify(bad)).toThrow(/Unsafe name/);
-      expect(() => buildZip([{ path: bad, content: 'x' }])).toThrow();
-    }
-    expect(() =>
-      buildZip([
-        { path: 'a.txt', content: '1' },
-        { path: 'a.txt', content: '2' },
-      ]),
-    ).toThrow(/Duplicate/);
-  });
-});
-
 describe('saving a findings export', () => {
-  const when = new Date('2026-11-14T10:20:30Z');
-
   it('saves a Markdown report as the file itself, with a Markdown save dialog', async () => {
     const requestSavePath = vi.fn().mockResolvedValue('C:\\Users\\me\\report.md');
     const writes: Array<{ destination: string; bytes: Buffer }> = [];
@@ -110,7 +37,6 @@ describe('saving a findings export', () => {
       requestSavePath,
       fetchExport: async () => markdown,
       writeDestination: async (destination, bytes) => void writes.push({ destination, bytes }),
-      now: () => when,
     });
     expect(result).toEqual({
       status: 'saved',
@@ -131,37 +57,48 @@ describe('saving a findings export', () => {
     expect(isSavedExport('C:\\Users\\me\\report.md')).toBe(true);
   });
 
-  it('saves GitHub issues as one ZIP with every file in it', async () => {
+  it('saves a JSON export as the file itself, with a JSON save dialog', async () => {
     const writes: Buffer[] = [];
     const result = await saveFindingsExport({
       requestSavePath: async (options) => {
-        expect(options.suggestedFilename).toBe('sentry-github-issues.zip');
-        expect(options.filters[0]).toEqual({ name: 'ZIP archives', extensions: ['zip'] });
-        return 'C:\\Users\\me\\issues.zip';
+        expect(options.suggestedFilename).toBe('sentry-findings.json');
+        expect(options.filters[0]).toEqual({ name: 'JSON files', extensions: ['json'] });
+        return 'C:\\Users\\me\\findings.json';
       },
-      fetchExport: async () => issues,
+      fetchExport: async () => json,
       writeDestination: async (_destination, bytes) => void writes.push(bytes),
-      now: () => when,
     });
-    expect(result).toMatchObject({ status: 'saved', files: 3, findingCount: 1 });
-    const entries = readZip(writes[0]!);
-    expect(entries.map((entry) => entry.name)).toEqual(issues.files.map((file) => file.path));
-    expect(entries[2]!.text).toBe('Ünïcode body ✓\n');
-    expect(entries.every((entry) => entry.crcOk)).toBe(true);
+    expect(result).toMatchObject({ status: 'saved', files: 1, findingCount: 2 });
+    expect(writes[0]!.toString('utf8')).toBe('{"findings":[]}\n');
   });
 
-  it('writes a SARIF export as a plain file with a SARIF filter', () => {
-    const sarif: FindingExportResultDto = {
-      ...markdown,
-      format: 'sarif',
-      suggestedName: 'sentry-findings.sarif',
-      files: [{ path: 'sentry-findings.sarif', content: '{}\n' }],
-    };
-    expect(saveOptionsForFindingsExport(sarif).filters[0]).toEqual({
-      name: 'SARIF files',
-      extensions: ['sarif', 'json'],
+  it('saves a plain text export as UTF-8 text, with a text save dialog', async () => {
+    const writes: Buffer[] = [];
+    const result = await saveFindingsExport({
+      requestSavePath: async (options) => {
+        expect(options.suggestedFilename).toBe('sentry-findings.txt');
+        expect(options.filters[0]).toEqual({ name: 'Text files', extensions: ['txt'] });
+        return 'C:\\Users\\me\\findings.txt';
+      },
+      fetchExport: async () => text,
+      writeDestination: async (_destination, bytes) => void writes.push(bytes),
     });
-    expect(findingsExportBytes(sarif, when).toString('utf8')).toBe('{}\n');
+    expect(result).toMatchObject({ status: 'saved', files: 1 });
+    expect(writes[0]!.toString('utf8')).toBe('Ünïcode report ✓\n');
+  });
+
+  it('refuses an export that is not exactly one file', () => {
+    const none: FindingExportResultDto = { ...markdown, files: [] };
+    const two: FindingExportResultDto = {
+      ...markdown,
+      files: [...markdown.files, { path: 'extra.md', content: 'x' }],
+    };
+    expect(() => findingsExportBytes(none)).toThrow(/exactly one file/);
+    expect(() => findingsExportBytes(two)).toThrow(/exactly one file/);
+    expect(saveOptionsForFindingsExport(markdown).filters[0]).toEqual({
+      name: 'Markdown files',
+      extensions: ['md'],
+    });
   });
 
   it('writes nothing and reports cancelled when the dialog is cancelled', async () => {

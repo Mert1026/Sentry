@@ -453,12 +453,12 @@ describe('findings export channels', () => {
     await dispatchDesktopCommand(
       h.service,
       'projects:export-findings',
-      { projectId, format: 'sarif', selection },
+      { projectId, format: 'json', selection },
       {},
       { external: true },
     );
     const call = h.seen.find((c) => c.method === 'projects.exportFindings');
-    expect(call?.params).toEqual({ projectId, format: 'sarif', selection });
+    expect(call?.params).toEqual({ projectId, format: 'json', selection });
   });
 
   it('accepts a run or revisions as the selection, and refuses anything else', async () => {
@@ -472,7 +472,7 @@ describe('findings export channels', () => {
     });
     await run({
       projectId,
-      format: 'github-issues',
+      format: 'text',
       selection: { revisionIds: ['rev_01K7777777777777777777779B'] },
     });
     for (const bad of [
