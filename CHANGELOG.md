@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- The hazard sweep no longer scans what an agent unpacked into its workspace. After the planned checks,
+  Sentry probes the riskiest-looking source files, but it walked the live workspace, so a Go SDK an
+  agent had downloaded into a plain `go/` folder outranked the five real project files. In a reviewed
+  run that sweep spent about 25 minutes on the Go standard distribution and one agent recorded two
+  findings about it. The sweep now only looks at files that existed before the agent started.
 - A provider's safety filter at the report stage is now named for what it is. When OpenAI's filter flags a security-testing run ("flagged for possible cybersecurity risk") while an agent writes its report,
   the agent used to fail with a generic `OPENCODE_START_FAILED` and a cut-off message. It now fails with `OPENCODE_PROVIDER_REFUSED`, says the provider declined the content (not an outage or a
   credential problem), that retrying does not help, and shows the provider's own explanation, which can name its permissive-access program for authorized security work. The agent's finished checks are

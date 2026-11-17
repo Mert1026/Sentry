@@ -114,14 +114,43 @@ async function* walk(directory: string, depth: number): AsyncGenerator<string> {
   }
 }
 
+/** Relative path with forward slashes, the form `HazardFile.file` and the candidate set use. */
+function relativePath(root: string, path: string): string {
+  return relative(root, path).split(sep).join('/');
+}
+
+/**
+ * The project's own source files, listed BEFORE the agent works in the workspace. Agents unpack
+ * toolchains and clone things into it (a `go/` SDK folder, a downloaded repository), and a sweep
+ * over the live tree then ranks that code instead of the product: in a reviewed run the sweep spent
+ * 25 minutes on the Go standard distribution and one agent recorded two findings about it.
+ * Never throws: an unreadable tree yields an empty set.
+ */
+export async function listHazardCandidates(root: string): Promise<ReadonlySet<string>> {
+  const files = new Set<string>();
+  let scanned = 0;
+  for await (const path of walk(root, 0)) {
+    scanned += 1;
+    if (scanned > MAX_FILES_SCANNED) break;
+    files.add(relativePath(root, path));
+  }
+  return files;
+}
+
 /**
  * Product source files ranked by how much risky behaviour they contain. Never
- * throws: an unreadable tree simply yields fewer files.
+ * throws: an unreadable tree simply yields fewer files. With `only`, files that were not in that
+ * set (see listHazardCandidates) are never read, so nothing the agent added is swept.
  */
-export async function scanHazardFiles(root: string, limit = 40): Promise<HazardFile[]> {
+export async function scanHazardFiles(
+  root: string,
+  limit = 40,
+  only?: ReadonlySet<string>,
+): Promise<HazardFile[]> {
   const found: HazardFile[] = [];
   let scanned = 0;
   for await (const path of walk(root, 0)) {
+    if (only !== undefined && !only.has(relativePath(root, path))) continue;
     scanned += 1;
     if (scanned > MAX_FILES_SCANNED) break;
     let source: string;
@@ -133,7 +162,7 @@ export async function scanHazardFiles(root: string, limit = 40): Promise<HazardF
     if (source.length > MAX_FILE_BYTES) continue;
     const { hazards, score } = scoreHazards(source);
     if (score < MIN_SCORE) continue;
-    found.push({ file: relative(root, path).split(sep).join('/'), hazards, score });
+    found.push({ file: relativePath(root, path), hazards, score });
   }
   return found.sort((a, b) => b.score - a.score || a.file.localeCompare(b.file)).slice(0, limit);
 }

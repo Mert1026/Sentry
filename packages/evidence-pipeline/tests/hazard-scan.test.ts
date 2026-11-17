@@ -2,7 +2,12 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { hazardModuleKey, scanHazardFiles, scoreHazards } from '../src/index.js';
+import {
+  hazardModuleKey,
+  listHazardCandidates,
+  scanHazardFiles,
+  scoreHazards,
+} from '../src/index.js';
 
 let root: string | undefined;
 afterEach(async () => {
@@ -17,6 +22,35 @@ describe('hazard scan', () => {
     ]);
     expect(scoreHazards("p.replaceAll('\\\\', '/')").score).toBeGreaterThanOrEqual(4);
     expect(scoreHazards('export const add = (a, b) => a + b;').score).toBe(0);
+  });
+
+  it('never sweeps files an agent added after the candidates were listed', async () => {
+    root = await mkdtemp(join(tmpdir(), 'hazard-added-'));
+    // Deletes recursively and rewrites separators: enough weight to pass the score threshold.
+    const risky = [
+      "import { rm } from 'node:fs/promises';",
+      'await rm(target, { recursive: true });',
+      "const p = name.replaceAll('\\\\', '/');",
+      '',
+    ].join('\n');
+    await mkdir(join(root, 'src'), { recursive: true });
+    await writeFile(join(root, 'src', 'store.ts'), risky);
+    const original = await listHazardCandidates(root);
+    expect([...original]).toEqual(['src/store.ts']);
+    // The agent now unpacks an SDK into the workspace root (a plain, non-hidden folder).
+    await mkdir(join(root, 'go', 'src', 'cmd'), { recursive: true });
+    await writeFile(join(root, 'go', 'src', 'cmd', 'vcweb.ts'), risky);
+    const everything = await scanHazardFiles(root);
+    expect(everything.map((file) => file.file)).toContain('go/src/cmd/vcweb.ts');
+    const swept = await scanHazardFiles(root, 40, original);
+    expect(swept.map((file) => file.file)).toEqual(['src/store.ts']);
+  });
+
+  it('lists nothing for an unreadable tree, so the sweep finds nothing instead of guessing', async () => {
+    const missing = join(tmpdir(), 'does-not-exist-hazard-candidates');
+    const original = await listHazardCandidates(missing);
+    expect(original.size).toBe(0);
+    expect(await scanHazardFiles(missing, 40, original)).toEqual([]);
   });
 
   it('ranks product source, skipping dependencies, builds and tests', async () => {
