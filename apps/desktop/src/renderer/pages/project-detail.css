@@ -597,8 +597,59 @@
 .run-notes-switch:hover {
   border-color: var(--border-strong);
 }
+.run-notes-switch:has(input:checked) {
+  border-color: var(--sentry-green-light);
+  background: var(--accent-soft);
+  color: var(--text-primary);
+}
+.run-notes-switch:has(input:focus-visible) {
+  outline: 2px solid var(--sentry-green-light);
+  outline-offset: 3px;
+}
+/* A real on/off switch in the theme's green: the track fills and the knob slides across. */
 .run-notes-switch input {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  flex: none;
+  box-sizing: border-box;
+  width: 38px;
+  height: 22px;
+  min-width: 38px;
+  min-height: 22px; /* the global input rule sets min-height 32px and padding */
   margin: 0;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--surface-3, var(--surface-2));
+  cursor: pointer;
+  transition:
+    background-color var(--dur-fast),
+    border-color var(--dur-fast);
+}
+.run-notes-switch input::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+  transition:
+    transform var(--dur-fast),
+    background-color var(--dur-fast);
+}
+.run-notes-switch input:checked {
+  border-color: var(--sentry-green-light);
+  background: var(--accent);
+}
+.run-notes-switch input:checked::before {
+  transform: translateX(16px);
+  background: #fff;
+}
+.run-notes-switch input:focus-visible {
+  outline: none;
 }
 .run-notes-fields {
   display: grid;
