@@ -1345,32 +1345,6 @@ details[open] > summary.disclosure::before {
 }
 
 /* Notes the user writes to the agents: the start-screen field and the cards on the run page. */
-.run-notes-switch {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 6px 0 10px;
-  cursor: pointer;
-}
-.run-notes-fields {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.run-notes-field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.run-notes-label {
-  font-weight: 600;
-}
-.run-notes-field textarea {
-  width: 100%;
-  min-height: 64px;
-  resize: vertical;
-  box-sizing: border-box;
-}
 .user-note-card {
   border-left: 3px solid var(--accent, #5b7fb5);
   padding: 6px 10px;
