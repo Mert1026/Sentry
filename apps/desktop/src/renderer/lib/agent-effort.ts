@@ -3,12 +3,13 @@
  * levels. This mirrors AGENT_EFFORT_LEVELS in @qa/shared (a test keeps the two identical); the
  * renderer keeps its own copy so it never imports the runtime-side package.
  */
-export type EffortAgent = 'opencode' | 'chatgpt' | 'glm' | 'deepseek';
+export type EffortAgent = 'opencode' | 'chatgpt' | 'glm' | 'claude' | 'deepseek';
 
 export const AGENT_EFFORT_LEVELS: Readonly<Record<EffortAgent, readonly string[]>> = {
   opencode: ['low', 'medium', 'high'],
   chatgpt: ['low', 'medium', 'high'],
   glm: ['low', 'medium', 'high', 'xhigh', 'max'],
+  claude: ['low', 'medium', 'high', 'xhigh', 'max'],
   deepseek: ['off', 'low', 'high', 'max'],
 };
 
@@ -16,6 +17,7 @@ export const AGENT_EFFORT_SETTING: Readonly<Record<EffortAgent, string>> = {
   opencode: 'SENTRY_OPENCODE_REASONING',
   chatgpt: 'SENTRY_CHATGPT_REASONING',
   glm: 'SENTRY_GLM_REASONING',
+  claude: 'SENTRY_ANTHROPIC_REASONING',
   deepseek: 'SENTRY_DEEPSEEK_REASONING',
 };
 

@@ -20,6 +20,7 @@ const SAME_IN_BOTH = new Set([
   'OpenCode',
   'DeepSeek',
   'ChatGPT',
+  'Claude',
   'GLM',
   'Ctrl+K',
   'TargetSpec',

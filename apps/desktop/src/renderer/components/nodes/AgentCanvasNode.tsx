@@ -13,6 +13,7 @@ const ACCENTS: Record<string, string> = {
   stack_deepseek_main: 'var(--deepseek)',
   stack_glm_main: 'var(--glm)',
   stack_chatgpt_main: 'var(--chatgpt)',
+  stack_claude_main: 'var(--claude)',
 };
 
 function stageTone(state: string): string {

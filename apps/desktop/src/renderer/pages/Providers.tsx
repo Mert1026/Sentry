@@ -15,6 +15,7 @@ import {
   OPENCODE_GO_MODELS,
   OPENCODE_ZEN_MODELS,
   ZAI_GLM_MODELS,
+  ANTHROPIC_CLAUDE_MODELS,
   modelsForOpenCodeMode,
   resolveOpenCodeBinarySuggestion,
   resolveOpenCodeModelMode,
@@ -40,9 +41,17 @@ const DESCRIPTIONS: Record<string, string> = {
     'OpenCode model id (non-secret) for the selected provider — e.g. kimi-k3 or gemini-4-argon-contributor (opencode-go), gpt-5.5 (opencode), or anthropic/claude-opus-4-6 (openrouter). Prefixing with opencode-go/, opencode/, or openrouter/ also selects that provider when Provider is unset.',
   DEEPSEEK_API_KEY: 'DeepSeek provider key (secret). Used by the DeepSeek harness host process.',
   ANTHROPIC_AUTH_TOKEN:
-    'GLM/Claude-Code provider token (secret). Used by the Claude parent process.',
+    'GLM provider token (secret). Used by the GLM agent only; the Claude agent never sees it.',
   ANTHROPIC_BASE_URL:
     'GLM endpoint override (non-secret). Trusted Z.AI Anthropic-compatible base URL, e.g. https://api.z.ai/api/anthropic.',
+  ANTHROPIC_API_KEY:
+    'Anthropic API key (secret, from console.anthropic.com). Used by the Claude agent, pay-as-you-go on your Anthropic account. The Claude agent always talks to Anthropic itself and never uses the GLM endpoint.',
+  CLAUDE_CODE_OAUTH_TOKEN:
+    'Claude account token (secret). Run `claude setup-token` in a terminal, sign in with your Claude account, and paste the token here. It lets the Claude agent use your Claude plan through the official Claude Code app instead of an API key. If both are set, the API key is used.',
+  SENTRY_ANTHROPIC_MODEL:
+    'Claude agent model id (non-secret), an Anthropic model such as claude-sonnet-5-5. The Claude agent runs Claude Code against Anthropic.',
+  SENTRY_ANTHROPIC_REASONING:
+    'How hard the Claude agent thinks (non-secret): low, medium, high, extra high or maximum. It is passed to Claude Code as its effort level. Higher effort usually finds more but takes longer and costs more. Unset uses the provider default.',
   SENTRY_DEEPSEEK_MODEL: 'DeepSeek model id override (non-secret).',
   SENTRY_GLM_MODEL: 'GLM model id override (non-secret).',
   SENTRY_DEEPSEEK_BINARY:
@@ -75,13 +84,15 @@ const SECRET_NAMES: ReadonlySet<string> = new Set([
   'OPENAI_API_KEY',
   'DEEPSEEK_API_KEY',
   'ANTHROPIC_AUTH_TOKEN',
+  'ANTHROPIC_API_KEY',
+  'CLAUDE_CODE_OAUTH_TOKEN',
 ]);
 
 interface AgentFieldSpec {
   readonly name: string;
   readonly label: string;
   readonly placeholder?: string;
-  readonly modelList?: 'opencode' | 'deepseek' | 'glm' | 'chatgpt';
+  readonly modelList?: 'opencode' | 'deepseek' | 'glm' | 'chatgpt' | 'claude';
   readonly detailsLabel?: string | null;
 }
 
@@ -162,6 +173,24 @@ const AGENT_CARDS: readonly AgentCardSpec[] = [
         modelList: 'chatgpt',
         label: 'Model',
         placeholder: 'e.g. gpt-5.5',
+      },
+    ],
+  },
+  {
+    title: 'Claude',
+    subtitle: 'Fifth reviewer · Claude Code on Anthropic, with an API key or your Claude account',
+    fields: [
+      {
+        name: 'SENTRY_ANTHROPIC_MODEL',
+        modelList: 'claude',
+        label: 'Model',
+        placeholder: 'e.g. claude-sonnet-5-5',
+      },
+      { name: 'ANTHROPIC_API_KEY', label: 'API key', detailsLabel: 'Explanation' },
+      {
+        name: 'CLAUDE_CODE_OAUTH_TOKEN',
+        label: 'Claude account token',
+        detailsLabel: 'Explanation',
       },
     ],
   },
@@ -412,7 +441,9 @@ export function Providers(): React.JSX.Element {
                         ? DEEPSEEK_MODELS
                         : field.modelList === 'glm'
                           ? ZAI_GLM_MODELS
-                          : OPENCODE_GO_MODELS
+                          : field.modelList === 'claude'
+                            ? ANTHROPIC_CLAUDE_MODELS
+                            : OPENCODE_GO_MODELS
                     }
                     optionNote={field.modelList === 'deepseek' ? deepSeekOptionNote : undefined}
                     {...fieldProps}
@@ -420,9 +451,11 @@ export function Providers(): React.JSX.Element {
                 ),
               )
             )}
-            {card.title === 'DeepSeek' || card.title === 'GLM' ? (
+            {card.title === 'DeepSeek' || card.title === 'GLM' || card.title === 'Claude' ? (
               <ReasoningEffortField
-                agent={card.title === 'GLM' ? 'glm' : 'deepseek'}
+                agent={
+                  card.title === 'GLM' ? 'glm' : card.title === 'Claude' ? 'claude' : 'deepseek'
+                }
                 byName={byName}
                 pending={save.isPending || clear.isPending}
                 onSave={fieldProps.onSave}

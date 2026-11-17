@@ -29,19 +29,19 @@ What changed: [What's new](#whats-new).
 
 ## Features
 
-| Area                 | What it does                                                                                                                            |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| Independent agents   | OpenCode, DeepSeek and GLM (through Claude Code) by default; ChatGPT is opt-in. Each agent works alone on the same snapshot.            |
-| Run modes            | Full QA for the whole project, or Targeted QA for chosen paths.                                                                         |
-| Evidence             | Findings with evidence, token usage and exports as JSON or log files.                                                                   |
-| Findings by revision | Browse what every agent reported in every run, per project revision. Nothing is merged or matched between runs.                         |
-| Export findings      | Save picked findings (or a whole revision) as one Markdown (.md), JSON (.json) or plain text (.txt) file. No AI, nothing sent anywhere. |
-| Re-test              | Pick findings from an older revision and check, on the current one, whether each is resolved and why not if it is not.                  |
-| Project profile      | Optional per-agent orientation notes for a project, labelled unverified and never containing past findings.                             |
-| Toolchains           | A library of 59 host-side installable packs in six groups, plus custom add-ons.                                                         |
-| CLI                  | A packaged `sentry cli` that drives the running Desktop with machine-readable JSON.                                                     |
-| Languages            | The interface is available in English and Bulgarian (Settings → Application).                                                           |
-| Local-first          | Projects and history stay on your machine; the original source folder is never changed.                                                 |
+| Area                 | What it does                                                                                                                             |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Independent agents   | OpenCode, DeepSeek and GLM (through Claude Code) by default; ChatGPT and Claude are opt-in. Each agent works alone on the same snapshot. |
+| Run modes            | Full QA for the whole project, or Targeted QA for chosen paths.                                                                          |
+| Evidence             | Findings with evidence, token usage and exports as JSON or log files.                                                                    |
+| Findings by revision | Browse what every agent reported in every run, per project revision. Nothing is merged or matched between runs.                          |
+| Export findings      | Save picked findings (or a whole revision) as one Markdown (.md), JSON (.json) or plain text (.txt) file. No AI, nothing sent anywhere.  |
+| Re-test              | Pick findings from an older revision and check, on the current one, whether each is resolved and why not if it is not.                   |
+| Project profile      | Optional per-agent orientation notes for a project, labelled unverified and never containing past findings.                              |
+| Toolchains           | A library of 59 host-side installable packs in six groups, plus custom add-ons.                                                          |
+| CLI                  | A packaged `sentry cli` that drives the running Desktop with machine-readable JSON.                                                      |
+| Languages            | The interface is available in English and Bulgarian (Settings → Application).                                                            |
+| Local-first          | Projects and history stay on your machine; the original source folder is never changed.                                                  |
 
 ## Requirements
 
@@ -102,12 +102,13 @@ Full steps: [release notes](docs/releases/v2.0.1.md#updating-from-v200).
 4. **Settings → Toolchains** (optional): install language runtimes and tools, see
    [Toolchains](#toolchains).
 
-| Agent    | Harness     | Default in runs | Credentials                             |
-| -------- | ----------- | --------------- | --------------------------------------- |
-| OpenCode | OpenCode    | yes             | OpenCode / OpenRouter provider settings |
-| DeepSeek | DeepSeek    | yes             | DeepSeek API key                        |
-| GLM      | Claude Code | yes             | Z.AI GLM token                          |
-| ChatGPT  | OpenCode    | no (opt-in)     | API key or a signed-in ChatGPT account  |
+| Agent    | Harness     | Default in runs | Credentials                                 |
+| -------- | ----------- | --------------- | ------------------------------------------- |
+| OpenCode | OpenCode    | yes             | OpenCode / OpenRouter provider settings     |
+| DeepSeek | DeepSeek    | yes             | DeepSeek API key                            |
+| GLM      | Claude Code | yes             | Z.AI GLM token                              |
+| ChatGPT  | OpenCode    | no (opt-in)     | API key or a signed-in ChatGPT account      |
+| Claude   | Claude Code | no (opt-in)     | Anthropic API key or a Claude account token |
 
 Optional per-run settings: **Allow web access** and **Allow tool and SDK downloads**.
 Package registries (npm, PyPI, crates.io, Go, RubyGems, Maven, NuGet, Packagist) are

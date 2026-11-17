@@ -59,6 +59,7 @@ const AGENT_ORDER = [
   'stack_deepseek_main',
   'stack_glm_main',
   'stack_chatgpt_main',
+  'stack_claude_main',
 ];
 
 function shortModel(modelId: string | undefined): string {
@@ -171,7 +172,8 @@ export function ProjectDetail(): React.JSX.Element {
         s.id === 'stack_opencode_main' ||
         s.id === 'stack_deepseek_main' ||
         s.id === 'stack_glm_main' ||
-        s.id === 'stack_chatgpt_main',
+        s.id === 'stack_chatgpt_main' ||
+        s.id === 'stack_claude_main',
     )
     .sort((a, b) => AGENT_ORDER.indexOf(a.id) - AGENT_ORDER.indexOf(b.id));
   const [selectedStacks, setSelectedStacks] = React.useState<string[] | undefined>(undefined);

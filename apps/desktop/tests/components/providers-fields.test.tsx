@@ -80,6 +80,26 @@ describe('Providers harness binary section', () => {
     expect(html).toContain('Value for DEEPSEEK_API_KEY');
     expect(html).toContain('Value for ANTHROPIC_AUTH_TOKEN');
   });
+
+  it('offers a Claude card of its own, apart from the GLM token and endpoint', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(
+        QueryClientProvider,
+        { client: new QueryClient() },
+        React.createElement(MemoryRouter, null, React.createElement(Providers, null)),
+      ),
+    );
+    expect(html).toContain('Claude');
+    expect(html).toContain('Value for SENTRY_ANTHROPIC_MODEL');
+    expect(html).toContain('<option value="claude-sonnet-5-5">claude-sonnet-5-5</option>');
+    // Two ways to sign in: an Anthropic API key, or a Claude account token from `claude setup-token`.
+    expect(html).toContain('Value for ANTHROPIC_API_KEY');
+    expect(html).toContain('Value for CLAUDE_CODE_OAUTH_TOKEN');
+    expect(html).toContain('Value for SENTRY_ANTHROPIC_REASONING');
+    // The GLM agent keeps its own token and endpoint.
+    expect(html).toContain('Value for ANTHROPIC_AUTH_TOKEN');
+    expect(html).toContain('Value for ANTHROPIC_BASE_URL');
+  });
 });
 
 describe('Providers OpenCode executable suggestion', () => {

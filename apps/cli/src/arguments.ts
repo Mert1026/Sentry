@@ -25,9 +25,15 @@ interface BaseCommand<C extends CliCommand> {
   readonly command: C;
 }
 
-export type AgentName = 'opencode' | 'deepseek' | 'glm' | 'chatgpt';
+export type AgentName = 'opencode' | 'deepseek' | 'glm' | 'chatgpt' | 'claude';
 
-export const AGENT_NAMES: readonly AgentName[] = ['opencode', 'deepseek', 'glm', 'chatgpt'];
+export const AGENT_NAMES: readonly AgentName[] = [
+  'opencode',
+  'deepseek',
+  'glm',
+  'chatgpt',
+  'claude',
+];
 /** Chosen when --agents is omitted. ChatGPT is opt-in: it needs an API key or a signed-in account. */
 export const DEFAULT_AGENT_NAMES: readonly AgentName[] = ['opencode', 'deepseek', 'glm'];
 
@@ -251,9 +257,16 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
   }
   if (area === 'agent' && action === 'doctor') {
     assertFlags(tail, []);
-    const [agent] = assertPositionals(tail, 1, 'qa agent doctor opencode|deepseek|glm|chatgpt');
+    const [agent] = assertPositionals(
+      tail,
+      1,
+      'qa agent doctor opencode|deepseek|glm|chatgpt|claude',
+    );
     if (agent === undefined || !isAgentName(agent))
-      fail('Unknown agent: ' + agent + ' (expected opencode, deepseek, glm, or chatgpt)', agent);
+      fail(
+        'Unknown agent: ' + agent + ' (expected opencode, deepseek, glm, chatgpt, or claude)',
+        agent,
+      );
     return { command: 'agent.doctor', agent };
   }
   if (area === 'project' && action === 'add') {
@@ -335,7 +348,7 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
     const [projectId] = positional(tail);
     if (projectId === undefined || positional(tail).length !== 1) {
       fail(
-        'Usage: qa run start <project-id> --mode full|targeted [--agents opencode,deepseek,glm,chatgpt] --wait [--paths a,b] [--instructions text] [--agent-note <agent>=<text>] | --retest <run-id>:<finding-id>,...',
+        'Usage: qa run start <project-id> --mode full|targeted [--agents opencode,deepseek,glm,chatgpt,claude] --wait [--paths a,b] [--instructions text] [--agent-note <agent>=<text>] | --retest <run-id>:<finding-id>,...',
       );
     }
     const retestText = option(tail, '--retest');
@@ -393,7 +406,7 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
     for (const name of agents) {
       if (!isAgentName(name))
         fail(
-          'Unknown agent: ' + name + ' (expected opencode, deepseek, glm, or chatgpt)',
+          'Unknown agent: ' + name + ' (expected opencode, deepseek, glm, chatgpt, or claude)',
           '--agents',
         );
     }
@@ -426,7 +439,7 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
       const note = equals < 0 ? '' : text.slice(equals + 1).trim();
       if (!isAgentName(name) || note.length === 0)
         fail(
-          '--agent-note looks like <agent>=<note>, with an agent of opencode, deepseek, glm or chatgpt',
+          '--agent-note looks like <agent>=<note>, with an agent of opencode, deepseek, glm, chatgpt or claude',
           '--agent-note',
         );
       if (!agents.includes(name))
@@ -560,7 +573,9 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
     assertFlags(tail, ['--agents']);
     const [projectId] = positional(tail);
     if (projectId === undefined || positional(tail).length !== 1)
-      fail('Usage: qa project profile-build <project-id> [--agents opencode,deepseek,glm,chatgpt]');
+      fail(
+        'Usage: qa project profile-build <project-id> [--agents opencode,deepseek,glm,chatgpt,claude]',
+      );
     const agentsText = option(tail, '--agents');
     const agents =
       agentsText === undefined
@@ -574,7 +589,7 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
     for (const name of agents ?? []) {
       if (!isAgentName(name))
         fail(
-          'Unknown agent: ' + name + ' (expected opencode, deepseek, glm, or chatgpt)',
+          'Unknown agent: ' + name + ' (expected opencode, deepseek, glm, chatgpt, or claude)',
           '--agents',
         );
     }
@@ -607,7 +622,7 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
     const [projectId] = positional(tail);
     if (projectId === undefined || positional(tail).length !== 1)
       fail(
-        'Usage: qa project toolchain-assess <project-id> [--agents opencode,deepseek,glm,chatgpt]',
+        'Usage: qa project toolchain-assess <project-id> [--agents opencode,deepseek,glm,chatgpt,claude]',
       );
     const agentsText = option(tail, '--agents');
     const agents =
@@ -622,7 +637,7 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
     for (const name of agents ?? []) {
       if (!isAgentName(name))
         fail(
-          'Unknown agent: ' + name + ' (expected opencode, deepseek, glm, or chatgpt)',
+          'Unknown agent: ' + name + ' (expected opencode, deepseek, glm, chatgpt, or claude)',
           '--agents',
         );
     }
@@ -661,10 +676,13 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
     const [agent, level] = assertPositionals(
       tail,
       2,
-      'qa settings effort <opencode|deepseek|glm|chatgpt> <level|default>',
+      'qa settings effort <opencode|deepseek|glm|chatgpt|claude> <level|default>',
     );
     if (agent === undefined || !isAgentName(agent))
-      fail('Unknown agent: ' + agent + ' (expected opencode, deepseek, glm, or chatgpt)', agent);
+      fail(
+        'Unknown agent: ' + agent + ' (expected opencode, deepseek, glm, chatgpt, or claude)',
+        agent,
+      );
     const value = (level ?? '').toLowerCase();
     const allowed = AGENT_EFFORT_LEVELS[agent] as readonly string[];
     if (value !== 'default' && !allowed.includes(value))

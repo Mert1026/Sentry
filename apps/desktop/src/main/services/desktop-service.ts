@@ -520,10 +520,12 @@ export class DesktopApplicationService {
     const deepseek = get('SENTRY_DEEPSEEK_MODEL');
     const glm = get('SENTRY_GLM_MODEL');
     const chatgpt = get('SENTRY_CHATGPT_MODEL');
+    const claude = get('SENTRY_ANTHROPIC_MODEL');
     if (opencode !== undefined) models['opencode'] = opencode;
     if (deepseek !== undefined) models['deepseek'] = deepseek;
     if (glm !== undefined) models['glm'] = glm;
     if (chatgpt !== undefined) models['chatgpt'] = chatgpt;
+    if (claude !== undefined) models['claude'] = claude;
     const providers: Record<string, string> = {};
     const openRouterKey = get('OPENROUTER_API_KEY');
     const openCodeKey = get('OPENCODE_API_KEY');
@@ -537,6 +539,11 @@ export class DesktopApplicationService {
     if (deepseekKey !== undefined) providers['deepseekApiKey'] = deepseekKey;
     if (glmToken !== undefined) providers['anthropicAuthToken'] = glmToken;
     if (glmEndpoint !== undefined) providers['anthropicBaseUrl'] = glmEndpoint;
+    // The Claude agent's own credentials; the GLM agent's token and endpoint above are separate.
+    const claudeKey = get('ANTHROPIC_API_KEY');
+    const claudeOauth = get('CLAUDE_CODE_OAUTH_TOKEN');
+    if (claudeKey !== undefined) providers['anthropicApiKey'] = claudeKey;
+    if (claudeOauth !== undefined) providers['claudeOauthToken'] = claudeOauth;
     const binaries: Record<string, string> = {};
     const opencodeBinary = get('SENTRY_OPENCODE_BINARY');
     const deepseekBinary = get('SENTRY_DEEPSEEK_BINARY');

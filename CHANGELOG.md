@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+- A **Claude** agent, the fifth, opt-in like ChatGPT. It runs the official Claude Code app against
+  Anthropic itself, in its own harness package (`@qa/harness-claude`), so it is fully apart from the
+  GLM agent: GLM keeps its Z.AI endpoint and token, and the Claude agent never receives them (its
+  child environment strips them, and a test checks it). Sign in under **Settings → Providers →
+  Claude** with an Anthropic API key, or with a Claude account token from `claude setup-token`
+  (the official Claude Code sign-in, so no third-party bridge). The model, reasoning effort and
+  credentials are its own (`SENTRY_ANTHROPIC_MODEL`, `SENTRY_ANTHROPIC_REASONING`,
+  `ANTHROPIC_API_KEY`, `CLAUDE_CODE_OAUTH_TOKEN`). It shares the Sentry-managed Claude Code binary
+  with GLM and nothing else. In the CLI it is `claude` (`--agents claude`, `agent doctor claude`,
+  `settings effort claude …`). Not yet run against a live Anthropic account.
 - The CLI now has what the app has. New commands: `project suggest-targets` (paths for a targeted run),
   `project toolchain-needs`, `project toolchain-selection` and `project toolchain-assess` (the Setup tab's
   toolchain needs; the last one asks the agents and uses provider budget), and `toolchain custom status|remove`

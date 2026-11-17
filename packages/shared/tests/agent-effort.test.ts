@@ -11,13 +11,16 @@ describe('agent reasoning effort', () => {
     expect(AGENT_EFFORT_LEVELS.opencode).toEqual(['low', 'medium', 'high']);
     expect(AGENT_EFFORT_LEVELS.chatgpt).toEqual(['low', 'medium', 'high']);
     expect(AGENT_EFFORT_LEVELS.glm).toEqual(['low', 'medium', 'high', 'xhigh', 'max']);
+    expect(AGENT_EFFORT_LEVELS.claude).toEqual(['low', 'medium', 'high', 'xhigh', 'max']);
     expect(AGENT_EFFORT_LEVELS.deepseek).toEqual(['off', 'low', 'high', 'max']);
-    expect(EFFORT_AGENTS.sort()).toEqual(['chatgpt', 'deepseek', 'glm', 'opencode']);
+    expect(EFFORT_AGENTS.sort()).toEqual(['chatgpt', 'claude', 'deepseek', 'glm', 'opencode']);
   });
 
   it('gives every agent its own setting', () => {
-    expect(new Set(Object.values(AGENT_EFFORT_SETTING)).size).toBe(4);
+    expect(new Set(Object.values(AGENT_EFFORT_SETTING)).size).toBe(5);
     expect(AGENT_EFFORT_SETTING.chatgpt).toBe('SENTRY_CHATGPT_REASONING');
+    // The Claude agent's setting is its own, not the GLM agent's.
+    expect(AGENT_EFFORT_SETTING.claude).toBe('SENTRY_ANTHROPIC_REASONING');
   });
 
   it('accepts a level of that agent, any case, and nothing else', () => {

@@ -157,7 +157,7 @@ export const DesktopChannelSchemas: Record<string, z.ZodTypeAny> = {
     z
       .object({
         setting: z.literal('reasoning-effort'),
-        agent: z.enum(['opencode', 'deepseek', 'glm', 'chatgpt']),
+        agent: z.enum(['opencode', 'deepseek', 'glm', 'chatgpt', 'claude']),
         value: z.string().min(1).max(20),
       })
       .strict(),
