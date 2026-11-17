@@ -78,6 +78,19 @@ export const CHATGPT_QA_STACK = AgentStackDefinitionSchema.parse({
   policy: { id: 'qa-standard', version: 1 },
 });
 
+// Claude is Anthropic's own Claude Code harness, separate from the GLM agent: it always talks to
+// Anthropic (never a custom endpoint), with its own model, effort and credentials.
+export const CLAUDE_QA_STACK = AgentStackDefinitionSchema.parse({
+  schemaVersion: 1,
+  id: 'stack_claude_main',
+  displayName: 'Claude QA Agent',
+  enabled: true,
+  model: { provider: 'anthropic', modelId: 'unconfigured', displayName: 'Claude' },
+  harness: { adapterId: 'claude', expectedProtocolVersion: 1 },
+  execution: {},
+  policy: { id: 'qa-standard', version: 1 },
+});
+
 /** The original three-agent set (simulation and fixtures keep this exact shape). */
 export const INITIAL_AGENT_STACKS: readonly AgentStackDefinition[] = [
   OPENCODE_QA_STACK,
@@ -85,8 +98,9 @@ export const INITIAL_AGENT_STACKS: readonly AgentStackDefinition[] = [
   GLM_QA_STACK,
 ];
 
-/** Every runnable agent stack the product offers (the three originals plus ChatGPT). */
+/** Every runnable agent stack the product offers (the three originals, ChatGPT and Claude). */
 export const AGENT_STACKS: readonly AgentStackDefinition[] = [
   ...INITIAL_AGENT_STACKS,
   CHATGPT_QA_STACK,
+  CLAUDE_QA_STACK,
 ];

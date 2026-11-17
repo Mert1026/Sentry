@@ -57,6 +57,11 @@ import {
   CLAUDE_CODE_TESTED_VERSION,
   type ClaudeExecutableIdentity,
 } from '@qa/harness-claude-code';
+import {
+  createClaudeRegistration,
+  claudeCredentialKind,
+  resolveClaudeRuntime,
+} from '@qa/harness-claude';
 import { HarnessAdapterRegistry } from '@qa/harness-protocol';
 import { RUN_TIMEOUT_MS_MAX, RUN_TIMEOUT_MS_MIN, createQARunId, nowIsoTimestamp } from '@qa/shared';
 import { FindingExportRequestSchema } from '@qa/schemas';
@@ -391,6 +396,8 @@ export interface DeepseekGateInput {
 }
 
 export interface GlmGateInput {
+  /** Which agent the verdict names in its reasons (default GLM); the Claude agent reuses this gate. */
+  readonly agentLabel?: string;
   readonly credential: boolean;
   readonly model: boolean;
   readonly endpointValid: boolean;
@@ -490,8 +497,9 @@ export function evaluateDeepseekGate(input: DeepseekGateInput): GateVerdict {
 export function evaluateGlmGate(input: GlmGateInput): GateVerdict {
   const reasons: string[] = [];
   const warnings: string[] = [];
-  if (!input.credential) reasons.push('GLM credential missing');
-  if (!input.model) reasons.push('GLM model not set');
+  const label = input.agentLabel ?? 'GLM';
+  if (!input.credential) reasons.push(label + ' credential missing');
+  if (!input.model) reasons.push(label + ' model not set');
   if (!input.endpointValid) reasons.push(input.endpointReason);
   if (input.executable === undefined) reasons.push('Claude Code executable not found');
   else {
@@ -543,6 +551,7 @@ export class SentryRuntimeHost {
     deepseek?: string;
     glm?: string;
     chatgpt?: string;
+    claude?: string;
   } = {};
   private closed = false;
   private shutdownRequested = false;
@@ -583,6 +592,9 @@ export class SentryRuntimeHost {
       )
       .register(
         createGlmRegistration({ toolchains: (workspace) => this.toolchains.setup(workspace) }),
+      )
+      .register(
+        createClaudeRegistration({ toolchains: (workspace) => this.toolchains.setup(workspace) }),
       );
     this.coordinator = new RunCoordinator(
       this.dataRoot,
@@ -680,6 +692,7 @@ export class SentryRuntimeHost {
       chatgpt: 'SENTRY_CHATGPT_REASONING',
       opencode: 'SENTRY_OPENCODE_VARIANT',
       glm: 'SENTRY_GLM_REASONING',
+      claude: 'SENTRY_ANTHROPIC_REASONING',
       deepseek: 'SENTRY_DEEPSEEK_REASONING',
     } as const;
     for (const [agent, variable] of Object.entries(effortVariables)) {
@@ -708,6 +721,10 @@ export class SentryRuntimeHost {
       process.env['SENTRY_GLM_MODEL'] = parsed.models.glm;
       this.configuredModels = { ...this.configuredModels, glm: parsed.models.glm };
     }
+    if (parsed.models.claude !== undefined) {
+      process.env['SENTRY_ANTHROPIC_MODEL'] = parsed.models.claude;
+      this.configuredModels = { ...this.configuredModels, claude: parsed.models.claude };
+    }
     // Secrets live in runtime process memory only: never persisted to
     // SQLite, events, artifacts, or logs (sanitized at the RPC boundary).
     if (parsed.providers.openRouterApiKey !== undefined) {
@@ -730,6 +747,12 @@ export class SentryRuntimeHost {
     }
     if (parsed.providers.anthropicBaseUrl !== undefined) {
       process.env['ANTHROPIC_BASE_URL'] = parsed.providers.anthropicBaseUrl;
+    }
+    if (parsed.providers.anthropicApiKey !== undefined) {
+      process.env['ANTHROPIC_API_KEY'] = parsed.providers.anthropicApiKey;
+    }
+    if (parsed.providers.claudeOauthToken !== undefined) {
+      process.env['CLAUDE_CODE_OAUTH_TOKEN'] = parsed.providers.claudeOauthToken;
     }
     // Full-state binary overrides: the desktop always pushes its complete
     // current set, so a present block with an absent key clears a stale
@@ -1248,16 +1271,18 @@ export class SentryRuntimeHost {
 
   // ---- doctors / system (all inside the Linux runtime) ----
   async environmentDoctors(): Promise<unknown> {
-    const [{ doctorOpenCode }, { doctorDeepSeek }, { doctorGlm }] = await Promise.all([
-      import('@qa/harness-opencode'),
-      import('@qa/harness-deepseek'),
-      import('@qa/harness-claude-code'),
-    ]);
+    const [{ doctorOpenCode }, { doctorDeepSeek }, { doctorGlm }, { doctorClaude }] =
+      await Promise.all([
+        import('@qa/harness-opencode'),
+        import('@qa/harness-deepseek'),
+        import('@qa/harness-claude-code'),
+        import('@qa/harness-claude'),
+      ]);
     // Sandbox prerequisites for the fail-closed GLM sandbox, probed here
     // (not in harness code): presence + versions + a minimal no-model
     // bubblewrap init smoke. Never throws; unknown means unverified.
     const sandboxDeps = probeSandboxDeps();
-    const [opencode, chatgpt, deepseek, glm] = await Promise.all([
+    const [opencode, chatgpt, deepseek, glm, claude] = await Promise.all([
       doctorOpenCode({
         managedExecutable: managedOpenCodeExecutable(this.dataRoot),
       }).catch(() => undefined),
@@ -1267,6 +1292,7 @@ export class SentryRuntimeHost {
       }).catch(() => undefined),
       doctorDeepSeek().catch(() => undefined),
       doctorGlm().catch(() => undefined),
+      doctorClaude().catch(() => undefined),
     ]);
     const stackStatus = (
       stackId: string,
@@ -1358,7 +1384,9 @@ export class SentryRuntimeHost {
                   managed: claudeManagedExecutablePath(this.dataRoot),
                 });
                 return {
-                  ...stackStatus(s.id, glm as never),
+                  // The Claude agent and the GLM agent share the managed Claude Code binary but
+                  // nothing else: each reports its own doctor.
+                  ...stackStatus(s.id, (s.id === 'stack_claude_main' ? claude : glm) as never),
                   executionPath: resolved.path,
                   executableSource: resolved.source,
                   ...glmSandboxStatus(sandboxDeps),
@@ -1622,6 +1650,40 @@ export class SentryRuntimeHost {
           sandboxInitOk: glmSandbox.initOk,
           sandboxDetail: glmSandbox.initDetail,
           systemdOk: glmSystemd,
+        }),
+      );
+    }
+    if (wants('stack_claude_main')) {
+      const claudeSandbox = SentryRuntimeHost.probeSandbox();
+      const claudeSystemd = SentryRuntimeHost.systemdUserReady();
+      let claudeRuntime: { executable: string };
+      try {
+        claudeRuntime = resolveClaudeRuntime({ environment: env });
+      } catch {
+        claudeRuntime = { executable: env['SENTRY_CLAUDE_BINARY']?.trim() || 'claude' };
+      }
+      const probed = await SentryRuntimeHost.probeClaudeIdentity(claudeRuntime.executable, env);
+      const version = probed.identity?.version;
+      pushVerdict(
+        'stack_claude_main',
+        evaluateGlmGate({
+          agentLabel: 'Claude',
+          // An API key or a Claude Code OAuth token; the GLM agent's Z.AI token never counts.
+          credential: claudeCredentialKind(env) !== undefined,
+          model: (env['SENTRY_ANTHROPIC_MODEL'] ?? '').length > 0,
+          // Fixed route to Anthropic: nothing to validate.
+          endpointValid: true,
+          endpointReason: '',
+          executable: probed.identity === undefined ? undefined : probed.identity.resolved,
+          windowsMounted: probed.windowsMounted,
+          version,
+          versionPolicy: version === undefined ? 'unverified' : classifyClaudeCodeVersion(version),
+          testedVersion: CLAUDE_CODE_TESTED_VERSION,
+          socat: claudeSandbox.socat,
+          bwrap: claudeSandbox.bwrap,
+          sandboxInitOk: claudeSandbox.initOk,
+          sandboxDetail: claudeSandbox.initDetail,
+          systemdOk: claudeSystemd,
         }),
       );
     }

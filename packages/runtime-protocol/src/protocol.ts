@@ -200,6 +200,7 @@ export const RuntimeConfigureParamsSchema = z
         deepseek: z.string().min(1).max(300).optional(),
         glm: z.string().min(1).max(300).optional(),
         chatgpt: z.string().min(1).max(300).optional(),
+        claude: z.string().min(1).max(300).optional(),
       })
       .strict()
       .default({}),
@@ -211,6 +212,9 @@ export const RuntimeConfigureParamsSchema = z
         deepseekApiKey: z.string().min(1).max(5000).optional(),
         anthropicAuthToken: z.string().min(1).max(5000).optional(),
         anthropicBaseUrl: z.string().min(1).max(2000).optional(),
+        // The Claude agent's own credentials (separate from the GLM agent's Z.AI token above).
+        anthropicApiKey: z.string().min(1).max(5000).optional(),
+        claudeOauthToken: z.string().min(1).max(5000).optional(),
       })
       .strict()
       .default({}),
@@ -226,6 +230,7 @@ export const RuntimeConfigureParamsSchema = z
         chatgpt: z.enum(['default', 'low', 'medium', 'high']).optional(),
         opencode: z.enum(['default', 'low', 'medium', 'high']).optional(),
         glm: z.enum(['default', 'low', 'medium', 'high', 'xhigh', 'max']).optional(),
+        claude: z.enum(['default', 'low', 'medium', 'high', 'xhigh', 'max']).optional(),
         deepseek: z.enum(['default', 'off', 'low', 'high', 'max']).optional(),
       })
       .strict()
