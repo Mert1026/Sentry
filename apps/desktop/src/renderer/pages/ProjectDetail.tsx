@@ -801,7 +801,7 @@ export function ProjectDetail(): React.JSX.Element {
                   icon={Download}
                   checked={toolDownloads}
                   onChange={setToolDownloads}
-                  description="Allow OpenCode and Claude Code to download missing compilers and SDKs from supported official vendor sites during this run. These downloads are temporary and are discarded afterwards. For tools you expect to reuse, install a managed toolchain through Settings → Toolchains. Package registry access is handled separately."
+                  description="Allow OpenCode and Claude Code to download missing compilers and SDKs from supported official vendor sites during this run. These downloads are temporary and are discarded afterwards. For tools you expect to reuse, install a managed toolchain through Settings → Toolchains. Package registry access is handled separately. DeepSeek has no network limit, so for DeepSeek this only changes its instructions and is not enforced."
                 />
                 <RunOptionToggle
                   label="Check for secrets"
