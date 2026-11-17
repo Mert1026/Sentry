@@ -447,11 +447,10 @@ export function Providers(): React.JSX.Element {
                 ),
               )
             )}
-            {card.title === 'DeepSeek' || card.title === 'GLM' || card.title === 'Claude' ? (
+            {/* OpenCode, ChatGPT and Claude show their own effort field inside their card. */}
+            {card.title === 'DeepSeek' || card.title === 'GLM' ? (
               <ReasoningEffortField
-                agent={
-                  card.title === 'GLM' ? 'glm' : card.title === 'Claude' ? 'claude' : 'deepseek'
-                }
+                agent={card.title === 'GLM' ? 'glm' : 'deepseek'}
                 byName={byName}
                 pending={save.isPending || clear.isPending}
                 onSave={fieldProps.onSave}

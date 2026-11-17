@@ -99,6 +99,8 @@ describe('Providers harness binary section', () => {
     expect(html).toContain('Value for ANTHROPIC_API_KEY');
     expect(html).not.toContain('CLAUDE_CODE_OAUTH_TOKEN');
     expect(html).toContain('Value for SENTRY_ANTHROPIC_REASONING');
+    // The effort setting appears once in the Claude card, not twice.
+    expect(html.split('Value for SENTRY_ANTHROPIC_REASONING').length - 1).toBe(1);
     // The GLM agent keeps its own token and endpoint.
     expect(html).toContain('Value for ANTHROPIC_AUTH_TOKEN');
     expect(html).toContain('Value for ANTHROPIC_BASE_URL');
