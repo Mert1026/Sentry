@@ -89,6 +89,23 @@ describe('severity disagreements: matching rules', () => {
     ).toEqual([]);
   });
 
+  it('compares a finding that has no line (even a stored null) by its file', () => {
+    const noLine = {
+      id: '2',
+      agent: 'b',
+      title: 'Duplicate keys overwrite earlier values',
+      severity: 'high',
+      file: 'settings.py',
+      line: null as unknown as undefined,
+    };
+    const out = severityDisagreements([
+      finding('1', 'a', 'Duplicate keys overwrite earlier values', 'low', 7),
+      noLine,
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0]?.ratings.map((r) => r.severity).sort()).toEqual(['high', 'low']);
+  });
+
   it('ignores severities it does not know and lines that are missing', () => {
     const out = severityDisagreements([
       {

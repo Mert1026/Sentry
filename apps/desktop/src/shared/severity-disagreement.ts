@@ -53,6 +53,8 @@ const GENERIC = new Set([
   'input',
   'instead',
   'invalid',
+  'parser',
+  'parsing',
   'raise',
   'return',
   'silent',
@@ -97,7 +99,12 @@ function sameIssue(
 ): boolean {
   if (a.agent === b.agent) return false;
   if (a.file === undefined || b.file === undefined || a.file !== b.file) return false;
-  if (a.line !== undefined && b.line !== undefined && Math.abs(a.line - b.line) > LINE_WINDOW)
+  // A finding without a line (undefined, or null from stored data) is compared by file only.
+  if (
+    typeof a.line === 'number' &&
+    typeof b.line === 'number' &&
+    Math.abs(a.line - b.line) > LINE_WINDOW
+  )
     return false;
   // Two shared words, or one that is long enough to name the defect (a type, a class, a mechanism).
   const shared = [...wa].filter((word) => wb.has(word));
