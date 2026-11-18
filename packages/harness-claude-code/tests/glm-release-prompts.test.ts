@@ -285,7 +285,13 @@ describe('GLM ordered stage prompt behavior', () => {
       const events = [];
       for await (const event of adapter.run(input)) events.push(event);
       await adapter.dispose();
-      expect(JSON.stringify(events.filter((e) => e.type === 'run.failed' || e.type === 'warning' || e.type === 'agent.status')).slice(0, 1500) + events.at(-1)?.type).toContain('run.completed');
+      expect(
+        JSON.stringify(
+          events.filter(
+            (e) => e.type === 'run.failed' || e.type === 'warning' || e.type === 'agent.status',
+          ),
+        ).slice(0, 1500) + events.at(-1)?.type,
+      ).toContain('run.completed');
       expect(events.filter((e) => e.type === 'report.checkpoint')).toHaveLength(depth ? 1 : 0);
       if (depth)
         expect(
