@@ -1357,3 +1357,12 @@ details[open] > summary.disclosure::before {
   margin: 2px 0 0;
   white-space: pre-wrap;
 }
+
+/* Issues two or more agents rated with different severities (run summary and revision findings). */
+.severity-disagreements {
+  border-left: 3px solid var(--warning, #8a6f2f);
+  padding: 6px 10px;
+  margin: 8px 0;
+  background: var(--surface-1);
+  border-radius: var(--radius-md);
+}

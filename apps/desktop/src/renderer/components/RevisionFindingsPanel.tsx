@@ -3,6 +3,13 @@ import { translateText } from '../lib/i18n.js';
 import { InfoPopover } from './InfoPopover.js';
 import { Link } from 'react-router-dom';
 import { StatusPill } from './ui/StatusPill.js';
+import { SeverityDisagreements } from './SeverityDisagreements.js';
+import {
+  severityDisagreements,
+  splitLocation,
+  type SeverityDisagreement,
+  type SeverityFinding,
+} from '../../shared/severity-disagreement.js';
 import type {
   FindingsByRevision,
   RevisionFindingsItem,
@@ -121,6 +128,32 @@ export function RevisionFindingsPanel({
   const canPick = selected !== undefined && selected.revisionId !== data?.currentRevisionId;
   const name = (stackId: string): string =>
     stacks.find((stack) => stack.id === stackId)?.displayName ?? stackId;
+  // Per run: issues two or more agents reported with different severities. Retests are skipped:
+  // they judge earlier findings and add no ratings of their own.
+  const revisionDisagreements: Array<{
+    runId: string;
+    at: string;
+    items: SeverityDisagreement[];
+  }> = [];
+  const byRun = new Map<string, { at: string; findings: SeverityFinding[] }>();
+  for (const agent of selected?.agents ?? [])
+    for (const run of agent.runs) {
+      if (run.retest !== undefined) continue;
+      const entry = byRun.get(run.runId) ?? { at: run.at, findings: [] };
+      for (const item of run.findings)
+        entry.findings.push({
+          id: item.id,
+          agent: agent.agentStackId,
+          title: item.title,
+          severity: item.severity,
+          ...splitLocation(item.location),
+        });
+      byRun.set(run.runId, entry);
+    }
+  for (const [runId, entry] of byRun) {
+    const items = severityDisagreements(entry.findings);
+    if (items.length > 0) revisionDisagreements.push({ runId, at: entry.at, items });
+  }
   const toggle = (selection: RetestSelection): void => {
     const next = new Map(picked);
     const key = keyOf(selection.runId, selection.findingId);
@@ -309,6 +342,18 @@ export function RevisionFindingsPanel({
             <p className="error-box" role="alert">
               {retestError}
             </p>
+          ) : null}
+          {revisionDisagreements.length > 0 ? (
+            <div style={{ margin: '8px 0' }}>
+              {revisionDisagreements.map((group) => (
+                <div key={group.runId}>
+                  <p className="metadata" style={{ margin: '4px 0' }}>
+                    {formatWhen(group.at)}
+                  </p>
+                  <SeverityDisagreements items={group.items} agentName={name} />
+                </div>
+              ))}
+            </div>
           ) : null}
           {selected.agents.map((agent) => {
             const total = agent.runs.reduce((sum, run) => sum + run.findings.length, 0);

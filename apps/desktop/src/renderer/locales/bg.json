@@ -933,5 +933,7 @@
   "Confirming…": "Потвърждаване…",
   "Anthropic API key": "API ключ на Anthropic",
   "Waiting for the code…": "Изчакване на кода…",
-  "How the Claude agent signs in (non-secret): key (Anthropic API key) or account (your Claude account through Claude Code).": "Как агентът Claude влиза (не е таен): key (API ключ на Anthropic) или account (вашият акаунт в Claude чрез Claude Code)."
+  "How the Claude agent signs in (non-secret): key (Anthropic API key) or account (your Claude account through Claude Code).": "Как агентът Claude влиза (не е таен): key (API ключ на Anthropic) или account (вашият акаунт в Claude чрез Claude Code).",
+  "Agents rated these differently": "Агентите оцениха това различно",
+  "Severity is each agent’s own judgment. These look like the same issue, rated differently:": "Степента на сериозност е собствена преценка на всеки агент. Това изглежда като един и същ проблем, оценен различно:"
 }
