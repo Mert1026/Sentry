@@ -1,225 +1,225 @@
 {
- "run": "run_01M7QN07AS2TBVWGSW8CD3GMZJ",
- "findings": [
-  {
-   "id": "H0BG5F",
-   "agent": "stack_claude_main",
-   "title": "load_settings uses FullLoader on untrusted YAML, letting python/object tags invoke callables",
-   "severity": "high",
-   "confidence": "confirmed",
-   "category": "security",
-   "file": "settings.py",
-   "line": 5
-  },
-  {
-   "id": "8ZKP74",
-   "agent": "stack_claude_main",
-   "title": "Pinned PyYAML 5.3.1 is in the affected range for FullLoader",
-   "severity": "high",
-   "confidence": "strong",
-   "category": "dependency",
-   "file": "requirements.txt",
-   "line": 1
-  },
-  {
-   "id": "0QN6GN",
-   "agent": "stack_claude_main",
-   "title": "Falsy non-mapping YAML documents silently return the default port",
-   "severity": "medium",
-   "confidence": "confirmed",
-   "category": "logic",
-   "file": "settings.py",
-   "line": 11
-  },
-  {
-   "id": "PX1WE0",
-   "agent": "stack_claude_main",
-   "title": "get_port raises uncaught AttributeError for non-mapping documents",
-   "severity": "medium",
-   "confidence": "confirmed",
-   "category": "runtime",
-   "file": "settings.py",
-   "line": 12
-  },
-  {
-   "id": "V9AJ44",
-   "agent": "stack_claude_main",
-   "title": "get_port accepts out-of-range and non-integer port values",
-   "severity": "medium",
-   "confidence": "confirmed",
-   "category": "logic",
-   "file": "settings.py",
-   "line": 12
-  },
-  {
-   "id": "5WX906",
-   "agent": "stack_claude_main",
-   "title": "get_port crashes with TypeError or ValueError on blank or odd port values",
-   "severity": "medium",
-   "confidence": "confirmed",
-   "category": "runtime",
-   "file": "settings.py",
-   "line": 12
-  },
-  {
-   "id": "N2YZ08",
-   "agent": "stack_claude_main",
-   "title": "Uppercase or spaced PORT key is silently ignored",
-   "severity": "medium",
-   "confidence": "confirmed",
-   "category": "logic",
-   "file": "settings.py",
-   "line": 12
-  },
-  {
-   "id": "X5D26W",
-   "agent": "stack_claude_main",
-   "title": "load_settings applies YAML 1.1 implicit typing to unquoted values",
-   "severity": "medium",
-   "confidence": "confirmed",
-   "category": "logic",
-   "file": "settings.py",
-   "line": 7
-  },
-  {
-   "id": "VVBSDM",
-   "agent": "stack_claude_main",
-   "title": "Duplicate YAML keys silently keep the last value",
-   "severity": "low",
-   "confidence": "confirmed",
-   "category": "logic",
-   "file": "settings.py",
-   "line": 7
-  },
-  {
-   "id": "JT9YY4",
-   "agent": "stack_deepseek_main",
-   "title": "Untrusted YAML can execute arbitrary code via FullLoader",
-   "severity": "critical",
-   "confidence": "confirmed",
-   "category": "security",
-   "file": "settings.py",
-   "line": 7
-  },
-  {
-   "id": "SYSW12",
-   "agent": "stack_deepseek_main",
-   "title": "get_port raises AttributeError for truthy non-mapping YAML roots",
-   "severity": "medium",
-   "confidence": "confirmed",
-   "category": "runtime",
-   "file": "settings.py",
-   "line": 10
-  },
-  {
-   "id": "G3T23C",
-   "agent": "stack_deepseek_main",
-   "title": "get_port raises TypeError for explicit null port instead of using default",
-   "severity": "low",
-   "confidence": "confirmed",
-   "category": "runtime",
-   "file": "settings.py",
-   "line": 11
-  },
-  {
-   "id": "P7R2YQ",
-   "agent": "stack_deepseek_main",
-   "title": "get_port silently accepts invalid or nonsensical TCP port values",
-   "severity": "medium",
-   "confidence": "confirmed",
-   "category": "logic",
-   "file": "settings.py",
-   "line": 12
-  },
-  {
-   "id": "WR8R6S",
-   "agent": "stack_deepseek_main",
-   "title": "Duplicate YAML keys are silently accepted with the last value winning",
-   "severity": "low",
-   "confidence": "confirmed",
-   "category": "logic",
-   "file": "settings.py",
-   "line": 7
-  },
-  {
-   "id": "AAW0QR",
-   "agent": "stack_chatgpt_main",
-   "title": "User-supplied YAML can execute Python expressions",
-   "severity": "critical",
-   "confidence": "confirmed",
-   "category": "security",
-   "file": "settings.py",
-   "line": 5
-  },
-  {
-   "id": "9NTKWC",
-   "agent": "stack_chatgpt_main",
-   "title": "Non-mapping settings fail inconsistently",
-   "severity": "medium",
-   "confidence": "confirmed",
-   "category": "logic",
-   "file": "settings.py",
-   "line": 10
-  },
-  {
-   "id": "K6QFMB",
-   "agent": "stack_chatgpt_main",
-   "title": "Port conversion accepts invalid and misleading values",
-   "severity": "medium",
-   "confidence": "confirmed",
-   "category": "logic",
-   "file": "settings.py",
-   "line": 10
-  },
-  {
-   "id": "ZMJ3ET",
-   "agent": "stack_chatgpt_main",
-   "title": "Duplicate and implicitly typed port values can select an unintended port",
-   "severity": "medium",
-   "confidence": "confirmed",
-   "category": "configuration",
-   "file": "settings.py",
-   "line": 7
-  },
-  {
-   "id": "VWBJND",
-   "agent": "stack_opencode_main",
-   "title": "Arbitrary code execution via yaml.load FullLoader on user-supplied YAML with pinned PyYAML 5.3.1",
-   "severity": "critical",
-   "confidence": "confirmed",
-   "category": "security",
-   "file": "settings.py",
-   "line": 1
-  },
-  {
-   "id": "AV12AN",
-   "agent": "stack_opencode_main",
-   "title": "get_port crashes with AttributeError on truthy non-dict YAML top-level",
-   "severity": "medium",
-   "confidence": "confirmed",
-   "category": "runtime",
-   "file": "settings.py",
-   "line": 1
-  },
-  {
-   "id": "7REEQN",
-   "agent": "stack_opencode_main",
-   "title": "Port coercion leaks ValueError/TypeError/OverflowError and silently mangles values",
-   "severity": "medium",
-   "confidence": "confirmed",
-   "category": "logic",
-   "file": "settings.py",
-   "line": 1
-  },
-  {
-   "id": "GK4HKH",
-   "agent": "stack_opencode_main",
-   "title": "Malformed, special-whitespace and non-string inputs escape as yaml/parser or AttributeError",
-   "severity": "medium",
-   "confidence": "confirmed",
-   "category": "runtime",
-   "file": "settings.py",
-   "line": 1
-  }
- ]
+  "run": "run_01M7QN07AS2TBVWGSW8CD3GMZJ",
+  "findings": [
+    {
+      "id": "H0BG5F",
+      "agent": "stack_claude_main",
+      "title": "load_settings uses FullLoader on untrusted YAML, letting python/object tags invoke callables",
+      "severity": "high",
+      "confidence": "confirmed",
+      "category": "security",
+      "file": "settings.py",
+      "line": 5
+    },
+    {
+      "id": "8ZKP74",
+      "agent": "stack_claude_main",
+      "title": "Pinned PyYAML 5.3.1 is in the affected range for FullLoader",
+      "severity": "high",
+      "confidence": "strong",
+      "category": "dependency",
+      "file": "requirements.txt",
+      "line": 1
+    },
+    {
+      "id": "0QN6GN",
+      "agent": "stack_claude_main",
+      "title": "Falsy non-mapping YAML documents silently return the default port",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "category": "logic",
+      "file": "settings.py",
+      "line": 11
+    },
+    {
+      "id": "PX1WE0",
+      "agent": "stack_claude_main",
+      "title": "get_port raises uncaught AttributeError for non-mapping documents",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "category": "runtime",
+      "file": "settings.py",
+      "line": 12
+    },
+    {
+      "id": "V9AJ44",
+      "agent": "stack_claude_main",
+      "title": "get_port accepts out-of-range and non-integer port values",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "category": "logic",
+      "file": "settings.py",
+      "line": 12
+    },
+    {
+      "id": "5WX906",
+      "agent": "stack_claude_main",
+      "title": "get_port crashes with TypeError or ValueError on blank or odd port values",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "category": "runtime",
+      "file": "settings.py",
+      "line": 12
+    },
+    {
+      "id": "N2YZ08",
+      "agent": "stack_claude_main",
+      "title": "Uppercase or spaced PORT key is silently ignored",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "category": "logic",
+      "file": "settings.py",
+      "line": 12
+    },
+    {
+      "id": "X5D26W",
+      "agent": "stack_claude_main",
+      "title": "load_settings applies YAML 1.1 implicit typing to unquoted values",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "category": "logic",
+      "file": "settings.py",
+      "line": 7
+    },
+    {
+      "id": "VVBSDM",
+      "agent": "stack_claude_main",
+      "title": "Duplicate YAML keys silently keep the last value",
+      "severity": "low",
+      "confidence": "confirmed",
+      "category": "logic",
+      "file": "settings.py",
+      "line": 7
+    },
+    {
+      "id": "JT9YY4",
+      "agent": "stack_deepseek_main",
+      "title": "Untrusted YAML can execute arbitrary code via FullLoader",
+      "severity": "critical",
+      "confidence": "confirmed",
+      "category": "security",
+      "file": "settings.py",
+      "line": 7
+    },
+    {
+      "id": "SYSW12",
+      "agent": "stack_deepseek_main",
+      "title": "get_port raises AttributeError for truthy non-mapping YAML roots",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "category": "runtime",
+      "file": "settings.py",
+      "line": 10
+    },
+    {
+      "id": "G3T23C",
+      "agent": "stack_deepseek_main",
+      "title": "get_port raises TypeError for explicit null port instead of using default",
+      "severity": "low",
+      "confidence": "confirmed",
+      "category": "runtime",
+      "file": "settings.py",
+      "line": 11
+    },
+    {
+      "id": "P7R2YQ",
+      "agent": "stack_deepseek_main",
+      "title": "get_port silently accepts invalid or nonsensical TCP port values",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "category": "logic",
+      "file": "settings.py",
+      "line": 12
+    },
+    {
+      "id": "WR8R6S",
+      "agent": "stack_deepseek_main",
+      "title": "Duplicate YAML keys are silently accepted with the last value winning",
+      "severity": "low",
+      "confidence": "confirmed",
+      "category": "logic",
+      "file": "settings.py",
+      "line": 7
+    },
+    {
+      "id": "AAW0QR",
+      "agent": "stack_chatgpt_main",
+      "title": "User-supplied YAML can execute Python expressions",
+      "severity": "critical",
+      "confidence": "confirmed",
+      "category": "security",
+      "file": "settings.py",
+      "line": 5
+    },
+    {
+      "id": "9NTKWC",
+      "agent": "stack_chatgpt_main",
+      "title": "Non-mapping settings fail inconsistently",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "category": "logic",
+      "file": "settings.py",
+      "line": 10
+    },
+    {
+      "id": "K6QFMB",
+      "agent": "stack_chatgpt_main",
+      "title": "Port conversion accepts invalid and misleading values",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "category": "logic",
+      "file": "settings.py",
+      "line": 10
+    },
+    {
+      "id": "ZMJ3ET",
+      "agent": "stack_chatgpt_main",
+      "title": "Duplicate and implicitly typed port values can select an unintended port",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "category": "configuration",
+      "file": "settings.py",
+      "line": 7
+    },
+    {
+      "id": "VWBJND",
+      "agent": "stack_opencode_main",
+      "title": "Arbitrary code execution via yaml.load FullLoader on user-supplied YAML with pinned PyYAML 5.3.1",
+      "severity": "critical",
+      "confidence": "confirmed",
+      "category": "security",
+      "file": "settings.py",
+      "line": 1
+    },
+    {
+      "id": "AV12AN",
+      "agent": "stack_opencode_main",
+      "title": "get_port crashes with AttributeError on truthy non-dict YAML top-level",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "category": "runtime",
+      "file": "settings.py",
+      "line": 1
+    },
+    {
+      "id": "7REEQN",
+      "agent": "stack_opencode_main",
+      "title": "Port coercion leaks ValueError/TypeError/OverflowError and silently mangles values",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "category": "logic",
+      "file": "settings.py",
+      "line": 1
+    },
+    {
+      "id": "GK4HKH",
+      "agent": "stack_opencode_main",
+      "title": "Malformed, special-whitespace and non-string inputs escape as yaml/parser or AttributeError",
+      "severity": "medium",
+      "confidence": "confirmed",
+      "category": "runtime",
+      "file": "settings.py",
+      "line": 1
+    }
+  ]
 }
