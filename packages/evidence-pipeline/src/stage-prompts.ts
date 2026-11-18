@@ -44,7 +44,10 @@ export const NO_REINSTALL_RULE =
 
 /** Keeps severities comparable across agents: rate by what the defect does to the shipped product. */
 export const SEVERITY_CALIBRATION =
-  'Severity rubric — rate by impact on the shipped product and its users, not by how wrong the code looks. critical: data loss, security breach, or a core user flow broken for most users. high: a main flow broken or wrong results for a common input. medium: wrong behavior on a realistic edge case, or a shipped artifact that misleads. low: cosmetic, rare, or recoverable. A defect in a test, QA harness, fixture or build/helper script (not shipped to users) is at most medium, and high only when it lets a real product defect ship undetected; it is never critical. Confidence "strong" or weaker (source-only, stubs, mocks standing in for the real service) cannot support critical.';
+  'Severity rubric — rate by impact on the shipped product and its users, not by how wrong the code looks. critical: data loss, security breach, or a core user flow broken for most users. high: a main flow broken or wrong results for a common input. medium: wrong behavior on a realistic edge case, or a shipped artifact that misleads. low: cosmetic, rare, or recoverable. A defect in a test, QA harness, fixture or build/helper script (not shipped to users) is at most medium, and high only when it lets a real product defect ship undetected; it is never critical. Confidence "strong" or weaker (source-only, stubs, mocks standing in for the real service) cannot support critical. ' +
+  'Code execution: input that makes the product run attacker-chosen code or call an attacker-chosen function in its own process is critical when the project itself (a comment, README, test or entry point) says users or admins supply that input. ' +
+  'Uploader privilege, an unseen deployment and a harmless proof payload (a marker file) do not lower it; only evidence that no outside party can supply the input moves it below high. ' +
+  'One finding per defect: report an exploited dependency pin in the code-path finding\u2019s root cause, not as a second finding.';
 
 type Plan = { plannedChecks: readonly string[] };
 type Request = {
@@ -304,7 +307,7 @@ export const INPUT_CLASS_RULE =
  * reach. Reachability changes the severity, not whether it is reported.
  */
 export const REPRODUCED_VIOLATION_RULE =
-  'Do not argue a reproduced violation away. If a probe shows a guard bypassed, data outside the allowed root read, changed or deleted, or behaviour that contradicts the documented contract, record it as a defect with the operation that showed it, state the precondition needed to reach it, and let the severity reflect how hard it is to reach (low when it needs unusual setup). "Nothing in the product creates that state" or "needs out-of-band setup" is a precondition to write down, not a reason to call the check passed.';
+  'Do not argue a reproduced violation away. If a probe shows a guard bypassed, data outside the allowed root read, changed or deleted, or behaviour that contradicts the documented contract, record it as a defect with the operation that showed it, state the precondition needed to reach it, and let the severity reflect how hard it is to reach (low when it needs unusual setup; the code-execution rule in the severity rubric still applies). "Nothing in the product creates that state" or "needs out-of-band setup" is a precondition to write down, not a reason to call the check passed.';
 
 /**
  * Extension round: a check that was already decided keeps its verdict, but the

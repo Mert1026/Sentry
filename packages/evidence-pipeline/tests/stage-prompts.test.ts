@@ -5,6 +5,7 @@ import {
   buildQaInvestigationPrompt,
   buildQaReportPrompt,
   QA_SESSION_CONTRACT,
+  REPRODUCED_VIOLATION_RULE,
 } from '../src/stage-prompts.js';
 import { composeProfileText, profileContextEntry } from '../src/profile.js';
 const request = {
@@ -99,6 +100,27 @@ describe('ordered compact QA stages', () => {
     const text = buildQaReportPrompt(plan, new Map());
     expect(text).toContain('Severity rubric');
     expect(text).toContain('never critical');
+  });
+
+  it('rates attacker-controlled code execution critical however it was proven, and counts one defect once', () => {
+    const text = buildQaReportPrompt(plan, new Map());
+    // The input path comes from the project itself, not from what the agent could see of the deployment.
+    expect(text).toContain('Code execution:');
+    expect(text).toContain('critical when the project itself');
+    // A marker file or directory proves the primitive; privilege and unseen deployments do not lower it.
+    expect(text).toContain('harmless proof payload');
+    expect(text).toContain(
+      'only evidence that no outside party can supply the input moves it below high',
+    );
+    // A vulnerable pin is part of the code-path finding, not a second finding for the same defect.
+    expect(text).toContain('One finding per defect');
+    expect(text).toContain('dependency pin in the code-path finding');
+  });
+
+  it('does not let the reachability rule undo the code-execution rule', () => {
+    expect(REPRODUCED_VIOLATION_RULE).toContain(
+      'the code-execution rule in the severity rubric still applies',
+    );
   });
 
   it('keeps reporting tool-free and puts unavailable environment checks in limitations', () => {
