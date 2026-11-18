@@ -91,6 +91,12 @@ function Invoke-SentryDoctor {
     elseif ($brt.Contains('BROWSER_MISSING')) { &$add 'Headless browser' 'WARN' 'not installed: agents report browser checks as inconclusive (run: sentry setup)' }
     elseif ($brt.Contains('BROWSER_BROKEN')) { &$add 'Headless browser' 'WARN' ('installed but unusable: ' + (($brt -split "`n" | Where-Object { $_ -match 'BROWSER_BROKEN' } | Select-Object -First 1) -replace 'BROWSER_BROKEN\s*','').Trim() + ' (run: sentry setup)') }
     else { &$add 'Headless browser' 'WARN' 'could not check (run: sentry setup)' }
+    $tm = Invoke-SentryWslFile -Distro $distro -ScriptName 'check-terminal.sh' -TimeoutSec 60
+    $tmt = [string]$tm.Stdout
+    if ($tmt.Contains('TERMINAL_OK')) { &$add 'Claude sign-in terminal' 'PASS' 'script provides a terminal (Claude account sign-in can run)' }
+    elseif ($tmt.Contains('TERMINAL_MISSING')) { &$add 'Claude sign-in terminal' 'WARN' 'script (util-linux) not found: the Claude account sign-in cannot run; the API key sign-in still works' }
+    elseif ($tmt.Contains('TERMINAL_BROKEN')) { &$add 'Claude sign-in terminal' 'WARN' ('script did not provide a terminal: ' + (($tmt -split "`n" | Where-Object { $_ -match 'TERMINAL_BROKEN' } | Select-Object -First 1) -replace 'TERMINAL_BROKEN\s*','').Trim() + '; the API key sign-in still works') }
+    else { &$add 'Claude sign-in terminal' 'WARN' 'could not check (run: sentry setup)' }
     Add-SentryCredentialReport -Add $add -RepoRoot $RepoRoot
   }
   Show-SentryDoctorResults $results
@@ -292,6 +298,7 @@ function Invoke-SentryPostUpdate {
   $ds = Ensure-SentryDeepSeek -Distro $distro -RepoRoot $RepoRoot
   $cc = Ensure-SentryClaudeCode -Distro $distro -RepoRoot $RepoRoot
   [void](Ensure-SentryBrowser -Distro $distro)
+  [void](Test-SentryTerminalTool -Distro $distro)
   $updSandbox = Get-SentrySandboxStatus -Distro $distro
   $cc = ([bool]$cc) -and $updSandbox.Socat -and $updSandbox.Bwrap -and $updSandbox.InitOk
   if (-not $cc) { Write-SentryWarn 'GLM sandbox not fully ready (see sentry doctor).' }

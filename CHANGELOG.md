@@ -13,7 +13,8 @@
   folder and goes only to the Claude agent; **Sign out** deletes it. The model and reasoning effort
   are its own (`SENTRY_ANTHROPIC_MODEL`, `SENTRY_ANTHROPIC_REASONING`). It shares the
   Sentry-managed Claude Code binary with GLM and nothing else. In the CLI it is `claude` (`--agents claude`, `agent doctor claude`,
-  `settings effort claude …`). Not yet run against a live Anthropic account.
+  `settings effort claude …`). `sentry setup` and `sentry doctor` now also check the util-linux `script` tool the
+  account sign-in needs (a warning if it is missing; the API key sign-in does not need it).
 - The CLI now has what the app has. New commands: `project suggest-targets` (paths for a targeted run),
   `project toolchain-needs`, `project toolchain-selection` and `project toolchain-assess` (the Setup tab's
   toolchain needs; the last one asks the agents and uses provider budget), and `toolchain custom status|remove`

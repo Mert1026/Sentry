@@ -66,6 +66,7 @@ function Invoke-SentrySetup {
   $ds = Ensure-SentryDeepSeek -Distro $distro -RepoRoot $RepoRoot
   $cc = Ensure-SentryClaudeCode -Distro $distro -RepoRoot $RepoRoot
   [void](Ensure-SentryBrowser -Distro $distro)
+  [void](Test-SentryTerminalTool -Distro $distro)
   Write-SentrySection '[7/7] Launcher'
   Install-SentryShim -RepoRoot $RepoRoot
   Write-SentryOk 'sentry command installed (user PATH; restart terminal if not recognized)'

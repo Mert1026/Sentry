@@ -155,6 +155,13 @@ cmd_setup() {
   agents_out=$(sentry_provision_agents "$repo") || { printf '%s\n' "$agents_out"; return 1; }
   printf '%s\n' "$agents_out"
   sentry_provision_browser "$repo"
+  # The Claude account sign-in runs under util-linux `script`; never gates readiness (the API key sign-in does not need it).
+  local term_out="$(bash "$linux_dir/check-terminal.sh")"
+  case "$term_out" in
+    TERMINAL_OK*) sentry_ok "Terminal tool for the Claude account sign-in (script)" ;;
+    TERMINAL_MISSING*) sentry_warn "The script tool (util-linux) is missing: the Claude account sign-in cannot run. The API key sign-in still works. Install util-linux and rerun sentry setup." ;;
+    *) sentry_warn "The script tool did not provide a terminal: the Claude account sign-in may not run. The API key sign-in still works. Run sentry doctor for details." ;;
+  esac
   local oc_ready="$(printf '%s\n' "$agents_out" | sed -n 's/^AGENTS_OPENCODE=//p' | head -n 1)"
   local ds_ready="$(printf '%s\n' "$agents_out" | sed -n 's/^AGENTS_DEEPSEEK=//p' | head -n 1)"
   local cc_ready="$(printf '%s\n' "$agents_out" | sed -n 's/^AGENTS_CLAUDE=//p' | head -n 1)"
