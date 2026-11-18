@@ -15,6 +15,7 @@ import {
   OPENCODE_GO_MODELS,
   OPENCODE_ZEN_MODELS,
   ZAI_GLM_MODELS,
+  ANTHROPIC_CLAUDE_MODELS,
   modelsForOpenCodeMode,
   resolveOpenCodeBinarySuggestion,
   resolveOpenCodeModelMode,
@@ -22,6 +23,7 @@ import {
 } from '../lib/provider-models.js';
 import { PageHeader } from '../components/ui/PageHeader.js';
 import { OpenAiAccountPanel } from '../components/OpenAiAccountPanel.js';
+import { ClaudeAccountPanel } from '../components/ClaudeAccountPanel.js';
 import { SegmentedControl } from '../components/ui/Tabs.js';
 
 interface ProviderStatus {
@@ -40,9 +42,17 @@ const DESCRIPTIONS: Record<string, string> = {
     'OpenCode model id (non-secret) for the selected provider — e.g. kimi-k3 or gemini-4-argon-contributor (opencode-go), gpt-5.5 (opencode), or anthropic/claude-opus-4-6 (openrouter). Prefixing with opencode-go/, opencode/, or openrouter/ also selects that provider when Provider is unset.',
   DEEPSEEK_API_KEY: 'DeepSeek provider key (secret). Used by the DeepSeek harness host process.',
   ANTHROPIC_AUTH_TOKEN:
-    'GLM/Claude-Code provider token (secret). Used by the Claude parent process.',
+    'GLM provider token (secret). Used by the GLM agent only; the Claude agent never sees it.',
   ANTHROPIC_BASE_URL:
     'GLM endpoint override (non-secret). Trusted Z.AI Anthropic-compatible base URL, e.g. https://api.z.ai/api/anthropic.',
+  ANTHROPIC_API_KEY:
+    'Anthropic API key (secret, from console.anthropic.com). Used by the Claude agent, pay-as-you-go on your Anthropic account. The Claude agent always talks to Anthropic itself and never uses the GLM endpoint.',
+  SENTRY_ANTHROPIC_AUTH:
+    'How the Claude agent signs in (non-secret): key (Anthropic API key) or account (your Claude account through Claude Code).',
+  SENTRY_ANTHROPIC_MODEL:
+    'Claude agent model id (non-secret), an Anthropic model such as claude-sonnet-5-5. The Claude agent runs Claude Code against Anthropic.',
+  SENTRY_ANTHROPIC_REASONING:
+    'How hard the Claude agent thinks (non-secret): low, medium, high, extra high or maximum. It is passed to Claude Code as its effort level. Higher effort usually finds more but takes longer and costs more. Unset uses the provider default.',
   SENTRY_DEEPSEEK_MODEL: 'DeepSeek model id override (non-secret).',
   SENTRY_GLM_MODEL: 'GLM model id override (non-secret).',
   SENTRY_DEEPSEEK_BINARY:
@@ -75,13 +85,14 @@ const SECRET_NAMES: ReadonlySet<string> = new Set([
   'OPENAI_API_KEY',
   'DEEPSEEK_API_KEY',
   'ANTHROPIC_AUTH_TOKEN',
+  'ANTHROPIC_API_KEY',
 ]);
 
 interface AgentFieldSpec {
   readonly name: string;
   readonly label: string;
   readonly placeholder?: string;
-  readonly modelList?: 'opencode' | 'deepseek' | 'glm' | 'chatgpt';
+  readonly modelList?: 'opencode' | 'deepseek' | 'glm' | 'chatgpt' | 'claude';
   readonly detailsLabel?: string | null;
 }
 
@@ -162,6 +173,18 @@ const AGENT_CARDS: readonly AgentCardSpec[] = [
         modelList: 'chatgpt',
         label: 'Model',
         placeholder: 'e.g. gpt-5.5',
+      },
+    ],
+  },
+  {
+    title: 'Claude',
+    subtitle: 'Fifth reviewer · Claude Code on Anthropic, with an API key or your Claude account',
+    fields: [
+      {
+        name: 'SENTRY_ANTHROPIC_MODEL',
+        modelList: 'claude',
+        label: 'Model',
+        placeholder: 'e.g. claude-sonnet-5-5',
       },
     ],
   },
@@ -388,6 +411,8 @@ export function Providers(): React.JSX.Element {
               <OpenCodeCard {...fieldProps} />
             ) : card.title === 'ChatGPT' ? (
               <ChatGptCard {...fieldProps} onError={fail} />
+            ) : card.title === 'Claude' ? (
+              <ClaudeCard {...fieldProps} onError={fail} />
             ) : (
               card.fields.map((field) =>
                 field.modelList === undefined ? (
@@ -412,7 +437,9 @@ export function Providers(): React.JSX.Element {
                         ? DEEPSEEK_MODELS
                         : field.modelList === 'glm'
                           ? ZAI_GLM_MODELS
-                          : OPENCODE_GO_MODELS
+                          : field.modelList === 'claude'
+                            ? ANTHROPIC_CLAUDE_MODELS
+                            : OPENCODE_GO_MODELS
                     }
                     optionNote={field.modelList === 'deepseek' ? deepSeekOptionNote : undefined}
                     {...fieldProps}
@@ -420,6 +447,7 @@ export function Providers(): React.JSX.Element {
                 ),
               )
             )}
+            {/* OpenCode, ChatGPT and Claude show their own effort field inside their card. */}
             {card.title === 'DeepSeek' || card.title === 'GLM' ? (
               <ReasoningEffortField
                 agent={card.title === 'GLM' ? 'glm' : 'deepseek'}
@@ -1249,6 +1277,81 @@ function ChatGptCard(props: {
     </div>
   );
 }
+function ClaudeCard(props: {
+  readonly onError: (error: unknown) => void;
+  readonly values: Record<string, string>;
+  readonly setValues: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  readonly onSave: (name: string, value: string) => void;
+  readonly onClear: (name: string) => void;
+  readonly savePending: boolean;
+  readonly clearPending: boolean;
+  readonly byName: Map<string, ProviderStatus>;
+  readonly statusPending: boolean;
+}): React.JSX.Element {
+  const authStatus = props.byName.get('SENTRY_ANTHROPIC_AUTH');
+  const account =
+    authStatus?.configured === true && authStatus.hint.trim().toLowerCase() === 'account';
+  const common = {
+    values: props.values,
+    setValues: props.setValues,
+    onSave: props.onSave,
+    onClear: props.onClear,
+    savePending: props.savePending,
+    clearPending: props.clearPending,
+    byName: props.byName,
+    statusPending: props.statusPending,
+  };
+  return (
+    <div>
+      <ModelSelectField
+        label="Model"
+        name="SENTRY_ANTHROPIC_MODEL"
+        placeholder="e.g. claude-sonnet-5-5"
+        detailsLabel="Explanation"
+        description={DESCRIPTIONS['SENTRY_ANTHROPIC_MODEL']}
+        options={ANTHROPIC_CLAUDE_MODELS}
+        {...common}
+      />
+      <div style={{ marginBottom: 12 }}>
+        <span id="claude-auth-label" className="metadata">
+          Sign in with
+        </span>
+        <div style={{ marginTop: 6 }}>
+          <SegmentedControl
+            label="Sign in with"
+            value={account ? 'account' : 'key'}
+            onChange={(value) => {
+              if (props.savePending || (value === 'account') === account) return;
+              props.onSave('SENTRY_ANTHROPIC_AUTH', value);
+            }}
+            options={[
+              { value: 'key', label: 'API key' },
+              { value: 'account', label: 'Claude account' },
+            ]}
+          />
+        </div>
+      </div>
+      {account ? (
+        <ClaudeAccountPanel onError={props.onError} />
+      ) : (
+        <CredentialField
+          label="Anthropic API key"
+          name="ANTHROPIC_API_KEY"
+          detailsLabel="Explanation"
+          {...common}
+        />
+      )}
+      <ReasoningEffortField
+        agent="claude"
+        byName={props.byName}
+        pending={props.savePending || props.clearPending}
+        onSave={props.onSave}
+        onClear={props.onClear}
+      />
+    </div>
+  );
+}
+
 const BINARY_FIELDS = [
   { name: 'SENTRY_OPENCODE_BINARY', label: 'OpenCode executable' },
   { name: 'SENTRY_DEEPSEEK_BINARY', label: 'DeepSeek executable' },

@@ -104,7 +104,7 @@ capabilities [--json]
 project list/add/show/update/delete/revisions/doctor
 project findings | export-findings | profile | profile-build
 settings show | effort | run-limit
-agent list | agent doctor opencode|deepseek|glm|chatgpt
+agent list | agent doctor opencode|deepseek|glm|chatgpt|claude
 run start/list/show/status/cancel/result/export
 toolchain status | install | remove
 ```
@@ -113,7 +113,7 @@ toolchain status | install | remove
 
 ```text
 sentry cli settings show
-sentry cli settings effort <opencode|deepseek|glm|chatgpt> <level|default>
+sentry cli settings effort <opencode|deepseek|glm|chatgpt|claude> <level|default>
 sentry cli settings run-limit <default|3h|6h|none|90m|12h>
 ```
 
@@ -170,7 +170,7 @@ sentry cli project export-findings proj_ID --format text --findings run_ID:find_
 sentry cli project suggest-targets proj_ID
 sentry cli project toolchain-needs proj_ID
 sentry cli project toolchain-selection proj_ID
-sentry cli project toolchain-assess proj_ID [--agents opencode,deepseek,glm,chatgpt]
+sentry cli project toolchain-assess proj_ID [--agents opencode,deepseek,glm,chatgpt,claude]
 sentry cli toolchain custom status
 sentry cli toolchain custom remove NAME --yes
 ```

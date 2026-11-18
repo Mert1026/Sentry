@@ -59,6 +59,9 @@ importers:
       '@qa/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@qa/harness-claude':
+        specifier: workspace:*
+        version: link:../../packages/harness-claude
       '@qa/harness-claude-code':
         specifier: workspace:*
         version: link:../../packages/harness-claude-code
@@ -211,6 +214,9 @@ importers:
       '@qa/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@qa/harness-claude':
+        specifier: workspace:*
+        version: link:../../packages/harness-claude
       '@qa/harness-claude-code':
         specifier: workspace:*
         version: link:../../packages/harness-claude-code
@@ -329,6 +335,58 @@ importers:
         specifier: 'catalog:'
         version: 3.25.76
     devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.20.2
+      eslint:
+        specifier: 'catalog:'
+        version: 9.39.5
+      typescript:
+        specifier: 'catalog:'
+        version: 5.6.3
+      typescript-eslint:
+        specifier: 'catalog:'
+        version: 8.70.0(eslint@9.39.5)(typescript@5.6.3)
+      vitest:
+        specifier: 'catalog:'
+        version: 2.1.9(@types/node@22.20.2)(jsdom@26.0.0)
+
+  packages/harness-claude:
+    dependencies:
+      '@qa/domain':
+        specifier: workspace:*
+        version: link:../domain
+      '@qa/evidence-pipeline':
+        specifier: workspace:*
+        version: link:../evidence-pipeline
+      '@qa/harness-protocol':
+        specifier: workspace:*
+        version: link:../harness-protocol
+      '@qa/schemas':
+        specifier: workspace:*
+        version: link:../schemas
+      '@qa/shared':
+        specifier: workspace:*
+        version: link:../shared
+      zod:
+        specifier: 'catalog:'
+        version: 3.25.76
+    devDependencies:
+      '@qa/persistence':
+        specifier: workspace:*
+        version: link:../persistence
+      '@qa/project-manager':
+        specifier: workspace:*
+        version: link:../project-manager
+      '@qa/run-engine':
+        specifier: workspace:*
+        version: link:../run-engine
+      '@qa/snapshot-engine':
+        specifier: workspace:*
+        version: link:../snapshot-engine
+      '@qa/workspace-factory':
+        specifier: workspace:*
+        version: link:../workspace-factory
       '@types/node':
         specifier: 'catalog:'
         version: 22.20.2

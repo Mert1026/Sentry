@@ -1,0 +1,34 @@
+export type ClaudeAgentHarnessErrorCode =
+  | 'QA_REPORT_DEADLINE'
+  | 'CLAUDE_STACK_UNAVAILABLE'
+  | 'CLAUDE_BINARY_NOT_FOUND'
+  | 'CLAUDE_MODEL_NOT_CONFIGURED'
+  | 'CLAUDE_START_FAILED'
+  | 'CLAUDE_AUTH_FAILED'
+  | 'CLAUDE_SANDBOX_UNAVAILABLE'
+  | 'CLAUDE_INVALID_RESULT'
+  | 'CLAUDE_SUBAGENT_FORBIDDEN'
+  | 'CLAUDE_REPORT_TOOL_FORBIDDEN'
+  | 'CLAUDE_TOOL_LOOP'
+  | 'CLAUDE_TOOL_PERMISSION_UNAVAILABLE'
+  | 'CLAUDE_VERSION_UNVERIFIED'
+  | 'CLAUDE_VERSION_UNSUPPORTED'
+  | 'CLAUDE_RUNTIME_MISMATCH'
+  | 'CLAUDE_CANCEL_FAILED'
+  | 'CLAUDE_INIT_TIMEOUT'
+  | 'CLAUDE_TURN_TIMEOUT'
+  | 'CLAUDE_PROVIDER_RATE_LIMITED'
+  | 'CLAUDE_PROVIDER_TRANSIENT'
+  | 'CLAUDE_PROVIDER_BAD_REQUEST'
+  | 'CLAUDE_BINARY_START_FAILED';
+
+export class ClaudeAgentHarnessError extends Error {
+  constructor(
+    readonly code: ClaudeAgentHarnessErrorCode,
+    message: string,
+    readonly retryable = false,
+  ) {
+    super(message);
+    this.name = 'ClaudeAgentHarnessError';
+  }
+}

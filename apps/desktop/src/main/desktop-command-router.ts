@@ -157,7 +157,7 @@ export const DesktopChannelSchemas: Record<string, z.ZodTypeAny> = {
     z
       .object({
         setting: z.literal('reasoning-effort'),
-        agent: z.enum(['opencode', 'deepseek', 'glm', 'chatgpt']),
+        agent: z.enum(['opencode', 'deepseek', 'glm', 'chatgpt', 'claude']),
         value: z.string().min(1).max(20),
       })
       .strict(),
@@ -181,6 +181,11 @@ export const DesktopChannelSchemas: Record<string, z.ZodTypeAny> = {
   'openai:account-login': z.object({}).strict(),
   'openai:account-cancel-login': z.object({}).strict(),
   'openai:account-logout': z.object({}).strict(),
+  'claude:account-status': z.object({}).strict(),
+  'claude:account-login': z.object({}).strict(),
+  'claude:account-submit-code': z.object({ code: z.string().min(1).max(2000) }).strict(),
+  'claude:account-cancel-login': z.object({}).strict(),
+  'claude:account-logout': z.object({}).strict(),
   'toolchains:install': z
     .object({ packId: z.string().min(1).max(40), version: z.string().min(1).max(40) })
     .strict(),
@@ -473,6 +478,16 @@ export async function dispatchDesktopCommand(
       return service.openAiAccountCancelLogin();
     case 'openai:account-logout':
       return service.openAiAccountLogout();
+    case 'claude:account-status':
+      return service.claudeAccountStatus();
+    case 'claude:account-login':
+      return service.claudeAccountLogin();
+    case 'claude:account-submit-code':
+      return service.claudeAccountSubmitCode(parsed['code'] as string);
+    case 'claude:account-cancel-login':
+      return service.claudeAccountCancelLogin();
+    case 'claude:account-logout':
+      return service.claudeAccountLogout();
     case 'toolchains:status':
       return service.toolchainStatus();
     case 'toolchains:install':

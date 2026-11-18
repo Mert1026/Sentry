@@ -19,6 +19,8 @@ import { AGENT_DISPLAY_NAMES, formatCount } from '../lib/agent-telemetry.js';
 import { InfoTile as Tile } from './InfoTile.js';
 import { describeRunLimit } from '../lib/run-time-limit.js';
 import { hasUserNotes } from '../lib/run-notes.js';
+import { SeverityDisagreements } from './SeverityDisagreements.js';
+import { severityDisagreements, type SeverityFinding } from '../../shared/severity-disagreement.js';
 
 export function RunSummaryPanel({
   snapshot,
@@ -43,6 +45,27 @@ export function RunSummaryPanel({
       countsByAgent.set(agentRunId, (countsByAgent.get(agentRunId) ?? 0) + 1);
     }
   }
+  // Findings by the agent that reported them, to see where agents rated the same issue differently.
+  const stackOfAgentRun = new Map<string, string>(
+    agentRuns.map((agent) => [String(agent['id']), String(agent['agentStackId'])]),
+  );
+  const ratedFindings: SeverityFinding[] = [];
+  for (const raw of findings) {
+    if (typeof raw !== 'object' || raw === null) continue;
+    const item = raw as Record<string, unknown>;
+    const location = (item['locations'] as Array<Record<string, unknown>> | undefined)?.[0];
+    const agent = stackOfAgentRun.get(String(item['agentRunId'] ?? ''));
+    if (agent === undefined) continue;
+    ratedFindings.push({
+      id: String(item['id'] ?? ''),
+      agent,
+      title: String(item['title'] ?? ''),
+      severity: String(item['severity'] ?? ''),
+      file: typeof location?.['relativePath'] === 'string' ? location['relativePath'] : undefined,
+      line: typeof location?.['startLine'] === 'number' ? location['startLine'] : undefined,
+    });
+  }
+  const disagreements = severityDisagreements(ratedFindings);
   const completedAgentCount = agentRuns.filter((agent) => agent['status'] === 'completed').length;
   const configuration = run['configuration'] as
     | {
@@ -282,6 +305,10 @@ export function RunSummaryPanel({
             })}
           </div>
         )}
+        <SeverityDisagreements
+          items={disagreements}
+          agentName={(agent) => AGENT_DISPLAY_NAMES[agent] ?? agent}
+        />
         {['partial', 'failed', 'cancelled'].includes(String(run['status'])) ? (
           <p className="metadata">
             Incomplete analysis. Reported findings and evidence are retained independently for each

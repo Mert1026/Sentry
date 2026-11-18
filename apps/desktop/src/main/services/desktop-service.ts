@@ -185,6 +185,26 @@ export class DesktopApplicationService {
     return this.call('openai.accountLogout', {});
   }
 
+  claudeAccountStatus(): Promise<unknown> {
+    return this.call('claude.accountStatus', {});
+  }
+
+  claudeAccountLogin(): Promise<unknown> {
+    return this.call('claude.accountLogin', {});
+  }
+
+  claudeAccountSubmitCode(code: string): Promise<unknown> {
+    return this.call('claude.accountSubmitCode', { code });
+  }
+
+  claudeAccountCancelLogin(): Promise<unknown> {
+    return this.call('claude.accountCancelLogin', {});
+  }
+
+  claudeAccountLogout(): Promise<unknown> {
+    return this.call('claude.accountLogout', {});
+  }
+
   toolchainStatus(): Promise<unknown> {
     return this.call('toolchains.status', {});
   }
@@ -520,10 +540,12 @@ export class DesktopApplicationService {
     const deepseek = get('SENTRY_DEEPSEEK_MODEL');
     const glm = get('SENTRY_GLM_MODEL');
     const chatgpt = get('SENTRY_CHATGPT_MODEL');
+    const claude = get('SENTRY_ANTHROPIC_MODEL');
     if (opencode !== undefined) models['opencode'] = opencode;
     if (deepseek !== undefined) models['deepseek'] = deepseek;
     if (glm !== undefined) models['glm'] = glm;
     if (chatgpt !== undefined) models['chatgpt'] = chatgpt;
+    if (claude !== undefined) models['claude'] = claude;
     const providers: Record<string, string> = {};
     const openRouterKey = get('OPENROUTER_API_KEY');
     const openCodeKey = get('OPENCODE_API_KEY');
@@ -537,6 +559,9 @@ export class DesktopApplicationService {
     if (deepseekKey !== undefined) providers['deepseekApiKey'] = deepseekKey;
     if (glmToken !== undefined) providers['anthropicAuthToken'] = glmToken;
     if (glmEndpoint !== undefined) providers['anthropicBaseUrl'] = glmEndpoint;
+    // The Claude agent's own credentials; the GLM agent's token and endpoint above are separate.
+    const claudeKey = get('ANTHROPIC_API_KEY');
+    if (claudeKey !== undefined) providers['anthropicApiKey'] = claudeKey;
     const binaries: Record<string, string> = {};
     const opencodeBinary = get('SENTRY_OPENCODE_BINARY');
     const deepseekBinary = get('SENTRY_DEEPSEEK_BINARY');
@@ -554,12 +579,15 @@ export class DesktopApplicationService {
         : {};
     const openAiAuth =
       get('SENTRY_OPENAI_AUTH')?.trim().toLowerCase() === 'account' ? 'account' : 'key';
+    const claudeAuth =
+      get('SENTRY_ANTHROPIC_AUTH')?.trim().toLowerCase() === 'account' ? 'account' : 'key';
     return this.call('runtime.configure', {
       models,
       providers,
       binaries,
       ...provider,
       openAiAuth,
+      claudeAuth,
       reasoningEffort: Object.fromEntries(
         EFFORT_AGENTS.map((agent) => [
           agent,

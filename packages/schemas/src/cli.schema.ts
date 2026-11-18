@@ -395,7 +395,7 @@ export type AgentListResult = z.infer<typeof AgentListResultSchema>;
 export const AgentDoctorResultSchema = z
   .object({
     // 'muse' retained historically: old envelopes still validate.
-    agent: z.enum(['muse', 'opencode', 'deepseek', 'glm', 'chatgpt']),
+    agent: z.enum(['muse', 'opencode', 'deepseek', 'glm', 'chatgpt', 'claude']),
     status: z.enum(['healthy', 'degraded', 'unavailable']),
     checks: z.array(
       z
@@ -676,6 +676,7 @@ export const SettingsShowResultSchema = z
         deepseek: z.string().min(1).max(20),
         glm: z.string().min(1).max(20),
         chatgpt: z.string().min(1).max(20),
+        claude: z.string().min(1).max(20),
       })
       .strict(),
     runTimeLimit: z.object({ ms: NonNegativeIntSchema, isDefault: z.boolean() }).strict(),
@@ -683,7 +684,7 @@ export const SettingsShowResultSchema = z
   .strict();
 export const SettingsSetEffortResultSchema = z
   .object({
-    agent: z.enum(['opencode', 'deepseek', 'glm', 'chatgpt']),
+    agent: z.enum(['opencode', 'deepseek', 'glm', 'chatgpt', 'claude']),
     reasoningEffort: z.string().min(1).max(20),
   })
   .strict();

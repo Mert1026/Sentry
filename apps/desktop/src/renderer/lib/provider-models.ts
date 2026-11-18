@@ -341,3 +341,11 @@ export function modelsForOpenCodeMode(mode: OpenCodeModelMode): readonly string[
   if (mode === 'zen') return OPENCODE_ZEN_MODELS;
   return NO_MODELS;
 }
+
+/** Anthropic models the Claude agent can run on; any other id can be typed as a custom value. */
+export const ANTHROPIC_CLAUDE_MODELS: readonly string[] = [
+  'claude-fable-5-2',
+  'claude-opus-5-5',
+  'claude-sonnet-5-5',
+  'claude-haiku-5-5',
+];

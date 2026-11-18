@@ -38,18 +38,20 @@ export interface FrontendOptions {
 }
 
 const TERMINAL_RUN = new Set(['completed', 'partial', 'failed', 'cancelled']);
-const AGENT_NAMES = ['opencode', 'deepseek', 'glm', 'chatgpt'] as const;
+const AGENT_NAMES = ['opencode', 'deepseek', 'glm', 'chatgpt', 'claude'] as const;
 const MODEL_ENV: Record<string, string> = {
   opencode: 'SENTRY_OPENCODE_MODEL',
   deepseek: 'SENTRY_DEEPSEEK_MODEL',
   glm: 'SENTRY_GLM_MODEL',
   chatgpt: 'SENTRY_CHATGPT_MODEL',
+  claude: 'SENTRY_ANTHROPIC_MODEL',
 };
 const HARNESS_NAME: Record<string, string> = {
   opencode: 'opencode',
   deepseek: 'deepseek-harness',
   glm: 'claude-code',
   chatgpt: 'opencode',
+  claude: 'claude',
 };
 
 function success(command: CliSuccessEnvelope['command'], data: unknown): CliSuccessEnvelope {
@@ -322,6 +324,7 @@ export async function executeFrontendCommand(
           { id: 'deepseek', displayName: 'DeepSeek QA Agent', harness: 'deepseek-harness' },
           { id: 'glm', displayName: 'GLM QA Agent', harness: 'claude-code' },
           { id: 'chatgpt', displayName: 'ChatGPT QA Agent', harness: 'opencode' },
+          { id: 'claude', displayName: 'Claude QA Agent', harness: 'claude' },
         ],
         runResultExport: true,
         asyncRunStart: true,

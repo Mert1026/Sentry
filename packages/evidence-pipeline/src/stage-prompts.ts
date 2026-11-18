@@ -44,7 +44,11 @@ export const NO_REINSTALL_RULE =
 
 /** Keeps severities comparable across agents: rate by what the defect does to the shipped product. */
 export const SEVERITY_CALIBRATION =
-  'Severity rubric — rate by impact on the shipped product and its users, not by how wrong the code looks. critical: data loss, security breach, or a core user flow broken for most users. high: a main flow broken or wrong results for a common input. medium: wrong behavior on a realistic edge case, or a shipped artifact that misleads. low: cosmetic, rare, or recoverable. A defect in a test, QA harness, fixture or build/helper script (not shipped to users) is at most medium, and high only when it lets a real product defect ship undetected; it is never critical. Confidence "strong" or weaker (source-only, stubs, mocks standing in for the real service) cannot support critical.';
+  'Severity rubric — rate by impact on the shipped product and its users, not by how wrong the code looks. critical: data loss, security breach, or a core user flow broken for most users. high: a main flow broken or wrong results for a common input. medium: wrong behavior on a realistic edge case, or a shipped artifact that misleads. low: cosmetic, rare, or recoverable. A defect in a test, QA harness, fixture or build/helper script (not shipped to users) is at most medium, and high only when it lets a real product defect ship undetected; it is never critical. Confidence "strong" or weaker (source-only, stubs, mocks standing in for the real service) cannot support critical. ' +
+  'A crash, hang or resource blowup that needs malformed or hostile input is medium unless the project says outside parties supply that input; high needs a common input. ' +
+  'Code execution: input that makes the product run attacker-chosen code or call an attacker-chosen function in its own process is critical when the project itself (a comment, README, test or entry point) says users or admins supply that input. ' +
+  'Uploader privilege, an unseen deployment and a harmless proof payload (a marker file) do not lower it; only evidence that no outside party can supply the input moves it below high. ' +
+  'One finding per defect: report an exploited dependency pin in the code-path finding\u2019s root cause, not as a second finding.';
 
 type Plan = { plannedChecks: readonly string[] };
 type Request = {
@@ -161,6 +165,7 @@ export function buildQaCheckInvestigationPrompt(
     'Before concluding, attempt the hostile inputs that apply to this check, as synthetic fixtures inside the workspace (defensive tests of the owner’s own guards): malformed names and paths (backslashes, traversal, symlinks, empty entries), pre-existing or legacy state, lifecycle transitions (create, delete, forget, restart, retest), and encoded or quoted payloads. If a category cannot apply, note that in your closing instead of skipping it silently. A check whose repro failed during setup is blocked, not verified: simplify the repro (direct built-dist or compiled-source probe) and retry once before giving up. Proof-bearing runs must be single non-compound commands: write probes to a temp file INSIDE the workspace first (for example `.qa-tmp/probe.mjs`; never `/tmp`: the write tool and your shell see different `/tmp` directories, and writes outside the workspace are rejected), then run `node <file>` (or the one test command) as its own command — no `;`, `&&`, `||`, other pipes or redirects on a run this check will cite, or the host cannot certify it. A trailing `2>&1` is fine, and a trailing `| tail -N` or `| head -N` is fine only where the host runs commands under pipefail (otherwise it hides the real exit code).',
     'A failing run is signal, not noise. When a proof run exits non-zero, triage it before changing anything: read the actual assertion or error and decide whether it is a PRODUCT defect (report it as a finding candidate and reproduce it minimally) or a proven FIXTURE error (missing build, wrong import, wrong API shape — name the exact cause). Never loosen, delete or rewrite an assertion just to turn a run green; an assertion that disagrees with the code under test is a hypothesis to investigate, and behavior you call "by design" must be justified from the documented contract. Your tests must try to break the property, not restate that the guard exists. Prefer running the real code path over a stub of it. Re-running the same failing command three times fails the check turn.',
     REPRODUCED_VIOLATION_RULE,
+    EXECUTION_PROOF_RULE,
     ...agentNetworkPromptLines(network),
     // A prepared workspace already has its dependencies: a full install deletes and rebuilds node_modules.
     NO_REINSTALL_RULE,
@@ -304,7 +309,18 @@ export const INPUT_CLASS_RULE =
  * reach. Reachability changes the severity, not whether it is reported.
  */
 export const REPRODUCED_VIOLATION_RULE =
-  'Do not argue a reproduced violation away. If a probe shows a guard bypassed, data outside the allowed root read, changed or deleted, or behaviour that contradicts the documented contract, record it as a defect with the operation that showed it, state the precondition needed to reach it, and let the severity reflect how hard it is to reach (low when it needs unusual setup). "Nothing in the product creates that state" or "needs out-of-band setup" is a precondition to write down, not a reason to call the check passed.';
+  'Do not argue a reproduced violation away. If a probe shows a guard bypassed, data outside the allowed root read, changed or deleted, or behaviour that contradicts the documented contract, record it as a defect with the operation that showed it, state the precondition needed to reach it, and let the severity reflect how hard it is to reach (low when it needs unusual setup; the code-execution rule in the severity rubric still applies). "Nothing in the product creates that state" or "needs out-of-band setup" is a precondition to write down, not a reason to call the check passed.';
+
+/**
+ * Severity follows what was shown: a parser that only builds objects is rated lower than one that runs
+ * code, and an agent that stops at "construction" never finds out which it has. Agents that probed the
+ * library version's other forms reached execution; the ones that did not rated the same defect lower
+ * (run_01M7QQ4YG9: object construction only, rated high).
+ */
+export const EXECUTION_PROOF_RULE =
+  'Proving code execution: building an object from untrusted input is not proof that code runs. When a check is about untrusted input reaching a parser, deserializer, template or eval-like call, prove execution harmlessly with a payload that creates a marker file or directory inside the workspace (for example os.mkdir or Path.touch) and never one that touches anything else. ' +
+  'If one tag, gadget or syntax form is rejected, try the other forms this library version supports before concluding that execution is not reachable, and list the forms you tried in "Breaks attempted:". ' +
+  'State plainly whether code was executed or only constructed.';
 
 /**
  * Extension round: a check that was already decided keeps its verdict, but the
@@ -331,6 +347,7 @@ export function buildDeepeningPrompt(
     'Try to BREAK the property from angles the first pass did not cover: other entry points that reach the same code, boundary and hostile inputs not yet used, concurrency and ordering, failure and cleanup paths, and the exact wording of the documented behaviour. Execute the REAL code path with a small probe (one single non-compound command) for each angle. A reproduced defect is a finding: state the trigger and the operation that showed it. If every angle holds, say which angles you ran. Your first-pass verdict stands unless this pass reproduces a defect, so a probe that crashes through a bug of your own (a ReferenceError, a wrong path, cleanup code that throws) is NOT a result: fix the probe and rerun it until it exits 0 with its full output, or state plainly that the angle stayed undecided. Never leave your last run of an angle failing. Stop after 2-3 sentences of conclusion and a "Breaks attempted:" line.',
     INPUT_CLASS_RULE,
     REPRODUCED_VIOLATION_RULE,
+    EXECUTION_PROOF_RULE,
   ].join('\n');
 }
 
@@ -350,6 +367,7 @@ export function buildLeadPrompt(plan: Plan, index: number, lead: string): string
     'Execute the REAL code path with a small probe (one single non-compound command) to reproduce it or rule it out. A reproduced defect is a finding even though the check it came from passed: state the trigger and the operation that showed it. A probe that crashes through a bug of your own is not a result: fix it and rerun until it exits 0, or say the lead stayed undecided. Never loosen an assertion. Stop after 2-3 sentences of conclusion and a "Breaks attempted:" line.',
     INPUT_CLASS_RULE,
     REPRODUCED_VIOLATION_RULE,
+    EXECUTION_PROOF_RULE,
   ].join('\n');
 }
 
@@ -368,6 +386,7 @@ export function buildHazardPrompt(file: string, hazards: readonly string[]): str
     'Read the flagged operations, decide which documented or obvious guarantee each one must keep, then execute the REAL code path with a small probe (one single non-compound command) that tries to break it. A probe that crashes through a bug of your own is not a result: fix it and rerun until it exits 0, or say the angle stayed undecided. Never loosen an assertion. Stop after 2-3 sentences of conclusion and a "Breaks attempted:" line.',
     INPUT_CLASS_RULE,
     REPRODUCED_VIOLATION_RULE,
+    EXECUTION_PROOF_RULE,
   ].join('\n');
 }
 

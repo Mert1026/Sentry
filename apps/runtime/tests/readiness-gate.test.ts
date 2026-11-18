@@ -43,6 +43,21 @@ const GLM_BASE = {
   systemdOk: true,
 };
 
+describe('pre-run gate: the Claude agent reuses the gate under its own name', () => {
+  it('names Claude, not GLM, when the credential or model is missing', () => {
+    const verdict = evaluateGlmGate({
+      ...GLM_BASE,
+      agentLabel: 'Claude',
+      credential: false,
+      model: false,
+    });
+    expect(verdict.ready).toBe(false);
+    expect(verdict.reasons).toContain('Claude credential missing');
+    expect(verdict.reasons).toContain('Claude model not set');
+    expect(verdict.reasons.join(';')).not.toContain('GLM');
+  });
+});
+
 describe('pre-run gate: GLM hard local readiness', () => {
   it('endpoint missing -> ready=false', () => {
     const verdict = evaluateGlmGate({

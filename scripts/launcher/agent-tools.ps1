@@ -83,6 +83,18 @@ function Ensure-SentryBrowser {
   return $false
 }
 
+# The Claude account sign-in runs `claude setup-token` under util-linux `script` (a terminal Claude Code
+# can read the pasted code from). Never gates readiness: the API key sign-in does not need it.
+function Test-SentryTerminalTool {
+  param([string]$Distro)
+  $r = Invoke-SentryWslFile -Distro $Distro -ScriptName 'check-terminal.sh' -TimeoutSec 60
+  $t = [string]$r.Stdout
+  if ($t.Contains('TERMINAL_OK')) { Write-SentryOk 'Terminal tool for the Claude account sign-in (script)'; return $true }
+  if ($t.Contains('TERMINAL_MISSING')) { Write-SentryWarn 'The script tool (util-linux) is missing in this distribution: the Claude account sign-in cannot run. The API key sign-in still works. Install util-linux (bsdutils on Ubuntu) and rerun sentry setup.'; return $false }
+  Write-SentryWarn 'The script tool did not provide a terminal: the Claude account sign-in may not run. The API key sign-in still works. Run sentry doctor for details.'
+  return $false
+}
+
 function Get-SentryManagedClaudePath {
   param([string]$CheckOutput)
   foreach ($line in (([string]$CheckOutput) -split "`n")) {

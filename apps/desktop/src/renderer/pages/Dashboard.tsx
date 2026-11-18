@@ -39,7 +39,7 @@ export function Dashboard(): React.JSX.Element {
     <div className="page dashboard-page">
       <PageHeader
         title="Dashboard"
-        subtitle="Independent AI QA across OpenCode, DeepSeek, GLM, and ChatGPT."
+        subtitle="Independent AI QA across OpenCode, DeepSeek, GLM, ChatGPT, and Claude."
         actions={
           <Link to="/projects">
             <button className="primary">

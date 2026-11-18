@@ -473,7 +473,13 @@ describe('findings export channels', () => {
     ])
       expect(isCliAllowed(channel), channel).toBe(true);
     // A custom add-on is a shell command the caller supplies: only the app's own window may start one.
-    for (const channel of ['toolchains:custom-install', 'providers:save', 'openai:account-login'])
+    for (const channel of [
+      'toolchains:custom-install',
+      'providers:save',
+      'openai:account-login',
+      'claude:account-login',
+      'claude:account-submit-code',
+    ])
       expect(isCliAllowed(channel), channel).toBe(false);
     await expect(
       dispatchDesktopCommand(

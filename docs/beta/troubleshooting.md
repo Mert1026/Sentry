@@ -84,6 +84,15 @@ browser and report browser checks as inconclusive. Fix the cause and rerun `sent
 To test it by hand inside WSL: `SENTRY_BROWSER_HOME=~/.local/share/sentry/tools/browser bash
 scripts/launcher/linux/install-browser.sh` prints `BROWSER_READY=...` or `BROWSER_FAILED=<reason>`.
 
+## "Sign in with Claude" says the script tool is missing
+
+The Claude account sign-in runs Anthropic's `claude setup-token` in the Linux runtime under the util-linux `script` tool,
+because Claude Code only reads the pasted code from a terminal. `sentry doctor` shows `Claude sign-in terminal` (PASS when
+`script` gave a terminal just now, a warning when it is missing or did not), and `sentry setup` prints `Terminal tool for
+the Claude account sign-in (script)` or the same warning. `script` is part of util-linux (`bsdutils` on Ubuntu), which
+every supported distribution ships in its base install, so a warning means a stripped-down image: install util-linux
+and rerun `sentry setup`. This never blocks anything else: signing in to Claude with an API key does not need it.
+
 ## An agent fails with "safety filter" / "flagged for possible cybersecurity risk"
 
 Symptom: a ChatGPT (or other OpenAI-backed) agent fails with `OPENCODE_PROVIDER_REFUSED`. The model provider's own content filter declined the request, usually because a security-testing run contains exploit

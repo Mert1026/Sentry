@@ -19,6 +19,7 @@ import {
   describePlanRejection,
   describeSchemaIssues,
   parseAgentEffort,
+  CLAUDE_SANDBOX_PLACEHOLDER_NOTE,
 } from '@qa/shared';
 import {
   limitPhase,
@@ -1517,9 +1518,8 @@ export class ClaudeCodeHarnessAdapter implements HarnessAdapter {
         type: 'warning',
         code: 'GLM_WINDOWS_PROFILES_HIDDEN',
         message: (
-          'Host Windows profiles detected (' +
-          profileBlockers.join(', ') +
-          ') but hidden from the Claude worker namespace by mount isolation; ' +
+          profileBlockers.length +
+          ' host Windows profile(s) detected but hidden from the Claude worker namespace by mount isolation; ' +
           'no host repair needed.'
         ).slice(0, 500),
       });
@@ -1753,6 +1753,7 @@ export class ClaudeCodeHarnessAdapter implements HarnessAdapter {
           webAccess: webAccessEnabled(request.executionSafeguards),
           toolDownloads: toolDownloadsEnabled(request.executionSafeguards),
           ...browserNetworkOption(),
+          sandboxNotes: [CLAUDE_SANDBOX_PLACEHOLDER_NOTE],
         },
         event: (body) => event(request.agentRunId, body),
         streamTurn: (turnText) =>

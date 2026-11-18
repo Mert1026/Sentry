@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CLAUDE_SANDBOX_PLACEHOLDER_NOTE,
   DEPENDENCY_CACHE_DIRNAME,
   NON_INTERACTIVE_ENVIRONMENT,
   PACKAGE_REGISTRY_HOSTS,
@@ -119,5 +120,26 @@ describe('agent network policy', () => {
       GIT_TERMINAL_PROMPT: '0',
       UNZIP: '-o',
     });
+  });
+});
+
+describe('sandbox notes in the investigation prompt', () => {
+  it('adds the lines it is given, and nothing when there are none', () => {
+    const plain = agentNetworkPromptLines({ webAccess: false });
+    const noted = agentNetworkPromptLines({ webAccess: false, sandboxNotes: ['A sandbox note.'] });
+    expect(noted).toContain('A sandbox note.');
+    expect(noted).toHaveLength(plain.length + 1);
+    expect(plain).not.toContain('A sandbox note.');
+  });
+
+  it('explains Claude Code placeholders as non-files that are not to be reported', () => {
+    expect(CLAUDE_SANDBOX_PLACEHOLDER_NOTE).toContain('character devices');
+    expect(CLAUDE_SANDBOX_PLACEHOLDER_NOTE).toContain('.mcp.json');
+    expect(CLAUDE_SANDBOX_PLACEHOLDER_NOTE).toContain('secrets-check gaps');
+    // Both kinds the sandbox leaves: character devices and zero-byte stand-ins.
+    expect(CLAUDE_SANDBOX_PLACEHOLDER_NOTE).toContain('zero-byte regular files');
+    expect(CLAUDE_SANDBOX_PLACEHOLDER_NOTE).toContain('pnpm-lock.yaml');
+    // A real file with the same name is still read normally.
+    expect(CLAUDE_SANDBOX_PLACEHOLDER_NOTE).toContain('read it normally');
   });
 });

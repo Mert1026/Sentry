@@ -223,7 +223,7 @@ function Redact-SentrySecrets {
     '(?i)(api[_-]?key\s*[:=]\s*)([^\s''"]+)',
     '(?i)(token\s*[:=]\s*)([^\s''"]+)',
     '(?i)(authorization\s*:\s*Bearer\s+)([^\s]+)',
-    '(?i)((?:OPENROUTER_API_KEY|OPENCODE_API_KEY|DEEPSEEK_API_KEY|ANTHROPIC_AUTH_TOKEN)\s*=\s*)([^\s''"]+)'
+    '(?i)((?:OPENROUTER_API_KEY|OPENCODE_API_KEY|DEEPSEEK_API_KEY|ANTHROPIC_AUTH_TOKEN|ANTHROPIC_API_KEY|CLAUDE_CODE_OAUTH_TOKEN)\s*=\s*)([^\s''"]+)'
   )
   foreach ($p in $patterns) { $out = $out -replace $p, '$1***' }
   return $out
