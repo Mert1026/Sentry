@@ -1986,7 +1986,8 @@ describe('ClaudeAgentHarnessAdapter', () => {
             code: 'CLAUDE_WINDOWS_PROFILES_HIDDEN',
           }),
         );
-        expect(JSON.stringify(events)).toContain('StaleAccount');
+        // The warning counts the profiles; it never prints account names.
+        expect(JSON.stringify(events)).not.toContain('StaleAccount');
       } finally {
         await chmod(join(usersRoot, 'StaleAccount'), 0o755).catch(() => undefined);
       }

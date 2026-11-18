@@ -1520,9 +1520,8 @@ export class ClaudeAgentHarnessAdapter implements HarnessAdapter {
         type: 'warning',
         code: 'CLAUDE_WINDOWS_PROFILES_HIDDEN',
         message: (
-          'Host Windows profiles detected (' +
-          profileBlockers.join(', ') +
-          ') but hidden from the Claude worker namespace by mount isolation; ' +
+          profileBlockers.length +
+          ' host Windows profile(s) detected but hidden from the Claude worker namespace by mount isolation; ' +
           'no host repair needed.'
         ).slice(0, 500),
       });

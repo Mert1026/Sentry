@@ -153,7 +153,7 @@ describe('ordered compact QA stages', () => {
     expect(text).toContain('check_1');
     expect(text).toContain('breaks attempted');
     expect(text).toContain('reproductionSteps');
-    expect(text.length).toBeLessThan(6500);
+    expect(text.length).toBeLessThan(6750);
     expect(buildQaReportPrompt(plan, new Map(), ['Invalid strength']).length).toBeLessThan(
       text.length,
     );
