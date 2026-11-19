@@ -248,6 +248,41 @@ function RetestTab({
   );
 }
 
+/**
+ * The agent's stages as a vertical timeline: a marker per stage joined by a line, the stage name, and a
+ * badge with its state. The count in the heading says how far the agent got.
+ */
+function StageTimeline({ stages }: { stages: AgentNodeView['stages'] }): React.JSX.Element {
+  const reached = stages.filter(
+    (stage) => stage.state === 'completed' || stage.state === 'observed',
+  ).length;
+  return (
+    <section className="stage-timeline" aria-label="Stages">
+      <div className="stage-timeline-head">
+        <span className="metadata">Stages</span>
+        <span className="stage-timeline-count" title="Stages reached">
+          {reached + '/' + stages.length}
+        </span>
+      </div>
+      <ol className="stage-timeline-list">
+        {stages.map((stage) => (
+          <li key={stage.id} className="stage-step" data-state={stage.state}>
+            <span className="stage-step-marker" aria-hidden="true">
+              {stage.state === 'observed' ? (
+                <Eye size={12} />
+              ) : (
+                <StatusIcon status={stage.state} size={12} />
+              )}
+            </span>
+            <span className="stage-step-label">{stage.label}</span>
+            <span className="stage-step-state">{stageStateLabel(stage.state)}</span>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
 function OverviewTab({
   view,
   userNote,
@@ -316,36 +351,7 @@ function OverviewTab({
           </div>
         ) : null}
       </div>
-      <div>
-        <div className="metadata" style={{ marginBottom: 4 }}>
-          Stages
-        </div>
-        <ul
-          style={{
-            listStyle: 'none',
-            padding: 0,
-            margin: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 2,
-          }}
-        >
-          {view.stages.map((stage) => (
-            <li key={stage.id} className="metadata">
-              <span className="stage-icon" aria-hidden="true">
-                {stage.state === 'observed' ? (
-                  <Eye size={12} />
-                ) : (
-                  <StatusIcon status={stage.state} size={12} />
-                )}
-              </span>{' '}
-              {stage.label}
-              {' — '}
-              {stageStateLabel(stage.state)}
-            </li>
-          ))}
-        </ul>
-      </div>
+      <StageTimeline stages={view.stages} />
       <div className="metric-grid">
         <div className="metric-card">
           <div className="metric-value">
