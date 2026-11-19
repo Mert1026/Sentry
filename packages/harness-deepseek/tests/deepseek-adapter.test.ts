@@ -347,7 +347,7 @@ describe('DeepSeekHarnessAdapter', () => {
                   step: 2,
                   message: { id: 'msg-2', role: 'assistant', content: [], source: {} },
                   stream: [],
-                  usage: { inputTokens: 100, outputTokens: 50 },
+                  usage: { inputTokens: 100, outputTokens: 50, cacheReadTokens: 400 },
                 },
               },
             ]),
@@ -393,7 +393,8 @@ describe('DeepSeekHarnessAdapter', () => {
     const usage = events.find((e) => e.type === 'usage.updated');
     expect(usage).toMatchObject({
       type: 'usage.updated',
-      usage: { inputTokens: 100, outputTokens: 50, turns: 3 },
+      // Input is the whole prompt: 100 new + 400 read from the cache.
+      usage: { inputTokens: 500, outputTokens: 50, cachedInputTokens: 400, turns: 3 },
     });
   });
 

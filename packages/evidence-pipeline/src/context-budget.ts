@@ -62,13 +62,20 @@ export class ContextBudget {
    *  bound, so rotation errs early, never late. That bound grows with every
    *  step of a long tool-using turn, so adapters that can should report it. */
   observeTurn(
-    usage: { readonly inputTokens?: number | undefined } | undefined,
+    usage:
+      | {
+          readonly inputTokens?: number | undefined;
+          readonly cachedInputTokens?: number | undefined;
+        }
+      | undefined,
     contextTokens?: number | undefined,
   ): void {
     const observed =
       contextTokens !== undefined && Number.isFinite(contextTokens)
         ? contextTokens
-        : usage?.inputTokens;
+        : usage?.inputTokens === undefined
+          ? undefined
+          : Math.max(0, usage.inputTokens - (usage.cachedInputTokens ?? 0));
     if (observed !== undefined && Number.isFinite(observed)) {
       this.peakInputTokens = Math.max(this.peakInputTokens, observed);
     }

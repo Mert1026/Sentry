@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- **Token counts mean the same for every agent.** Input is now the whole prompt (new tokens plus cache
+  reads and writes) and cached is the cached part of it, so Claude no longer shows a few hundred input
+  tokens next to the others' hundreds of thousands. OpenCode and ChatGPT count their reasoning tokens
+  as output, which they used to leave out. Numbers for new runs are larger than before; old runs keep
+  the figures they were stored with.
 - **Agents that report in a fresh session keep the lines they read.** Each file read was cut to 260
   characters before the report stage, and the long workspace path used most of that, so OpenCode and
   ChatGPT saw no line numbers (every finding said line 1) and listed the output as truncated. Reads now

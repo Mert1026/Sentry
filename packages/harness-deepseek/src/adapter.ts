@@ -329,7 +329,10 @@ function tokenUsageFromEvent(data: AssistantMessageDataView): AgentUsage | undef
   )
     return undefined;
   return {
-    ...(inputTokens === undefined ? {} : { inputTokens }),
+    // The whole prompt: uncached plus cache reads and writes (cachedInputTokens is the cached part of it).
+    ...(inputTokens === undefined && cacheReadTokens === undefined && cacheWriteTokens === undefined
+      ? {}
+      : { inputTokens: (inputTokens ?? 0) + (cacheReadTokens ?? 0) + (cacheWriteTokens ?? 0) }),
     ...(outputTokens === undefined ? {} : { outputTokens }),
     ...(cacheReadTokens === undefined && cacheWriteTokens === undefined
       ? {}

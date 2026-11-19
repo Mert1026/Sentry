@@ -143,7 +143,12 @@ function investigationTurn(extra: ClaudeStreamEvent[] = []) {
     }),
     evt('result', {
       is_error: false,
-      usage: { input_tokens: 100, output_tokens: 50 },
+      usage: {
+        input_tokens: 100,
+        output_tokens: 50,
+        cache_read_input_tokens: 400,
+        cache_creation_input_tokens: 100,
+      },
       subagent_stats: { spawned: 0 },
     }),
   ];
@@ -1256,7 +1261,8 @@ describe('ClaudeAgentHarnessAdapter', () => {
     expect(child['SENTRY_ANTHROPIC_MODEL']).toBe('claude-5.3-flash');
     const usage = events.find((e) => e.type === 'usage.updated');
     expect(usage).toMatchObject({
-      usage: { inputTokens: 120, outputTokens: 60, turns: 3 },
+      // Input is the whole prompt: 100 + 400 read + 100 written in the investigation, plus 10 each for planning and report.
+      usage: { inputTokens: 620, outputTokens: 60, cachedInputTokens: 500, turns: 3 },
     });
   });
 
