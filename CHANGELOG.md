@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- **A clearer agent box on the run canvas.** Each box has a fixed width and every line is trimmed to it,
+  so long model names and translated words no longer spill out. It shows the name, the model without its
+  provider prefix, a status badge with the elapsed time, the stage bars across the full width with how many
+  stages are done and where the agent is, the live activity line while it works, three equal cells for
+  findings, evidence and the secrets light, and a thin bar of the findings by severity.
+  A **Legend** button on the canvas toolbar opens a dropdown that names the colour of every stage bar and
+  every severity in the findings bar, one per line with its full word. It closes on a click elsewhere,
+  on Escape or on the button.
 - **A tidier Overview on the run page.** It now shows only what the page does not already show: the run
   status, mode, run depth, time limit, the add-ons and the agent counts. The add-ons (web access, tool
   and SDK downloads, secrets check, project profile) are one list with a clear On or Off for each, and the

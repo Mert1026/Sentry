@@ -44,6 +44,11 @@
   --warning: #c2a760;
   --danger: var(--sentry-danger);
   --failed: var(--danger);
+  --sev-critical: var(--danger);
+  --sev-high: #c98a64;
+  --sev-medium: var(--warning);
+  --sev-low: #8aa383;
+  --sev-info: #929d90;
   --cancelled: #737d71;
   --inconclusive: #a99870;
   /* Glows */
@@ -1232,13 +1237,16 @@ textarea:focus {
     background var(--dur-med) var(--ease-out),
     box-shadow var(--dur-med) var(--ease-out);
 }
+.canvas-legend .stage-dots i.done,
 .flow-node .stage-dots i.done {
   background: var(--success);
   box-shadow: 0 0 8px rgba(109, 155, 102, 0.55);
 }
+.canvas-legend .stage-dots i.observed,
 .flow-node .stage-dots i.observed {
   background: #929d90;
 }
+.canvas-legend .stage-dots i.active,
 .flow-node .stage-dots i.active {
   background: var(--running);
   box-shadow: 0 0 10px rgba(212, 192, 11, 0.75);
@@ -1255,6 +1263,7 @@ textarea:focus {
 }
 /* The agent hit a warning or error: a calm yellow blink in diagonal stripes. Only yellow is used
    (the gaps are a faint yellow), with a faint glow and a shallow blink so it never shines. */
+.canvas-legend .stage-dots i.warning,
 .flow-node .stage-dots i.warning {
   background-color: rgba(212, 192, 11, 0.14);
   background-image: repeating-linear-gradient(
@@ -1274,6 +1283,7 @@ textarea:focus {
     opacity: 0.72;
   }
 }
+.canvas-legend .stage-dots i.failed,
 .flow-node .stage-dots i.failed {
   background: var(--danger);
   box-shadow: 0 0 10px rgba(185, 100, 98, 0.7);
@@ -1324,6 +1334,185 @@ textarea:focus {
   box-shadow: 0 0 8px rgba(212, 192, 11, 0.9);
   flex: none;
   animation: icon-breathe 1.4s ease-in-out infinite;
+}
+
+/* Agent node: a fixed width, every line trimmed to it, so nothing can overflow the box. */
+.flow-node.agent-node {
+  width: 244px;
+  min-width: 0;
+  max-width: none;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.flow-node.agent-node > * {
+  min-width: 0;
+}
+.flow-node.agent-node .node-title {
+  gap: 8px;
+}
+.flow-node.agent-node .node-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.flow-node.agent-node .node-status-icon {
+  flex: none;
+}
+.flow-node.agent-node .node-model {
+  font-size: 12px;
+  margin-top: -3px;
+}
+.flow-node.agent-node .node-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.flow-node.agent-node .node-status {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+}
+.flow-node.agent-node .node-status.state-running,
+.flow-node.agent-node .node-status.state-thinking,
+.flow-node.agent-node .node-status.state-starting {
+  color: var(--running);
+  border-color: rgba(212, 192, 11, 0.45);
+  background: rgba(212, 192, 11, 0.08);
+}
+.flow-node.agent-node .node-status.state-completed {
+  color: var(--success);
+  border-color: rgba(109, 155, 102, 0.45);
+  background: rgba(109, 155, 102, 0.1);
+}
+.flow-node.agent-node .node-status.state-failed,
+.flow-node.agent-node .node-status.state-timeout {
+  color: var(--danger);
+  border-color: rgba(185, 100, 98, 0.45);
+  background: rgba(185, 100, 98, 0.08);
+}
+.flow-node.agent-node .node-elapsed {
+  flex: none;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+/* The stage bars share the whole width, so the node reads as one progress bar. */
+.flow-node.agent-node .stage-dots {
+  margin-top: 2px;
+  gap: 4px;
+}
+.flow-node.agent-node .stage-dots i {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
+}
+.flow-node.agent-node .node-stage-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.flow-node.agent-node .node-stage-count {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+.flow-node.agent-node .node-stage-word {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.flow-node.agent-node .live-line {
+  margin-top: 0;
+  font-size: 12px;
+}
+/* Three equal cells: the number first, the word under it. */
+.flow-node.agent-node .node-stats {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 6px;
+  margin-top: 2px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle);
+}
+.flow-node.agent-node .node-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.flow-node.agent-node .node-stat strong {
+  display: flex;
+  align-items: center;
+  min-height: 22px;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+.flow-node.agent-node .node-stat span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+.flow-node.agent-node .node-stat.secrets-light {
+  gap: 1px;
+}
+.flow-node.agent-node .node-stat.secrets-light i {
+  width: 12px;
+  height: 12px;
+}
+/* Findings by severity as one thin bar: a glance says whether anything serious was found. */
+.flow-node.agent-node .node-severity {
+  display: flex;
+  gap: 2px;
+  height: 4px;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.flow-node.agent-node .node-severity i {
+  flex-basis: 0;
+  min-width: 4px;
+}
+.flow-node.agent-node .node-severity .sev-critical,
+.legend-swatch.sev-critical {
+  background: var(--sev-critical);
+}
+.flow-node.agent-node .node-severity .sev-high,
+.legend-swatch.sev-high {
+  background: var(--sev-high);
+}
+.flow-node.agent-node .node-severity .sev-medium,
+.legend-swatch.sev-medium {
+  background: var(--sev-medium);
+}
+.flow-node.agent-node .node-severity .sev-low,
+.legend-swatch.sev-low {
+  background: var(--sev-low);
+}
+.flow-node.agent-node .node-severity .sev-info,
+.legend-swatch.sev-info {
+  background: var(--sev-info);
 }
 
 /* Agent state halos — each lifecycle phase reads instantly */
@@ -1623,4 +1812,85 @@ input:focus-visible,
 select:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* Legend card on the run canvas: what the stage bars and the findings bar colours mean. */
+.canvas-legend-anchor {
+  position: relative;
+  display: flex;
+}
+/* A dropdown under the toolbar button, opened only when the button is pressed. */
+.canvas-legend {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: -3px;
+  z-index: 6;
+  width: 264px;
+  max-width: calc(100vw - 40px);
+  max-height: 70vh;
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  background: var(--glass-bg-strong);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+.canvas-legend .legend-heading {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+.canvas-legend .legend-heading:not(:first-child) {
+  margin-top: 10px;
+}
+.canvas-legend .legend-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+/* One item per line, and a long word wraps instead of being cut off. */
+.canvas-legend .legend-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.canvas-legend .legend-list li > span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.canvas-legend .legend-swatch {
+  flex: none;
+  width: 22px;
+  height: 5px;
+  border-radius: 2px;
+}
+.canvas-legend .stage-dots {
+  flex: none;
+  display: flex;
+}
+.canvas-legend .stage-dots i {
+  width: 22px;
+  height: 5px;
+  border-radius: 2px;
+  background: rgba(160, 190, 160, 0.18);
+}
+.canvas-legend .legend-note {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
 }
