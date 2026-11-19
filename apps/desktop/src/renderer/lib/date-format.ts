@@ -12,7 +12,7 @@ export function formatDateTime(
   if (iso === undefined || iso === null || iso === '') return '—';
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
-  return new Intl.DateTimeFormat(language === 'bg' ? 'bg-BG' : 'en-GB', {
+  const text = new Intl.DateTimeFormat(language === 'bg' ? 'bg-BG' : 'en-GB', {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
@@ -20,4 +20,6 @@ export function formatDateTime(
     minute: '2-digit',
     hour12: false,
   }).format(date);
+  // Bulgarian puts "г." (year) after the year; the date reads clearly without it.
+  return text.replace(/\s*г\.(?=,)/, '');
 }

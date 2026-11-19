@@ -9,6 +9,8 @@
   Started and Completed now both show the date and the time in your own time zone (for example
   "19 Nov 2026, 19:18"). Completed used to show the stored UTC text next to a local start time, so a run looked
   as if it had ended before it began.
+  In Bulgarian the date no longer carries the "г." mark, and the Low colour in the findings bar and the legend
+  is a clear blue, so it is no longer mistaken for the green of Completed.
 - **More fixes from a second QA run on Sentry's own code.** Stored events now have secrets removed from the text of
   commands, tool summaries and errors, status, warnings, failures, cancel reasons and test suites, not only from
   messages, plans and findings. The redactor also catches a token after an underscore (`GH_ghp_…`), camelCase

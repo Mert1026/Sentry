@@ -20,6 +20,12 @@ describe('formatDateTime', () => {
     expect(formatDateTime(iso, 'bg').endsWith(hh + ':' + mm)).toBe(true);
   });
 
+  it('does not add the Bulgarian year mark after the year', () => {
+    const text = formatDateTime(iso, 'bg');
+    expect(text).not.toContain('г.');
+    expect(text).toContain('2026,');
+  });
+
   it('follows the interface language', () => {
     expect(formatDateTime(iso, 'bg')).not.toBe(formatDateTime(iso, 'en'));
   });

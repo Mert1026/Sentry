@@ -47,7 +47,7 @@
   --sev-critical: var(--danger);
   --sev-high: #c98a64;
   --sev-medium: var(--warning);
-  --sev-low: #8aa383;
+  --sev-low: #5fa8d3;
   --sev-info: #929d90;
   --cancelled: #737d71;
   --inconclusive: #a99870;
