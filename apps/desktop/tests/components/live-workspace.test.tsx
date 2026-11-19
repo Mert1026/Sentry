@@ -143,6 +143,16 @@ describe('truthful run workspace', () => {
       title: group.querySelector('.run-group-title')?.textContent,
       labels: [...group.querySelectorAll('dt')].map((dt) => dt.textContent),
     }));
+    // Both moments are local date and time: no stored ISO text, and the end is not shown in another zone.
+    const fact = (label: string): string =>
+      [...document.querySelectorAll('.run-details .run-detail')]
+        .find((row) => row.querySelector('dt')?.textContent === label)
+        ?.querySelector('dd')?.textContent ?? '';
+    expect(fact('Started')).toContain('2026');
+    expect(fact('Completed')).toContain('2026');
+    expect(fact('Completed')).not.toContain('T09:');
+    expect(fact('Started')).toMatch(/\d{2}:\d{2}$/);
+    expect(fact('Completed')).toMatch(/\d{2}:\d{2}$/);
     expect(groups).toEqual([
       { title: 'Run', labels: ['Project', 'Started', 'Completed', 'Duration'] },
       { title: 'Results', labels: ['Agents', 'Findings', 'Evidence'] },

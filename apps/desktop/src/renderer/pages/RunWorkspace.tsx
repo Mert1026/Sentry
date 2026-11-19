@@ -16,6 +16,8 @@ import { buildRunGraph } from '../lib/run-graph.js';
 import { useRunSnapshot } from '../lib/use-live-run.js';
 import { useDeveloperMode } from '../lib/developer-mode.js';
 import { sentryApi } from '../lib/sentry-api.js';
+import { formatDateTime } from '../lib/date-format.js';
+import { useI18n } from '../lib/i18n.js';
 
 const LEFT_KEY = 'sentry:run-layout:left-width';
 const RIGHT_KEY = 'sentry:run-layout:right-width';
@@ -31,13 +33,6 @@ function loadWidth(key: string, fallback: number): number {
   } catch {
     return fallback;
   }
-}
-
-function formatClock(iso: string | undefined): string {
-  if (iso === undefined || iso === '') return '—';
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
 function formatDuration(startIso: string | undefined, endIso: string | null | undefined): string {
@@ -57,6 +52,7 @@ export function RunWorkspace(): React.JSX.Element {
   const { runId } = useParams();
   const queryClient = useQueryClient();
   const developerMode = useDeveloperMode();
+  const { language } = useI18n();
   const [selectedId, setSelectedId] = React.useState<string | undefined>(undefined);
   const [centerRequest, setCenterRequest] = React.useState<{ id: string; key: number } | undefined>(
     undefined,
@@ -396,13 +392,15 @@ export function RunWorkspace(): React.JSX.Element {
               <div className="run-detail">
                 <dt>Started</dt>
                 <dd className="mono" title={String(data.run.startedAt ?? data.run.createdAt)}>
-                  {formatClock(data.run.startedAt ?? data.run.createdAt)}
+                  {formatDateTime(data.run.startedAt ?? data.run.createdAt, language)}
                 </dd>
               </div>
               {data.run.completedAt != null ? (
                 <div className="run-detail">
                   <dt>Completed</dt>
-                  <dd className="mono">{String(data.run.completedAt)}</dd>
+                  <dd className="mono" title={String(data.run.completedAt)}>
+                    {formatDateTime(data.run.completedAt, language)}
+                  </dd>
                 </div>
               ) : null}
               <div className="run-detail">
