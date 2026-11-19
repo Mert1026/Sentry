@@ -48,6 +48,27 @@ const STAGE_ORDER: readonly AgentStageId[] = [
   'completed',
 ];
 
+/** The position of the furthest stage an agent reached, or -1 when it has not reached any. */
+export function reachedStageIndex(stages: readonly { readonly state: StageState }[]): number {
+  let furthest = -1;
+  stages.forEach((stage, index) => {
+    if (stage.state !== 'not_started') furthest = index;
+  });
+  return furthest;
+}
+
+/**
+ * A stage before the furthest one that no event showed. The events are milestones, not a required sequence,
+ * so an agent can be reporting while "Evidence" never showed up; the bars still read as one line, with such a
+ * stage drawn as passed. Its label stays "Not observed": nothing claims it was seen.
+ */
+export function isPassedStage(
+  stages: readonly { readonly state: StageState }[],
+  index: number,
+): boolean {
+  return stages[index]?.state === 'not_started' && index < reachedStageIndex(stages);
+}
+
 /** Human label for a stage id; falls back to the raw id for forward compatibility. */
 export function stageLabel(stage: AgentStageId | string): string {
   return (STAGE_LABELS as Record<string, string>)[stage] ?? stage;

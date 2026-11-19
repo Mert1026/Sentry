@@ -310,6 +310,12 @@ export function RunWorkspace(): React.JSX.Element {
       .filter((agent) => ['failed', 'timed_out', 'interrupted'].includes(agent.status))
       .map((agent) => agent.id + ':' + agent.status)
       .join(',');
+  // Notices the person closed that would still be showing: a button brings them back.
+  const refreshNoticeApplies = snapshot.isError || snapshot.runtimeUnavailable;
+  const analysisNoticeApplies = ['failed', 'partial', 'cancelled'].includes(data.run.status);
+  const hiddenNotices =
+    (refreshNoticeApplies && dismissed['refresh'] === 'refresh' ? 1 : 0) +
+    (analysisNoticeApplies && dismissed['analysis'] === analysisSignature ? 1 : 0);
   const focusAgent = (stackId: string): void => {
     const id = 'agent-' + stackId;
     setSelectedId(id);
@@ -349,6 +355,17 @@ export function RunWorkspace(): React.JSX.Element {
             )}
           </div>
           <div className="run-actions">
+            {hiddenNotices > 0 ? (
+              <button
+                type="button"
+                className="compact ghost show-issues"
+                onClick={() => setDismissed({})}
+              >
+                <AlertTriangle size={14} aria-hidden="true" />
+                <span>Show issues</span>
+                <span className="show-issues-count">{hiddenNotices}</span>
+              </button>
+            ) : null}
             {terminal ? (
               <>
                 <button

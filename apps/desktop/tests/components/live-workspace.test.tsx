@@ -214,6 +214,22 @@ describe('truthful run workspace', () => {
     expect(document.querySelector('.run-notice')).toBeNull();
     // Closing the note changes nothing else on the page.
     expect(document.querySelector('.run-details')).not.toBeNull();
+    // A button brings the closed note back, and goes away once it is showing again.
+    const show = screen.getByRole('button', { name: /Show issues/ });
+    expect(show.textContent).toContain('1');
+    fireEvent.click(show);
+    expect(document.querySelector('.run-notice')).not.toBeNull();
+    expect(screen.queryByRole('button', { name: /Show issues/ })).toBeNull();
+  });
+
+  it('offers no Show issues button while nothing was closed', async () => {
+    const data = snapshot('partial') as ReturnType<typeof snapshot> & {
+      agentRuns: Array<{ status: string; failure?: { code: string; message: string } }>;
+    };
+    data.agentRuns[0] = { ...data.agentRuns[0]!, status: 'failed' };
+    workspace(data);
+    await screen.findByText('Structured failure details were not recorded.');
+    expect(screen.queryByRole('button', { name: /Show issues/ })).toBeNull();
   });
 
   it('a status query error does not leave a cached connected indicator or claim no active runs', async () => {

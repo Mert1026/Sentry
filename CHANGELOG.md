@@ -19,6 +19,9 @@
   Every failure an agent or the run engine can record (about 80 codes across OpenCode, DeepSeek, GLM and Claude, plus
   timeouts, interruptions and report deadlines) now has a plain sentence, in English and Bulgarian. The note has an X
   in its corner to close it; it comes back if a new agent fails.
+  A **Show issues** button in the run header brings back the notes you closed. The stage bars on an agent box read as
+  one line: a stage no event showed, before the furthest one reached, is drawn dimmer instead of empty, and the count
+  beside it (for example 6/7) is the position of the furthest stage, so it agrees with the bars and the stage name.
 - **More fixes from a second QA run on Sentry's own code.** Stored events now have secrets removed from the text of
   commands, tool summaries and errors, status, warnings, failures, cancel reasons and test suites, not only from
   messages, plans and findings. The redactor also catches a token after an underscore (`GH_ghp_…`), camelCase

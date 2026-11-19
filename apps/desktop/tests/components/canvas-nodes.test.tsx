@@ -107,11 +107,55 @@ describe('canvas node components', () => {
         } as never),
       ),
     );
-    expect(html).toContain('<span class="node-stage-count">3/' + view.stages.length + '</span>');
+    expect(html).toContain('<span class="node-stage-count">4/' + view.stages.length + '</span>');
     expect(html).toContain('aria-label="1 critical, 3 medium"');
     // Widths come from flex proportions, never from percentages.
     expect(html).toContain('class="sev-critical" style="flex-grow:1"');
     expect(html).toContain('class="sev-medium" style="flex-grow:3"');
+  });
+
+  it('draws the stage bars as one line: a stage no event showed, before the furthest one, is passed', () => {
+    const base = makeAgentNodeView({ status: 'running' });
+    const states = [
+      'observed',
+      'observed',
+      'observed',
+      'observed',
+      'not_started',
+      'warning',
+      'not_started',
+    ] as const;
+    const view = {
+      ...base,
+      stages: base.stages.map((stage, index) => ({ ...stage, state: states[index]! })),
+    };
+    const html = renderToStaticMarkup(
+      withFlow(
+        React.createElement(AgentCanvasNode, {
+          id: 'agent-x',
+          type: 'agentNode',
+          selected: false,
+          zIndex: 1,
+          isConnectable: false,
+          xPos: 0,
+          yPos: 0,
+          dragging: false,
+          data: {
+            label: view.displayName,
+            status: view.status,
+            kind: 'agent',
+            payload: { view, agentStackId: view.agentStackId },
+          },
+        } as never),
+      ),
+    );
+    const bars = [...html.matchAll(/<i class="([^"]*)" title="([^"]*)"/g)].map((m) => m[1]);
+    // Evidence (5th) was never seen, but Reporting (6th) was reached: it is drawn as passed, not as empty.
+    expect(bars).toEqual(['observed', 'observed', 'observed', 'observed', 'passed', 'warning', '']);
+    // Its tooltip still says nothing claims it was seen.
+    expect(html).toContain('title="Evidence — Not observed"');
+    // The count is the position of the furthest stage, so it agrees with the bars and the stage word.
+    expect(html).toContain('<span class="node-stage-count">6/7</span>');
   });
 
   it('keeps every line of the agent node inside its width', () => {

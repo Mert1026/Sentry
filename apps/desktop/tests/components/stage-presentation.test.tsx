@@ -91,9 +91,13 @@ describe('observed stage and activity presentation', () => {
     expect(steps.map((step) => step.getAttribute('data-state'))).toEqual(
       view.stages.map((stage) => stage.state),
     );
-    const reached = view.stages.filter((s) => s.state === 'completed' || s.state === 'observed');
+    // The count is the position of the furthest stage reached.
+    const furthest = view.stages.reduce(
+      (last, stage, index) => (stage.state === 'not_started' ? last : index),
+      -1,
+    );
     expect(timeline.querySelector('.stage-timeline-count')?.textContent).toBe(
-      reached.length + '/' + view.stages.length,
+      furthest + 1 + '/' + view.stages.length,
     );
   });
 

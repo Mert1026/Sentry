@@ -986,5 +986,7 @@
   "The run could not be carried out.": "Изпълнението не можа да бъде проведено.",
   "The agent’s provider is not set up. Check Settings → Providers.": "Доставчикът на агента не е настроен. Проверете Настройки → Доставчици.",
   "The agent stopped responding, so it was stopped.": "Агентът спря да отговаря, затова беше спрян.",
-  "The agent used up the time limit of the run.": "Агентът изчерпа времевия лимит на изпълнението."
+  "The agent used up the time limit of the run.": "Агентът изчерпа времевия лимит на изпълнението.",
+  "Passed, not observed": "Преминат, без наблюдение",
+  "Show issues": "Покажи проблемите"
 }

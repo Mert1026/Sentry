@@ -1283,6 +1283,11 @@ textarea:focus {
 .flow-node .stage-dots i.observed {
   background: #929d90;
 }
+/* A stage no event showed, before the furthest one reached: drawn dimmer, so the bars still read as one line. */
+.canvas-legend .stage-dots i.passed,
+.flow-node .stage-dots i.passed {
+  background: rgba(146, 157, 144, 0.42);
+}
 .canvas-legend .stage-dots i.active,
 .flow-node .stage-dots i.active {
   background: var(--running);
@@ -2155,4 +2160,31 @@ select:focus-visible {
   color: var(--text-primary);
   background: rgba(238, 241, 235, 0.08);
   border-color: var(--border-default);
+}
+
+/* In the stage timeline a stage no event showed, before the furthest one reached, keeps the line unbroken. */
+.stage-step[data-passed='true']:not(:last-child)::before {
+  background: color-mix(in srgb, #8fa08a 40%, transparent);
+}
+.stage-step[data-passed='true'] .stage-step-marker {
+  border-color: rgba(143, 160, 138, 0.5);
+}
+
+/* Brings back the notes the person closed. */
+.show-issues {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--warning);
+  border-color: rgba(194, 167, 96, 0.5);
+}
+.show-issues-count {
+  min-width: 18px;
+  padding: 0 5px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--bg-base, #0d100d);
+  background: var(--warning);
+  border-radius: 999px;
 }
