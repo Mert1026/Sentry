@@ -62,11 +62,23 @@ export function oneLine(value: string): string {
   return value.replace(/[\p{Cc}\s]+/gu, ' ').trim();
 }
 
+/** [ ] and < > become plain text, so free text cannot form a link, an image or an HTML tag. */
+function escapeMarkup(value: string): string {
+  return value.replace(/[[\]]/g, '\\$&').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/** Free text on one line for the Markdown report: oneLine, with link, image and HTML syntax defused. */
+function mdLine(value: string): string {
+  return escapeMarkup(oneLine(value));
+}
+
 /** A block quote, so free text can never start a heading, list or fence of its own. */
 function quote(value: string): string {
   return value
     .split(/\r?\n/)
-    .map((line) => (line.trim() === '' ? '>' : '> ' + line.replace(/[\p{Cc}]/gu, ' ')))
+    .map((line) =>
+      line.trim() === '' ? '>' : '> ' + escapeMarkup(line.replace(/[\p{Cc}]/gu, ' ')),
+    )
     .join('\n');
 }
 
@@ -105,7 +117,7 @@ function locationText(finding: Finding): string[] {
 function evidenceLines(items: readonly Evidence[]): string[] {
   return items.map((item) => {
     const base = '- ' + item.strength.replace(/_/g, ' ');
-    const description = item.description === undefined ? '' : ': ' + oneLine(item.description);
+    const description = item.description === undefined ? '' : ': ' + mdLine(item.description);
     const command =
       item.type === 'command'
         ? ' (ran ' + inlineCode(item.command.command) + ', exit code ' + item.command.exitCode + ')'
@@ -125,7 +137,7 @@ function findingBody(entry: ExportedFinding): string[] {
       finding.confidence +
       ', category: ' +
       finding.category +
-      (finding.categoryDetail === undefined ? '' : ' (' + oneLine(finding.categoryDetail) + ')'),
+      (finding.categoryDetail === undefined ? '' : ' (' + mdLine(finding.categoryDetail) + ')'),
   );
   lines.push(
     '- Reported by ' +
@@ -151,9 +163,7 @@ function findingBody(entry: ExportedFinding): string[] {
     if (value !== undefined) lines.push('', '**' + label + '**', '', quote(value));
   if (finding.reproductionSteps.length > 0) {
     lines.push('', '**Reproduction steps**', '');
-    finding.reproductionSteps.forEach((step, index) =>
-      lines.push(index + 1 + '. ' + oneLine(step)),
-    );
+    finding.reproductionSteps.forEach((step, index) => lines.push(index + 1 + '. ' + mdLine(step)));
   }
   if (entry.evidence.length > 0)
     lines.push('', '**Evidence**', '', ...evidenceLines(entry.evidence));
@@ -223,7 +233,7 @@ export function markdownReport(input: {
   const lines: string[] = [
     '# Sentry findings report',
     '',
-    '- Project: ' + oneLine(input.projectName),
+    '- Project: ' + mdLine(input.projectName),
     '- Generated: ' + input.generatedAt,
     '- Findings: ' +
       entries.length +
@@ -255,7 +265,7 @@ export function markdownReport(input: {
         ' | ' +
         entry.finding.severity +
         ' | ' +
-        oneLine(entry.finding.title).replace(/\|/g, '\\|') +
+        mdLine(entry.finding.title).replace(/\|/g, '\\|') +
         ' |',
     ),
   );
@@ -267,7 +277,7 @@ export function markdownReport(input: {
         '. [' +
         entry.finding.severity.toUpperCase() +
         '] ' +
-        oneLine(entry.finding.title),
+        mdLine(entry.finding.title),
       '',
       ...findingBody(entry),
     );

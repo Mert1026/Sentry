@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -231,5 +231,78 @@ describe('custom add-ons', () => {
     release();
     await addons.settled();
     expect((await addons.list())[0]).toMatchObject({ installing: false, installed: true });
+  });
+});
+
+describe('add-on markers and program folders that are not what the install wrote', () => {
+  const marker = async (root: string, name: string, content: string): Promise<string> => {
+    const dir = customAddonDir(root, name);
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, '.installed.json'), content);
+    return dir;
+  };
+
+  it('treats a marker of the wrong shape as not installed, without throwing', async () => {
+    const root = await dataRoot();
+    for (const [name, content] of [
+      ['empty', '{}'],
+      ['nothing', 'null'],
+      ['list', '[]'],
+      ['text', '"x"'],
+      [
+        'badentries',
+        JSON.stringify({ name: 'badentries', command: 'x', pathEntries: 'bin', installedAt: 't' }),
+      ],
+      [
+        'numbers',
+        JSON.stringify({ name: 'numbers', command: 'x', pathEntries: [1], installedAt: 't' }),
+      ],
+    ] as const)
+      await marker(root, name, content);
+    const addons = new CustomAddons(root, runner([]));
+    expect(await addons.list()).toEqual([]);
+    expect(await addons.pathEntries()).toEqual([]);
+  });
+
+  it('refuses a program folder that is a link leading outside the add-on', async () => {
+    const root = await dataRoot();
+    const outside = await mkdtemp(join(tmpdir(), 'sentry-outside-'));
+    roots.push(outside);
+    const linking: ScriptRunner = async (_command, { cwd }) => {
+      await symlink(outside, join(cwd, 'bin'), 'junction');
+      return { code: 0, output: '' };
+    };
+    const addons = new CustomAddons(root, linking);
+    try {
+      addons.install({ name: 'linky', command: 'ln', pathEntries: ['bin'] });
+    } catch {
+      return; // links need privileges on Windows; covered on Linux CI
+    }
+    for (let i = 0; i < 100; i += 1) {
+      await new Promise((done) => setTimeout(done, 50));
+      const item = (await addons.list()).find((entry) => entry.name === 'linky');
+      if (item !== undefined && !item.installing) break;
+    }
+    const item = (await addons.list()).find((entry) => entry.name === 'linky');
+    expect(item?.installed).toBe(false);
+    expect(item?.error ?? '').toContain('does not exist inside the add-on');
+    expect(await addons.pathEntries()).toEqual([]);
+  });
+
+  it('leaves a hand-edited marker that points through a link out of PATH', async () => {
+    const root = await dataRoot();
+    const outside = await mkdtemp(join(tmpdir(), 'sentry-outside-'));
+    roots.push(outside);
+    const dir = await marker(
+      root,
+      'tampered',
+      JSON.stringify({ name: 'tampered', command: 'x', pathEntries: ['bin'], installedAt: 't' }),
+    );
+    try {
+      await symlink(outside, join(dir, 'bin'), 'junction');
+    } catch {
+      return; // links need privileges on Windows; covered on Linux CI
+    }
+    expect(await new CustomAddons(root, runner([])).pathEntries()).toEqual([]);
   });
 });

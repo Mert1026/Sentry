@@ -157,6 +157,50 @@ describe('redactSecrets', () => {
   });
 });
 
+// Assembled from parts so this file itself holds no secret-looking text.
+const TOKEN_A = ['abcdef', '123456789'].join('');
+const TOKEN_B = ['abc123', 'def456', 'ghi789jkl'].join('');
+const BASIC = ['dXNlcjpw', 'YXNzd29yZA'].join('');
+
+describe('redactSecrets: the credential shapes a run review found missing', () => {
+  const cases: Array<[string, string]> = [
+    ['Authorization: Bearer ' + TOKEN_B, 'Authorization: Bearer [redacted]'],
+    ['token=' + TOKEN_A, 'token=[redacted]'],
+    ['password: hunter2hunter2', 'password: [redacted]'],
+    ['GITHUB_TOKEN=' + TOKEN_A, 'GITHUB_TOKEN=[redacted]'],
+    ['db-password=hunter2hunter2', 'db-password=[redacted]'],
+    ['password = "my secret pass phrase"', 'password = "[redacted]"'],
+    ['{"password": "hunter2hunter2"}', '{"password": "[redacted]"}'],
+    ['{"api_key":"abcdef123456"}', '{"api_key":"[redacted]"}'],
+    ['Authorization: Basic ' + BASIC + '==', 'Authorization: Basic [redacted]'],
+    ['Cookie: session=' + TOKEN_A + '; theme=dark', 'Cookie: [redacted]'],
+    ['Set-Cookie: sid=' + TOKEN_A + '; Path=/', 'Set-Cookie: [redacted]'],
+  ];
+  for (const [input, expected] of cases)
+    it('redacts ' + input.slice(0, 40), () => {
+      expect(redactSecrets('see ' + input)).toBe('see ' + expected);
+    });
+
+  it('keeps prose and code that only look like a credential', () => {
+    for (const plain of [
+      'the API uses Bearer authentication',
+      'Basic authentication is not used',
+      'password = get_password()',
+      'const token = readToken(request)',
+      'token = process.env.TOKEN',
+      'the token: refresh',
+    ])
+      expect(redactSecrets(plain), plain).toBe(plain);
+  });
+
+  it('stays fast on a long run of letters and digits', () => {
+    const long = 'a1'.repeat(30_000);
+    const start = Date.now();
+    redactSecrets('x ' + long + ' password=' + long);
+    expect(Date.now() - start).toBeLessThan(1000);
+  });
+});
+
 describe('grounding the Secrets check', () => {
   const report = (name: string, coverage: 'complete' | 'partial' = 'complete') => ({
     schemaVersion: 2 as const,

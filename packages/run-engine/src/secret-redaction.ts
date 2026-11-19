@@ -24,6 +24,11 @@ export function redactEventSecrets(event: HarnessEvent): HarnessEvent {
   switch (event.type) {
     case 'agent.message':
       return { ...event, message: redactSecrets(event.message) };
+    // The plan and a discovered hypothesis are the agent's own words too, so they are redacted like a message.
+    case 'investigation.plan.created':
+      return { ...event, plan: redactDeep(event.plan) };
+    case 'investigation.hypothesis.discovered':
+      return { ...event, hypothesis: redactDeep(event.hypothesis) };
     case 'finding.submitted':
       return { ...event, finding: redactDeep(event.finding) };
     case 'evidence.submitted':
