@@ -11,6 +11,11 @@
   as if it had ended before it began.
   In Bulgarian the date no longer carries the "г." mark, and the Low colour in the findings bar and the legend
   is a clear blue, so it is no longer mistaken for the green of Completed.
+  The run page no longer squeezes the canvas when the window is short: the page scrolls and the canvas keeps at least
+  460 px, so the side panels are not cut off. The legend opens inside the canvas and scrolls if it is taller than it.
+  The note under the header for a partial or failed run has a row per agent that did not finish, with a plain
+  sentence first (for example that the provider's usage limit was reached) and the code and the provider's own
+  words under Technical details. The agent count in the header is a number with its unit beside it.
 - **More fixes from a second QA run on Sentry's own code.** Stored events now have secrets removed from the text of
   commands, tool summaries and errors, status, warnings, failures, cancel reasons and test suites, not only from
   messages, plans and findings. The redactor also catches a token after an underscore (`GH_ghp_…`), camelCase

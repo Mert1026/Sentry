@@ -34,3 +34,16 @@ describe('the canvas legend', () => {
       );
   });
 });
+
+describe('the run page layout', () => {
+  const css = readFileSync(resolve(process.cwd(), 'src/renderer/styles.css'), 'utf8');
+
+  it('scrolls when the window is short instead of squeezing the canvas', () => {
+    expect(css).toMatch(/\.run-page \{[^}]*overflow-y: auto/);
+    expect(css).toMatch(/\.workspace \{[^}]*min-height: 460px/);
+  });
+
+  it('keeps the legend inside the canvas height', () => {
+    expect(css).toMatch(/\.canvas-legend-layer \{[^}]*max-height: calc\(100% - 64px\)/);
+  });
+});

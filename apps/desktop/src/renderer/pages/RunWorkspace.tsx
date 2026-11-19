@@ -2,7 +2,7 @@ import React from 'react';
 import { LoadingOverlay } from '../components/BlockingOverlay.js';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { AlertTriangle, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { RunCanvas } from '../components/RunCanvas.js';
 import { AgentInspector } from '../components/AgentInspector.js';
 import { RunSummaryPanel } from '../components/RunSummaryPanel.js';
@@ -17,6 +17,7 @@ import { useRunSnapshot } from '../lib/use-live-run.js';
 import { useDeveloperMode } from '../lib/developer-mode.js';
 import { sentryApi } from '../lib/sentry-api.js';
 import { formatDateTime } from '../lib/date-format.js';
+import { describeFailure } from '../lib/failure-text.js';
 import { useI18n } from '../lib/i18n.js';
 
 const LEFT_KEY = 'sentry:run-layout:left-width';
@@ -423,8 +424,10 @@ export function RunWorkspace(): React.JSX.Element {
               <div className="run-detail">
                 <dt>Agents</dt>
                 <dd>
-                  {String(data.run.configuration?.agentStackIds?.length ?? data.agentRuns.length) +
-                    ' selected'}
+                  <strong>
+                    {String(data.run.configuration?.agentStackIds?.length ?? data.agentRuns.length)}
+                  </strong>{' '}
+                  <span className="run-fact-unit">selected</span>
                 </dd>
               </div>
               <div className="run-detail">
@@ -465,24 +468,47 @@ export function RunWorkspace(): React.JSX.Element {
         </div>
       </header>
       {['failed', 'partial', 'cancelled'].includes(data.run.status) ? (
-        <div className="inline-notice tone-warning" role="status">
-          <strong>{'Analysis ' + data.run.status + '.'}</strong>{' '}
-          <span>Reported findings and evidence are retained independently for each agent.</span>
-          {data.agentRuns
-            .filter((agent) => ['failed', 'timed_out', 'interrupted'].includes(agent.status))
-            .map((agent) => (
-              <p key={agent.id}>
-                {AGENT_DISPLAY_NAMES[agent.agentStackId] ?? agent.agentStackId}:{' '}
-                {agent.status.replaceAll('_', ' ')}.
-                {agent.failure !== undefined
-                  ? ' ' + agent.failure.code + ': ' + agent.failure.message
-                  : ' Structured failure details were not recorded.'}
-              </p>
-            ))}
-          {data.agentRuns.length === 0 ? <span> No agent execution was recorded.</span> : null}{' '}
-          <span>
+        <div className="inline-notice tone-warning run-notice" role="status">
+          <div className="run-notice-head">
+            <AlertTriangle size={16} aria-hidden="true" />
+            <strong>{'Analysis ' + data.run.status + '.'}</strong>
+            <span>Reported findings and evidence are retained independently for each agent.</span>
+          </div>
+          <ul className="run-notice-agents">
+            {data.agentRuns
+              .filter((agent) => ['failed', 'timed_out', 'interrupted'].includes(agent.status))
+              .map((agent) => (
+                <li key={agent.id} className="run-notice-agent">
+                  <span className="run-notice-name">
+                    {AGENT_DISPLAY_NAMES[agent.agentStackId] ?? agent.agentStackId}
+                  </span>
+                  <span className="run-notice-state">{agent.status.replaceAll('_', ' ')}</span>
+                  {agent.failure !== undefined ? (
+                    <span className="run-notice-reason">
+                      {describeFailure(agent.failure) ?? agent.failure.message}
+                    </span>
+                  ) : (
+                    <span className="run-notice-reason">
+                      Structured failure details were not recorded.
+                    </span>
+                  )}
+                  {agent.failure !== undefined ? (
+                    <details className="run-notice-details">
+                      <summary>Technical details</summary>
+                      <code className="wrap-anywhere">
+                        {agent.failure.code + ': ' + agent.failure.message}
+                      </code>
+                    </details>
+                  ) : null}
+                </li>
+              ))}
+          </ul>
+          {data.agentRuns.length === 0 ? (
+            <p className="run-notice-hint">No agent execution was recorded.</p>
+          ) : null}
+          <p className="run-notice-hint">
             Review agent details and Environment before deliberately starting another run.
-          </span>
+          </p>
         </div>
       ) : null}
       {!terminal ? <div className="inline-notice">Export unlocks at terminal status.</div> : null}

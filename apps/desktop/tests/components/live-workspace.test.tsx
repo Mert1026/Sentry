@@ -126,7 +126,10 @@ describe('truthful run workspace', () => {
     ]) {
       expect(within(details).getByText(label)).toBeTruthy();
     }
-    expect(within(details).getByText(`${stacks.length} selected`)).toBeTruthy();
+    const agentsRow = [...details.querySelectorAll('.run-detail')].find(
+      (row) => row.querySelector('dt')?.textContent === 'Agents',
+    );
+    expect(agentsRow?.querySelector('dd')?.textContent).toBe(`${stacks.length} selected`);
     // No tile boxes in the header (they overflowed the layout).
     expect(document.querySelector('header .rs-tile')).toBeNull();
   });
@@ -158,6 +161,37 @@ describe('truthful run workspace', () => {
       { title: 'Results', labels: ['Agents', 'Findings', 'Evidence'] },
       { title: 'Identifiers', labels: expect.arrayContaining(['Run ID', 'Snapshot']) },
     ]);
+  });
+
+  it('explains a failed agent in a row of its own, with the provider text as technical details', async () => {
+    const data = snapshot('partial') as ReturnType<typeof snapshot> & {
+      agentRuns: Array<{ status: string; failure?: { code: string; message: string } }>;
+    };
+    data.agentRuns[0] = {
+      ...data.agentRuns[0]!,
+      status: 'failed',
+      failure: {
+        code: 'OPENCODE_UPSTREAM_FAILED',
+        message:
+          'OpenCode openai failed openai/gpt-6.1-sol (HTTP 429): The usage limit has been reached',
+      },
+    };
+    workspace(data);
+    await screen.findByText('Technical details');
+    const rows = document.querySelectorAll('.run-notice-agent');
+    expect(rows).toHaveLength(1);
+    const row = rows[0] as HTMLElement;
+    expect(row.querySelector('.run-notice-name')?.textContent).toBe('OpenCode');
+    expect(row.querySelector('.run-notice-state')?.textContent).toBe('failed');
+    // The first thing read is a plain sentence, not the code and the provider's wording.
+    expect(row.querySelector('.run-notice-reason')?.textContent).toContain(
+      'usage limit was reached',
+    );
+    expect(row.querySelector('.run-notice-reason')?.textContent).not.toContain(
+      'OPENCODE_UPSTREAM_FAILED',
+    );
+    const details = row.querySelector('details') as HTMLDetailsElement;
+    expect(details.textContent).toContain('OPENCODE_UPSTREAM_FAILED: OpenCode openai failed');
   });
 
   it('a status query error does not leave a cached connected indicator or claim no active runs', async () => {

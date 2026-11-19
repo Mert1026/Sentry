@@ -923,6 +923,8 @@ textarea:focus {
   gap: var(--space-3);
   height: 100%;
   min-height: 0;
+  /* When the window is short the page scrolls; the canvas keeps a usable height instead of being squeezed. */
+  overflow-y: auto;
 }
 .run-page .content-scroll {
   display: flex;
@@ -1024,8 +1026,8 @@ textarea:focus {
 .workspace {
   display: flex;
   gap: 0;
-  flex: 1;
-  min-height: 0;
+  flex: 1 0 auto;
+  min-height: 460px;
   min-width: 0;
 }
 .ws-panel {
@@ -1851,18 +1853,22 @@ select:focus-visible {
 
 /* Legend card on the run canvas: what the stage bars and the findings bar colours mean. */
 .canvas-legend-anchor {
-  position: relative;
   display: flex;
 }
-/* A dropdown under the toolbar button, opened only when the button is pressed. */
-.canvas-legend {
+/* A dropdown under the toolbar, opened only when the button is pressed. It sits in the canvas itself, so
+   its height is limited by the canvas and it scrolls instead of running past the bottom of the window. */
+.canvas-legend-layer {
   position: absolute;
-  top: calc(100% + 10px);
-  right: -3px;
+  top: 52px;
+  right: 10px;
   z-index: 6;
+  display: flex;
+  max-width: calc(100% - 20px);
+  max-height: calc(100% - 64px);
+}
+.canvas-legend {
   width: 264px;
-  max-width: calc(100vw - 40px);
-  max-height: 70vh;
+  max-width: 100%;
   overflow-y: auto;
   box-sizing: border-box;
   padding: 10px 12px;
@@ -2043,4 +2049,83 @@ select:focus-visible {
   border-style: dashed;
   border-color: var(--border-default);
   color: var(--text-muted);
+}
+
+.run-group--results .run-fact-unit {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+/* Why an analysis is partial or failed: a title line, then one row per agent that did not finish. */
+.run-notice {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: none;
+}
+.run-notice-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+.run-notice-head svg {
+  flex: none;
+  color: var(--warning);
+}
+.run-notice-agents {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.run-notice-agent {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 8px 10px;
+  background: rgba(13, 16, 13, 0.45);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+.run-notice-name {
+  font-weight: 700;
+}
+.run-notice-state {
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  border-radius: 999px;
+}
+.run-notice-reason {
+  flex: 1 1 260px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.run-notice-details {
+  flex: 1 1 100%;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.run-notice-details summary {
+  cursor: pointer;
+}
+.run-notice-details code {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.run-notice-hint {
+  margin: 0;
+  color: var(--text-secondary);
 }
