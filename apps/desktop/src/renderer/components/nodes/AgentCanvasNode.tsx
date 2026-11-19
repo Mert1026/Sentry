@@ -4,7 +4,14 @@ import type { AgentNodeView } from '../../lib/types.js';
 import { StatusIcon, nodeStateClass } from '../StatusGlyph.js';
 import { dotClassForStatus } from '../ui/StatusPill.js';
 import { useI18n } from '../../lib/i18n.js';
-import { formatCount, formatElapsed, stageStateLabel } from '../../lib/agent-telemetry.js';
+import {
+  formatCount,
+  formatElapsed,
+  isBeyondHead,
+  isPassedStage,
+  stageHeadIndex,
+  stageStateLabel,
+} from '../../lib/agent-telemetry.js';
 import { SECRETS_LABEL } from '../../lib/secrets-light.js';
 
 const SEVERITY_ORDER = ['critical', 'high', 'medium', 'low', 'info'] as const;
@@ -66,9 +73,8 @@ export function AgentCanvasNode({ data }: NodeProps): React.JSX.Element {
     view.currentOperation.title !== ''
       ? view.currentOperation.title
       : undefined;
-  const stagesDone = view.stages.filter(
-    (stage) => stage.state === 'completed' || stage.state === 'observed',
-  ).length;
+  // How far along the line the agent is: the position of the stage its phase says it is in.
+  const stagesReached = stageHeadIndex(view.stages) + 1;
   const activeStage = view.stages.find((stage) => stage.state === 'active');
   // The stage in progress, or the last one reached: a word that says where the agent is.
   const stageWord = (
@@ -123,16 +129,22 @@ export function AgentCanvasNode({ data }: NodeProps): React.JSX.Element {
           view.stages.map((stage) => stage.label + ' ' + stageStateLabel(stage.state)).join(', ')
         }
       >
-        {view.stages.map((stage) => (
+        {view.stages.map((stage, index) => (
           <i
             key={stage.id}
-            className={stageTone(stage.state)}
+            className={
+              isBeyondHead(view.stages, index)
+                ? ''
+                : isPassedStage(view.stages, index)
+                  ? 'passed'
+                  : stageTone(stage.state)
+            }
             title={stage.label + ' — ' + stageStateLabel(stage.state)}
           />
         ))}
       </div>
       <div className="node-stage-line">
-        <span className="node-stage-count">{stagesDone + '/' + view.stages.length}</span>
+        <span className="node-stage-count">{stagesReached + '/' + view.stages.length}</span>
         {stageWord === undefined ? null : (
           <span className="node-stage-word" title={stageWord}>
             {t(stageWord)}

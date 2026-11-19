@@ -2,6 +2,31 @@
 
 ## [Unreleased]
 
+- **A more structured run header.** The facts under the run title are three labelled groups side by side: the run
+  (project, started, completed, duration), its results (agents, findings, evidence, in larger numbers) and its
+  identifiers (run, snapshot and revision ids with copy buttons). Each fact is a label with its value on one line,
+  and the groups stack on a narrow window.
+  Started and Completed now both show the date and the time in your own time zone (for example
+  "19 Nov 2026, 19:18"). Completed used to show the stored UTC text next to a local start time, so a run looked
+  as if it had ended before it began.
+  In Bulgarian the date no longer carries the "г." mark, and the Low colour in the findings bar and the legend
+  is a clear blue, so it is no longer mistaken for the green of Completed.
+  The run page never scrolls: the panels scroll inside themselves, and opening or filling the details panel cannot make
+  the page taller. A chevron in the header folds the run facts away to give the canvas the room (folded by default on a
+  short window and remembered), and a long note about failed agents scrolls inside itself. The legend opens inside
+  the canvas and scrolls if it is taller than it.
+  The note under the header for a partial or failed run has a row per agent that did not finish, with a plain
+  sentence first (for example that the provider's usage limit was reached) and the code and the provider's own
+  words under Technical details. The agent count in the header is a number with its unit beside it.
+  Every failure an agent or the run engine can record (about 80 codes across OpenCode, DeepSeek, GLM and Claude, plus
+  timeouts, interruptions and report deadlines) now has a plain sentence, in English and Bulgarian. The note has an X
+  in its corner to close it; it comes back if a new agent fails.
+  A **Show issues** button in the run header brings back the notes you closed. The stage bars on an agent box read as
+  one line: a stage no event showed, before the furthest one reached, is drawn dimmer instead of empty, and the count
+  beside it (for example 6/7) is the position of the furthest stage, so it agrees with the bars and the stage name.
+  The bars are filled up to the stage the agent's own phase says it is in and empty after it: commands and findings are
+  activity inside a phase (an agent that is still planning runs commands too), so they no longer fill the bars ahead of
+  it or pull the count forward. The agent details keep listing what was really observed.
 - **More fixes from a second QA run on Sentry's own code.** Stored events now have secrets removed from the text of
   commands, tool summaries and errors, status, warnings, failures, cancel reasons and test suites, not only from
   messages, plans and findings. The redactor also catches a token after an underscore (`GH_ghp_…`), camelCase

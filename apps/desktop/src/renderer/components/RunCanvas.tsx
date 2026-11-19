@@ -261,12 +261,16 @@ function RunCanvasScene({
 
   // The legend is a dropdown: it opens on the button, and closes on a click elsewhere, Escape or the button.
   const [legendOpen, setLegendOpen] = React.useState(false);
-  const legendRef = React.useRef<HTMLDivElement | null>(null);
+  const legendButtonRef = React.useRef<HTMLDivElement | null>(null);
+  const legendCardRef = React.useRef<HTMLDivElement | null>(null);
   React.useEffect(() => {
     if (!legendOpen) return;
     const onPointerDown = (event: MouseEvent): void => {
+      const target = event.target;
       const inside =
-        event.target instanceof HTMLElement && legendRef.current?.contains(event.target) === true;
+        target instanceof HTMLElement &&
+        (legendButtonRef.current?.contains(target) === true ||
+          legendCardRef.current?.contains(target) === true);
       if (!inside) setLegendOpen(false);
     };
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -325,7 +329,7 @@ function RunCanvasScene({
         >
           <Maximize size={15} />
         </button>
-        <div className="canvas-legend-anchor" ref={legendRef}>
+        <div className="canvas-legend-anchor" ref={legendButtonRef}>
           <button
             className="icon-btn ghost"
             onClick={() => setLegendOpen((open) => !open)}
@@ -335,7 +339,6 @@ function RunCanvasScene({
           >
             <Info size={15} />
           </button>
-          {legendOpen ? <CanvasLegend /> : null}
         </div>
         <button
           className="icon-btn ghost"
@@ -346,6 +349,11 @@ function RunCanvasScene({
           <RotateCcw size={15} />
         </button>
       </div>
+      {legendOpen ? (
+        <div className="canvas-legend-layer" ref={legendCardRef}>
+          <CanvasLegend />
+        </div>
+      ) : null}
       <ReactFlow
         nodes={flowNodes}
         edges={flowEdges}

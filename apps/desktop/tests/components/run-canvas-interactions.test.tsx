@@ -149,6 +149,15 @@ describe('controlled graph lifecycle', () => {
 describe('the legend dropdown', () => {
   const open = (): void => fireEvent.click(screen.getByRole('button', { name: /^Legend:/ }));
 
+  it('opens inside the canvas, not inside the toolbar, so the canvas limits its height', () => {
+    render(<RunCanvas {...props} />);
+    open();
+    const legend = screen.getByRole('region', { name: 'Legend' });
+    expect(legend.closest('.canvas-legend-layer')).not.toBeNull();
+    expect(legend.closest('.canvas-toolbar')).toBeNull();
+    expect(legend.closest('.canvas-host')).not.toBeNull();
+  });
+
   it('is closed until the button is pressed', () => {
     render(<RunCanvas {...props} />);
     expect(screen.queryByRole('region', { name: 'Legend' })).toBeNull();

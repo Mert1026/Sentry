@@ -18,7 +18,9 @@ import { retestRows, type RetestItemInfo } from '../lib/retest-results.js';
 import { SECRETS_LABEL } from '../lib/secrets-light.js';
 import {
   formatCount,
+  isPassedStage,
   projectTimeline,
+  stageHeadIndex,
   stageLabel,
   stageStateLabel,
   truncateMiddle,
@@ -253,9 +255,8 @@ function RetestTab({
  * badge with its state. The count in the heading says how far the agent got.
  */
 function StageTimeline({ stages }: { stages: AgentNodeView['stages'] }): React.JSX.Element {
-  const reached = stages.filter(
-    (stage) => stage.state === 'completed' || stage.state === 'observed',
-  ).length;
+  // The position of the stage the agent's phase says it is in: how far along the line it is.
+  const reached = stageHeadIndex(stages) + 1;
   return (
     <section className="stage-timeline" aria-label="Stages">
       <div className="stage-timeline-head">
@@ -265,8 +266,13 @@ function StageTimeline({ stages }: { stages: AgentNodeView['stages'] }): React.J
         </span>
       </div>
       <ol className="stage-timeline-list">
-        {stages.map((stage) => (
-          <li key={stage.id} className="stage-step" data-state={stage.state}>
+        {stages.map((stage, index) => (
+          <li
+            key={stage.id}
+            className="stage-step"
+            data-state={stage.state}
+            data-passed={isPassedStage(stages, index) ? 'true' : undefined}
+          >
             <span className="stage-step-marker" aria-hidden="true">
               {stage.state === 'observed' ? (
                 <Eye size={12} />

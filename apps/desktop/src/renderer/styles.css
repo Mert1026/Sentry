@@ -47,7 +47,7 @@
   --sev-critical: var(--danger);
   --sev-high: #c98a64;
   --sev-medium: var(--warning);
-  --sev-low: #8aa383;
+  --sev-low: #5fa8d3;
   --sev-info: #929d90;
   --cancelled: #737d71;
   --inconclusive: #a99870;
@@ -923,6 +923,8 @@ textarea:focus {
   gap: var(--space-3);
   height: 100%;
   min-height: 0;
+  /* The run page never scrolls: the panels scroll inside themselves, and the header can be folded away. */
+  overflow: hidden;
 }
 .run-page .content-scroll {
   display: flex;
@@ -955,30 +957,65 @@ textarea:focus {
   color: var(--text-secondary);
   margin-top: 6px;
 }
-/* Run header facts: always visible, laid out in as many columns as fit. */
+/* Run header facts: three labelled groups side by side (the run, its results, its identifiers). */
 .run-details {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-  gap: 10px 24px;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 14px 28px;
   margin: 12px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
 }
-.run-detail {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+.run-group {
   min-width: 0;
 }
-.run-detail dt {
+.run-group + .run-group {
+  padding-left: 22px;
+  border-left: 1px solid var(--border-subtle);
+}
+.run-group-title {
+  margin: 0 0 8px;
   font-size: 11px;
-  letter-spacing: 0.04em;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-tertiary);
+}
+/* A label on the left, its value on the right, one fact per line. */
+.run-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: baseline;
+  gap: 7px 16px;
+  margin: 0;
+}
+.run-detail {
+  display: contents;
+}
+.run-detail dt {
+  font-size: 12px;
+  color: var(--text-muted);
 }
 .run-detail dd {
   margin: 0;
   min-width: 0;
   font-size: 14px;
   overflow-wrap: anywhere;
+}
+.run-group--results .run-detail dd {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+/* When the groups stack there is no room for a divider beside them. */
+@media (max-width: 760px) {
+  .run-group + .run-group {
+    padding-left: 0;
+    border-left: 0;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-subtle);
+  }
 }
 .run-actions {
   margin-left: auto;
@@ -989,7 +1026,8 @@ textarea:focus {
 .workspace {
   display: flex;
   gap: 0;
-  flex: 1;
+  /* A basis of zero: what is inside a panel (the details, say) never makes the workspace, or the page, taller. */
+  flex: 1 1 0;
   min-height: 0;
   min-width: 0;
 }
@@ -1245,6 +1283,11 @@ textarea:focus {
 .canvas-legend .stage-dots i.observed,
 .flow-node .stage-dots i.observed {
   background: #929d90;
+}
+/* A stage no event showed, before the furthest one reached: drawn dimmer, so the bars still read as one line. */
+.canvas-legend .stage-dots i.passed,
+.flow-node .stage-dots i.passed {
+  background: rgba(146, 157, 144, 0.55);
 }
 .canvas-legend .stage-dots i.active,
 .flow-node .stage-dots i.active {
@@ -1816,18 +1859,22 @@ select:focus-visible {
 
 /* Legend card on the run canvas: what the stage bars and the findings bar colours mean. */
 .canvas-legend-anchor {
-  position: relative;
   display: flex;
 }
-/* A dropdown under the toolbar button, opened only when the button is pressed. */
-.canvas-legend {
+/* A dropdown under the toolbar, opened only when the button is pressed. It sits in the canvas itself, so
+   its height is limited by the canvas and it scrolls instead of running past the bottom of the window. */
+.canvas-legend-layer {
   position: absolute;
-  top: calc(100% + 10px);
-  right: -3px;
+  top: 52px;
+  right: 10px;
   z-index: 6;
+  display: flex;
+  max-width: calc(100% - 20px);
+  max-height: calc(100% - 64px);
+}
+.canvas-legend {
   width: 264px;
-  max-width: calc(100vw - 40px);
-  max-height: 70vh;
+  max-width: 100%;
   overflow-y: auto;
   box-sizing: border-box;
   padding: 10px 12px;
@@ -2008,4 +2055,140 @@ select:focus-visible {
   border-style: dashed;
   border-color: var(--border-default);
   color: var(--text-muted);
+}
+
+.run-group--results .run-fact-unit {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+/* Why an analysis is partial or failed: a title line, then one row per agent that did not finish. */
+.run-notice {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: none;
+  /* A long list of failures scrolls inside the note instead of pushing the canvas down. */
+  max-height: 30vh;
+  overflow-y: auto;
+}
+.run-notice-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+.run-notice-head svg {
+  flex: none;
+  color: var(--warning);
+}
+.run-notice-agents {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.run-notice-agent {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 8px 10px;
+  background: rgba(13, 16, 13, 0.45);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+.run-notice-name {
+  font-weight: 700;
+}
+.run-notice-state {
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  border-radius: 999px;
+}
+.run-notice-reason {
+  flex: 1 1 260px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.run-notice-details {
+  flex: 1 1 100%;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.run-notice-details summary {
+  cursor: pointer;
+}
+.run-notice-details code {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.run-notice-hint {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+/* A notice the person can close: the X sits in its top right corner. */
+.inline-notice.has-close {
+  position: relative;
+  padding-right: 44px;
+}
+.notice-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.notice-close:hover,
+.notice-close:focus-visible {
+  color: var(--text-primary);
+  background: rgba(238, 241, 235, 0.08);
+  border-color: var(--border-default);
+}
+
+/* In the stage timeline a stage no event showed, before the furthest one reached, keeps the line unbroken. */
+.stage-step[data-passed='true']:not(:last-child)::before {
+  background: color-mix(in srgb, #8fa08a 40%, transparent);
+}
+.stage-step[data-passed='true'] .stage-step-marker {
+  border-color: rgba(143, 160, 138, 0.5);
+}
+
+/* Brings back the notes the person closed. */
+.show-issues {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--warning);
+  border-color: rgba(194, 167, 96, 0.5);
+}
+.show-issues-count {
+  min-width: 18px;
+  padding: 0 5px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--bg-base, #0d100d);
+  background: var(--warning);
+  border-radius: 999px;
 }
