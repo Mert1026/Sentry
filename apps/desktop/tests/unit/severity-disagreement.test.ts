@@ -135,6 +135,52 @@ describe('severity disagreements: matching rules', () => {
   });
 });
 
+describe('severity disagreements: one long title must not tie two issues together', () => {
+  // run_01M7SEH5DXV5D7FTB87QPDC29G: OpenCode's "malformed YAML ... duplicate keys" finding touches both
+  // the code execution finding (the word "attacker") and ChatGPT's duplicate-keys finding.
+  it('keeps the code execution and the duplicate keys apart', () => {
+    const out = severityDisagreements([
+      finding(
+        '1',
+        'claude',
+        'load_settings executes attacker-chosen Python via yaml.load FullLoader on PyYAML 5.3.1',
+        'critical',
+        7,
+      ),
+      finding(
+        '2',
+        'opencode',
+        'Malformed YAML leaks raw parser errors and attacker-shaped types; duplicate keys silently last-wins',
+        'medium',
+        5,
+      ),
+      finding(
+        '3',
+        'chatgpt',
+        'Duplicate settings keys silently override earlier values',
+        'medium',
+        7,
+      ),
+    ]);
+    expect(out).toEqual([]);
+  });
+
+  it('still groups three agents that describe the same issue', () => {
+    const out = severityDisagreements([
+      finding('1', 'claude', 'Duplicate settings keys silently override earlier values', 'low'),
+      finding('2', 'chatgpt', 'Duplicate keys override earlier values without warning', 'medium'),
+      finding(
+        '3',
+        'opencode',
+        'Silent last-wins on duplicate keys overrides earlier values',
+        'low',
+      ),
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0]?.ratings).toHaveLength(3);
+  });
+});
+
 describe('splitLocation', () => {
   it('reads a file with and without a line', () => {
     expect(splitLocation('settings.py:5')).toEqual({ file: 'settings.py', line: 5 });

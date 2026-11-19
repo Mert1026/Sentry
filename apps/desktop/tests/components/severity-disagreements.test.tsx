@@ -76,9 +76,17 @@ describe('the run summary', () => {
   it('flags the same issue rated critical by one agent and high by another', () => {
     render(<RunSummaryPanel snapshot={snapshot(['critical', 'high'])} />);
     const note = screen.getByRole('note');
-    expect(note.textContent).toContain('Agents rated these differently');
     expect(note.textContent).toContain('DeepSeek: critical');
     expect(note.textContent).toContain('Claude: high');
+  });
+
+  it('puts the notice in a section of its own, with the title shown once, like the other sections', () => {
+    render(<RunSummaryPanel snapshot={snapshot(['critical', 'high'])} />);
+    const section = screen.getByRole('region', { name: 'Agents rated these differently' });
+    expect(section.querySelectorAll('.section-title')).toHaveLength(1);
+    expect(section.textContent).toContain('Agents rated these differently');
+    // It sits beside Run, Add-ons and Results, not inside Results.
+    expect(screen.getByRole('region', { name: 'Results by agent' }).contains(section)).toBe(false);
   });
 
   it('shows no notice when the agents agree', () => {

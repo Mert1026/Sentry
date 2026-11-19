@@ -248,10 +248,6 @@ export function RunSummaryPanel({
             onClick={focusFirst(['failed', 'timed_out', 'interrupted'])}
           />
         </div>
-        <SeverityDisagreements
-          items={disagreements}
-          agentName={(agent) => AGENT_DISPLAY_NAMES[agent] ?? agent}
-        />
         {['partial', 'failed', 'cancelled'].includes(String(run['status'])) ? (
           <p className="metadata">
             Incomplete analysis. Reported findings and evidence are retained independently for each
@@ -259,6 +255,18 @@ export function RunSummaryPanel({
           </p>
         ) : null}
       </section>
+      {disagreements.length > 0 ? (
+        <section aria-label="Agents rated these differently">
+          <div className="section-title" style={{ marginBottom: 8 }}>
+            Agents rated these differently
+          </div>
+          <SeverityDisagreements
+            items={disagreements}
+            agentName={(agent) => AGENT_DISPLAY_NAMES[agent] ?? agent}
+            showTitle={false}
+          />
+        </section>
+      ) : null}
     </div>
   );
 }
