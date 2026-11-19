@@ -271,3 +271,35 @@ describe('WorkspaceFactory', () => {
     ).rejects.toThrow();
   });
 });
+
+describe('WorkspaceFactory cleanup removes only agent workspaces', () => {
+  it('refuses the projects folder and a project folder, and removes a real workspace path', async () => {
+    const dataRoot = await mkdtemp(join(tmpdir(), 'sentry-workspaces-'));
+    roots.push(dataRoot);
+    const workspace = join(
+      dataRoot,
+      'projects',
+      'proj_1',
+      'runs',
+      'run_1',
+      'agents',
+      'arun_1',
+      'workspace',
+    );
+    await mkdir(join(workspace, 'project'), { recursive: true });
+    await writeFile(join(dataRoot, 'projects', 'proj_1', 'keep.txt'), 'x');
+    const factory = new WorkspaceFactory(dataRoot, false);
+    const cleanup = (runtimePath: string) =>
+      factory.cleanup({
+        runtimePath,
+        snapshotId: 'snap_x' as never,
+        writable: true,
+        isolated: true,
+      });
+    expect((await cleanup(join(dataRoot, 'projects'))).cleaned).toBe(false);
+    expect((await cleanup(join(dataRoot, 'projects', 'proj_1'))).cleaned).toBe(false);
+    expect((await cleanup(join(dataRoot, 'projects', 'proj_1', 'runs'))).cleaned).toBe(false);
+    expect(await readFile(join(dataRoot, 'projects', 'proj_1', 'keep.txt'), 'utf8')).toBe('x');
+    expect((await cleanup(join(workspace, 'project'))).cleaned).toBe(true);
+  });
+});

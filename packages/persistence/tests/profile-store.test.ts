@@ -122,3 +122,27 @@ describe('ToolchainNeedsStore', () => {
     });
   });
 });
+
+describe('a project id names one project folder', () => {
+  it('refuses an absolute path, a traversal, a dot and an empty id', async () => {
+    const root = await dataRoot();
+    for (const id of [join(root, 'sibling'), '../../sibling', '.', '..', ''])
+      expect(() => projectDataPaths(root, id as never), JSON.stringify(id)).toThrow(/PATH_ESCAPE/);
+  });
+
+  it('does not delete a file outside the data root when remove gets a hostile id', async () => {
+    const base = await dataRoot();
+    const root = join(base, 'data');
+    await mkdir(root, { recursive: true });
+    const sibling = join(base, 'sibling');
+    await mkdir(join(sibling, 'profiles'), { recursive: true });
+    const outside = join(sibling, 'profiles', 'stack_opencode_main.json');
+    await writeFile(outside, 'OUTSIDE');
+    const store = new ProjectProfileStore(root);
+    for (const id of [sibling, '../sibling'])
+      await expect(store.remove(id as never, 'stack_opencode_main' as never)).rejects.toThrow(
+        /PATH_ESCAPE/,
+      );
+    expect(await readFile(outside, 'utf8')).toBe('OUTSIDE');
+  });
+});

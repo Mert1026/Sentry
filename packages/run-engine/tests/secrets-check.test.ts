@@ -19,6 +19,32 @@ const TOKEN = ['ghp_', 'a'.repeat(36)].join('');
 describe('redactEventSecrets', () => {
   const base = { schemaVersion: 1, eventId: 'e', agentRunId: 'a', timestamp: 't' };
 
+  it('removes known secret formats from an investigation plan and a hypothesis', () => {
+    const plan = redactEventSecrets({
+      ...base,
+      type: 'investigation.plan.created',
+      plan: {
+        projectUnderstanding: 'The service uses ' + TOKEN,
+        criticalFlows: [TOKEN],
+        weakPoints: ['config holds ' + TOKEN],
+        plannedChecks: ['Check ' + TOKEN],
+      },
+    } as unknown as HarnessEvent);
+    expect(JSON.stringify(plan)).not.toContain(TOKEN);
+    expect(JSON.stringify(plan)).toContain('[redacted]');
+    const hypothesis = redactEventSecrets({
+      ...base,
+      type: 'investigation.hypothesis.discovered',
+      hypothesis: {
+        title: 'A leaked ' + TOKEN,
+        rationale: 'seen in a file',
+        relatedPaths: [],
+        plannedChecks: ['Read the file'],
+      },
+    } as unknown as HarnessEvent);
+    expect(JSON.stringify(hypothesis)).not.toContain(TOKEN);
+  });
+
   it('removes known secret formats from messages, findings and evidence', () => {
     const message = redactEventSecrets({
       ...base,

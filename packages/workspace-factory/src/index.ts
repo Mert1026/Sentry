@@ -1,5 +1,5 @@
 import { mkdir, rm, writeFile } from 'node:fs/promises';
-import { basename, dirname, resolve } from 'node:path';
+import { basename, dirname, relative, resolve, sep } from 'node:path';
 import type { AgentRunId, ProjectId, QARunId, SnapshotId } from '@qa/shared';
 import type { HarnessWorkspace } from '@qa/schemas';
 import {
@@ -86,6 +86,15 @@ export class WorkspaceFactory {
       const safePath = resolveInside(this.dataRoot, workspace.runtimePath);
       // An empty or root-level path resolves to the data folder itself; never delete that.
       if (safePath === resolve(this.dataRoot)) throw new Error('refusing to remove the data root');
+      // Only an agent workspace is removed: projects/<id>/runs/<run>/agents/<agent run>/workspace[/project].
+      const parts = relative(resolve(this.dataRoot), safePath).split(sep);
+      const isWorkspace =
+        (parts.length === 7 || (parts.length === 8 && parts[7] === 'project')) &&
+        parts[0] === 'projects' &&
+        parts[2] === 'runs' &&
+        parts[4] === 'agents' &&
+        parts[6] === 'workspace';
+      if (!isWorkspace) throw new Error('refusing to remove a path that is not an agent workspace');
       await assertNoSymlinkBelow(this.dataRoot, safePath);
       const cleanupPath =
         basename(safePath) === 'project' && basename(dirname(safePath)) === 'workspace'

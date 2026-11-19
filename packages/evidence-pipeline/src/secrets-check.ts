@@ -97,11 +97,27 @@ const SECRET_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
   [/\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g, REDACTED],
   // user:password@host inside a URL keeps everything but the password
   [/\b([a-z][a-z0-9+.-]*:\/\/[^\s:/@]+:)[^\s@/]{3,}(@)/gi, '$1' + REDACTED + '$2'],
-  // password = "value" and friends keep the name and drop the value
+  // password = "value" and friends keep the name and drop the value; a quoted value may hold spaces, and
+  // the name may carry a prefix (GITHUB_TOKEN, db-password) or sit in JSON ("password": "value")
   [
-    /\b((?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key)["']?\s*[:=]\s*)(["'])[^"'\s]{6,}\2/gi,
+    /\b((?:[A-Za-z0-9]{1,30}[_-]){0,4}(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key)["']?\s*[:=]\s*)(["'])[^"'\r\n]{6,120}\2/gi,
     '$1$2' + REDACTED + '$2',
   ],
+  // The same names with a bare value (GITHUB_TOKEN=abcd1234, password: hunter2hunter2). Only a value that
+  // ends cleanly and holds a digit counts, so code such as `password = get_password()` or
+  // `token = process.env.TOKEN` keeps its text.
+  [
+    /\b((?:[A-Za-z0-9]{1,30}[_-]){0,4}(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key)\s*[:=]\s*)(?=[A-Za-z0-9._~+/=@:#%^*!-]*\d)[A-Za-z0-9._~+/=@:#%^*!-]{8,}(?=[\s,;"')\]}]|$)/gi,
+    '$1' + REDACTED,
+  ],
+  // Authorization headers: Bearer and Basic credentials (they hold a digit or a padding sign, so the
+  // words "Bearer authentication" stay), and cookie values
+  [/\b(Bearer\s+)(?=[A-Za-z0-9._~+/=-]*\d)[A-Za-z0-9._~+/=-]{8,}/g, '$1' + REDACTED],
+  [
+    /\b(Basic\s+)(?:(?=[A-Za-z0-9+/]*[0-9+/])[A-Za-z0-9+/]{8,}={0,2}|[A-Za-z0-9+/]{8,}={1,2})/g,
+    '$1' + REDACTED,
+  ],
+  [/\b((?:Set-)?Cookie:\s*)[^\r\n]+/gi, '$1' + REDACTED],
 ];
 
 /** The text with every known secret format replaced, so a value an agent let slip is never stored. */

@@ -243,13 +243,30 @@ export class ToolchainManager {
     const checks = TOOLCHAIN_PACKS.flatMap((pack) =>
       pack.versions.map(async (version): Promise<InstalledToolchain | undefined> => {
         try {
-          const marker = JSON.parse(
+          const parsed: unknown = JSON.parse(
             await readFile(join(toolchainDir(this.dataRoot, pack.id, version), MARKER), 'utf8'),
-          ) as { installedAt?: string; verification?: string };
+          );
+          // Only the marker the install writes counts: an object naming this pack and version, with its
+          // fields the right type (every install since the first has written all three).
+          if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed))
+            return undefined;
+          const marker = parsed as {
+            packId?: unknown;
+            version?: unknown;
+            installedAt?: unknown;
+            verification?: unknown;
+          };
+          if (
+            marker.packId !== pack.id ||
+            marker.version !== version ||
+            typeof marker.installedAt !== 'string' ||
+            (marker.verification !== undefined && typeof marker.verification !== 'string')
+          )
+            return undefined;
           return {
             packId: pack.id,
             version,
-            installedAt: marker.installedAt ?? '',
+            installedAt: marker.installedAt,
             ...(marker.verification === undefined ? {} : { verification: marker.verification }),
           };
         } catch {

@@ -23,7 +23,11 @@ export interface RunDataPaths {
 }
 
 export function projectDataPaths(dataRoot: string, projectId: ProjectId): ProjectDataPaths {
-  const root = resolve(dataRoot, 'projects', projectId);
+  // The id names one folder under projects/. An absolute path, "..", "." or an empty id would point
+  // somewhere else, so it is refused here whatever the caller checked.
+  const projects = resolve(dataRoot, 'projects');
+  const root = resolveInside(projects, projectId);
+  if (root === projects) throw new Error('PATH_ESCAPE: project id does not name a project folder');
   return {
     root,
     workingCopy: resolve(root, 'working-copy'),

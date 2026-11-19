@@ -106,7 +106,7 @@ describe('Markdown report', () => {
     expect(headings).toEqual([
       '# Sentry findings report',
       '## Contents',
-      '## 1. [MEDIUM] Real title ## 9. [CRITICAL] Forged finding | 9 | critical | x | | pipe',
+      '## 1. [MEDIUM] Real title ## 9. \\[CRITICAL\\] Forged finding | 9 | critical | x | | pipe',
     ]);
     expect(lines.some((line) => line === '# Forged heading')).toBe(false);
     expect(lines.some((line) => line === '> # Forged heading')).toBe(true);
@@ -452,5 +452,29 @@ describe('choosing findings from the stored records', () => {
       exportFindings(f.repository, id, { ...options('markdown'), selection: { revisionIds: [] } }),
     ).toThrow(/at least one revision/);
     f.database.close();
+  });
+});
+
+describe('Markdown report defuses link, image and HTML syntax', () => {
+  const hostile = 'x [click](https://evil.example) ![img](https://evil.example/x.png) <img src=x>';
+  const entries = () => [
+    finding({ n: 1, title: hostile, description: 'd ' + hostile, reproductionSteps: [hostile] }),
+  ];
+
+  it('escapes brackets and angle brackets in the title, the steps and the description', () => {
+    const text = build('markdown', entries()).files[0]!.content;
+    // Every closing bracket before a parenthesis is escaped, so no [text](url) link or image forms.
+    expect(text).not.toMatch(/(?<!\\)\]\(/);
+    expect(text).not.toMatch(/(?<!\\)\[click/);
+    expect(text).not.toContain('<img');
+    expect(text).toContain('\\[click\\]');
+    expect(text).toContain('&lt;img src=x&gt;');
+    // The title in the contents table and in the heading, the step, and the quoted description.
+    expect(text.match(/evil\.example/g)?.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it('leaves the plain text report as the agent wrote it', () => {
+    const text = build('text', entries()).files[0]!.content;
+    expect(text).toContain('[click](https://evil.example)');
   });
 });

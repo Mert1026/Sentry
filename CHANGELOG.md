@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+- **Fixes from a QA run on Sentry's own code.** The Markdown export now escapes brackets and angle brackets
+  in findings, so an agent's text cannot form a link, an image or an HTML tag (the file's own promise).
+  Secret redaction now also covers investigation plans and hypotheses, `Bearer` and `Basic` credentials,
+  `Cookie` headers, bare `token=` and `password=` values (with prefixed names such as `GITHUB_TOKEN`),
+  JSON fields and quoted values with spaces, and every harness runs the shared redactor too; plain prose
+  and code such as `password = get_password()` are left alone. A toolchain or add-on marker of the wrong
+  shape counts as not installed instead of throwing, an add-on program folder that is a link leading
+  outside the add-on is refused, a project id must name one project folder, and workspace cleanup removes
+  only agent workspaces.
 - **The stages in an agent's details are a timeline.** Each stage has a marker joined to the next by a line,
   its name, and a coloured state badge (completed green, observed grey-green, active yellow, warning, failed
   red, not reached dashed), with the count of stages reached in the heading. Long names wrap on a narrow
