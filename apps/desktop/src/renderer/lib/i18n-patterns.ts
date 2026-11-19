@@ -66,6 +66,12 @@ const RULES: readonly Rule[] = [
   { re: /^Input (\S+)$/, to: (m) => `Вход ${m[1]}` },
   { re: /^Output (\S+)$/, to: (m) => `Изход ${m[1]}` },
   { re: /^Cached (\S+)$/, to: (m) => `Кеширани ${m[1]}` },
+  {
+    re: /^Used by (\d+) agent\(s\)(?: · (\d+) without \(out of date or not built\))?$/,
+    to: (m) =>
+      `Използван от ${m[1]} ${plural(m[1] ?? '', 'агент', 'агента')}` +
+      (m[2] === undefined ? '' : ` · ${m[2]} без (остарял или непостроен)`),
+  },
   { re: /^(\d+) paths?$/, to: (m) => `${m[1]} ${plural(m[1] ?? '', 'път', 'пътя')}` },
   // Sentences with a value inside.
   {

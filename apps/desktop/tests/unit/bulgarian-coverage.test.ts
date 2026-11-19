@@ -256,6 +256,14 @@ describe('Bulgarian for text built from parts', () => {
     expect(bg('2 active runs · Open')).toBe('2 активни изпълнения · Отвори');
   });
 
+  it('translates the project profile line of the run add-ons', () => {
+    expect(bg('Add-ons')).toBe('Допълнения');
+    expect(bg('Used by 1 agent(s)')).toBe('Използван от 1 агент');
+    expect(bg('Used by 3 agent(s) · 1 without (out of date or not built)')).toBe(
+      'Използван от 3 агента · 1 без (остарял или непостроен)',
+    );
+  });
+
   it('leaves English as it is', () => {
     expect(translateText('Ask DeepSeek what it needs', 'en')).toBe('Ask DeepSeek what it needs');
   });

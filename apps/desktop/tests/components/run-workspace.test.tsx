@@ -75,8 +75,8 @@ describe('compact agent node density', () => {
     expect(html).toContain('muse-spark-1.3-contributor');
     expect(html).toContain('Read src/auth/session.ts');
     expect(html).toContain('stage-dots');
-    expect(html).toContain('1 finding');
-    expect(html).toContain('4 evidence');
+    expect(html).toContain('<strong>1</strong><span>finding</span>');
+    expect(html).toContain('<strong>4</strong><span>evidence</span>');
     // Detail belongs in the inspector, not the node.
     expect(html).not.toContain('Tool started: shell');
     expect(html).not.toContain('class="stage"');

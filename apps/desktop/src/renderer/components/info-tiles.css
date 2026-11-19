@@ -218,15 +218,26 @@ button.rs-tile:focus-visible {
     border-color: rgba(109, 155, 102, 0.45);
     background: rgba(109, 155, 102, 0.08);
   }
-  .rs-count .rs-label {
+  /* A small tile keeps the picture and the value; its words move to the tooltip. */
+  .rs-tile--compact .rs-label {
     display: none;
   }
+  /* The count tiles keep a short word under the number, so the icon never has to be guessed. */
   .rs-count {
     align-items: center;
+  }
+  .rs-count .rs-label {
+    font-size: 10px;
+    letter-spacing: 0;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
   }
 }
 /* Very narrow: the boxes stay two per row (the on/off pair side by side), just smaller. */
 @container rs (max-width: 210px) {
+  .rs-count .rs-label {
+    display: none;
+  }
   .rs-tiles {
     gap: 6px;
   }
@@ -256,5 +267,113 @@ button.rs-tile:focus-visible {
   .rs-tile {
     padding: 5px;
     gap: 4px;
+  }
+}
+
+/* Add-ons: one row each, with a state you can read at a glance. */
+.rs-addons {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.rs-addon {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px 12px;
+  color: var(--text-secondary);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+.rs-addon[data-on='true'] {
+  color: var(--text-primary);
+  border-color: rgba(109, 155, 102, 0.35);
+}
+.rs-addon[data-on='true'] .rs-icon {
+  color: var(--success);
+  background: rgba(109, 155, 102, 0.12);
+  border-color: rgba(109, 155, 102, 0.35);
+}
+.rs-addon[data-on='false'] .rs-icon {
+  opacity: 0.6;
+}
+.rs-addon-text {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.rs-addon-label {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.rs-addon-state {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+}
+.rs-addon-state::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.5;
+}
+.rs-addon[data-on='true'] .rs-addon-state {
+  color: var(--success);
+  background: rgba(109, 155, 102, 0.14);
+  border-color: rgba(109, 155, 102, 0.45);
+}
+.rs-addon[data-on='true'] .rs-addon-state::before {
+  opacity: 1;
+}
+
+/* A profile that is on but out of date keeps its warning colour even when its words are hidden. */
+.rs-addon[data-warn='true'] {
+  border-color: var(--warning);
+}
+
+/* Narrow panel: the add-ons become a row of coloured icons, green when on and dim when off. */
+@container rs (max-width: 330px) {
+  /* Add-ons become a row of coloured icons: green when on, dim when off. */
+  .rs-addons {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(44px, 1fr));
+    gap: 6px;
+  }
+  .rs-addon {
+    position: relative;
+    justify-content: center;
+    padding: 8px;
+  }
+  .rs-addon-text {
+    display: none;
+  }
+  .rs-addon-state {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    padding: 0;
+    font-size: 0;
+    gap: 0;
+    border: 0;
+    background: transparent;
   }
 }
