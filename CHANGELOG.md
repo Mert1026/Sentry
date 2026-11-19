@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- **The stages in an agent's details are a timeline.** Each stage has a marker joined to the next by a line,
+  its name, and a coloured state badge (completed green, observed grey-green, active yellow, warning, failed
+  red, not reached dashed), with the count of stages reached in the heading. Long names wrap on a narrow
+  panel instead of being cut off.
 - **A clearer agent box on the run canvas.** Each box has a fixed width and every line is trimmed to it,
   so long model names and translated words no longer spill out. It shows the name, the model without its
   provider prefix, a status badge with the elapsed time, the stage bars across the full width with how many

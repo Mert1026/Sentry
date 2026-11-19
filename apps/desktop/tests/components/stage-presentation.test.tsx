@@ -37,6 +37,16 @@ function canvas(view?: ReturnType<typeof telemetry>, status = 'waiting') {
   );
 }
 
+/** Each stage row of the inspector as "label — state", read from the timeline. */
+function stageRows(): string[] {
+  return [...document.querySelectorAll('.stage-step')].map(
+    (row) =>
+      (row.querySelector('.stage-step-label')?.textContent ?? '') +
+      ' — ' +
+      (row.querySelector('.stage-step-state')?.textContent ?? ''),
+  );
+}
+
 describe('observed stage and activity presentation', () => {
   it('classifies generic output as Message and preserves content, time and agent attribution', () => {
     const event = {
@@ -64,10 +74,27 @@ describe('observed stage and activity presentation', () => {
       { type: 'agent.status', status: 'reporting', agentRunId: 'a', timestamp },
     ]);
     render(<AgentInspector data={{ view }} />);
-    expect(screen.getByText('Reporting — Active')).toBeTruthy();
-    expect(screen.getByText('Planning — Not observed')).toBeTruthy();
+    expect(stageRows()).toContain('Reporting — Active');
+    expect(stageRows()).toContain('Planning — Not observed');
     expect(view.currentStage).toBe('reporting');
     expect(view.stages.some((s) => s.state === 'completed')).toBe(false);
+  });
+
+  it('shows the stages as a timeline with how many were reached and a state on each step', () => {
+    const view = telemetry('completed', [
+      { type: 'file.read', relativePath: 'fixture.ts', agentRunId: 'a', timestamp },
+    ]);
+    render(<AgentInspector data={{ view }} />);
+    const timeline = screen.getByRole('region', { name: 'Stages' });
+    const steps = [...timeline.querySelectorAll('.stage-step')];
+    expect(steps).toHaveLength(view.stages.length);
+    expect(steps.map((step) => step.getAttribute('data-state'))).toEqual(
+      view.stages.map((stage) => stage.state),
+    );
+    const reached = view.stages.filter((s) => s.state === 'completed' || s.state === 'observed');
+    expect(timeline.querySelector('.stage-timeline-count')?.textContent).toBe(
+      reached.length + '/' + view.stages.length,
+    );
   });
 
   it('a sparse historical completion displays missing milestones as Not observed', () => {
@@ -81,9 +108,9 @@ describe('observed stage and activity presentation', () => {
       'Evidence',
       'Reporting',
     ]) {
-      expect(screen.getByText(label + ' — Not observed')).toBeTruthy();
+      expect(stageRows()).toContain(label + ' — Not observed');
     }
-    expect(screen.getByText('Completed — Completed')).toBeTruthy();
+    expect(stageRows()).toContain('Completed — Completed');
     expect(screen.queryByText(/not_started|Not started/)).toBeNull();
     expect(view.stages.filter((s) => s.state === 'completed')).toHaveLength(1);
   });
@@ -93,7 +120,7 @@ describe('observed stage and activity presentation', () => {
       { type: 'file.read', relativePath: 'fixture.ts', agentRunId: 'a', timestamp },
     ]);
     render(<AgentInspector data={{ view }} />);
-    expect(screen.getByText('Investigation — Observed')).toBeTruthy();
+    expect(stageRows()).toContain('Investigation — Observed');
     cleanup();
     canvas(view);
     const stages = screen.getByRole('img', {

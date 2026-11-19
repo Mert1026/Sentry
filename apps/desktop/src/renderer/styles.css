@@ -1894,3 +1894,118 @@ select:focus-visible {
   color: var(--text-muted);
   overflow-wrap: anywhere;
 }
+
+/* Stages in the agent details: a vertical timeline, one marker per stage joined by a line. */
+.stage-timeline {
+  padding: 10px 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+.stage-timeline-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.stage-timeline-count {
+  padding: 1px 8px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+}
+.stage-timeline-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.stage-step {
+  --stage-color: var(--text-tertiary);
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 10px;
+  min-width: 0;
+  padding: 5px 0 5px 32px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+/* The line that joins a marker to the next one. */
+.stage-step:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: 10px;
+  top: 27px;
+  bottom: -5px;
+  width: 2px;
+  background: var(--border-default);
+}
+.stage-step[data-state='completed']:not(:last-child)::before,
+.stage-step[data-state='observed']:not(:last-child)::before {
+  background: color-mix(in srgb, var(--stage-color) 55%, transparent);
+}
+.stage-step-marker {
+  position: absolute;
+  left: 0;
+  top: 5px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  color: var(--stage-color);
+  background: var(--bg-panel);
+  border: 1px solid var(--stage-color);
+  border-radius: 50%;
+}
+.stage-step-label {
+  flex: 1 1 96px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text-primary);
+}
+.stage-step-state {
+  flex: none;
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--stage-color);
+  border: 1px solid var(--stage-color);
+  border-radius: 999px;
+}
+.stage-step[data-state='completed'] {
+  --stage-color: var(--success);
+}
+.stage-step[data-state='observed'] {
+  --stage-color: #8fa08a;
+}
+.stage-step[data-state='active'] {
+  --stage-color: var(--running);
+}
+.stage-step[data-state='active'] .stage-step-marker {
+  box-shadow: 0 0 8px rgba(212, 192, 11, 0.55);
+}
+.stage-step[data-state='warning'] {
+  --stage-color: var(--warning);
+}
+.stage-step[data-state='failed'] {
+  --stage-color: var(--danger);
+}
+.stage-step[data-state='cancelled'] {
+  --stage-color: var(--text-tertiary);
+}
+/* A stage the agent never reached stays quiet. */
+.stage-step[data-state='not_started'] .stage-step-label {
+  color: var(--text-muted);
+}
+.stage-step[data-state='not_started'] .stage-step-state {
+  border-style: dashed;
+  border-color: var(--border-default);
+  color: var(--text-muted);
+}
