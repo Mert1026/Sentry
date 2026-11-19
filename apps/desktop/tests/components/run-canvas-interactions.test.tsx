@@ -146,16 +146,34 @@ describe('controlled graph lifecycle', () => {
   });
 });
 
-describe('the legend button', () => {
-  it('shows the legend first, hides it on a click and remembers that', () => {
-    const { unmount } = render(<RunCanvas {...props} />);
-    expect(screen.getByRole('region', { name: 'Legend' })).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /^Legend:/ }));
-    expect(screen.queryByRole('region', { name: 'Legend' })).toBeNull();
-    unmount();
+describe('the legend dropdown', () => {
+  const open = (): void => fireEvent.click(screen.getByRole('button', { name: /^Legend:/ }));
+
+  it('is closed until the button is pressed', () => {
     render(<RunCanvas {...props} />);
     expect(screen.queryByRole('region', { name: 'Legend' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: /^Legend:/ }));
+    expect(screen.getByRole('button', { name: /^Legend:/ }).getAttribute('aria-expanded')).toBe(
+      'false',
+    );
+    open();
     expect(screen.getByRole('region', { name: 'Legend' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^Legend:/ }).getAttribute('aria-expanded')).toBe(
+      'true',
+    );
+  });
+
+  it('closes with the button, with Escape and with a click elsewhere, not with a click inside it', () => {
+    render(<RunCanvas {...props} />);
+    open();
+    fireEvent.mouseDown(screen.getByRole('region', { name: 'Legend' }));
+    expect(screen.getByRole('region', { name: 'Legend' })).toBeTruthy();
+    open();
+    expect(screen.queryByRole('region', { name: 'Legend' })).toBeNull();
+    open();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('region', { name: 'Legend' })).toBeNull();
+    open();
+    fireEvent.mouseDown(document.body);
+    expect(screen.queryByRole('region', { name: 'Legend' })).toBeNull();
   });
 });
