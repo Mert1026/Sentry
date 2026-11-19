@@ -276,6 +276,19 @@ describe('truthful run workspace', () => {
       expect(screen.getByLabelText('Tool and SDK downloads: Off').textContent).toContain('Off');
     });
 
+    it('gives the add-ons and the small tiles a tooltip, so a narrow panel can hide their words', () => {
+      render(<RunSummaryPanel snapshot={mixed()} />);
+      expect(screen.getByLabelText('Web access: On').getAttribute('title')).toBe('Web access: On');
+      expect(screen.getByLabelText('Tool and SDK downloads: Off').getAttribute('title')).toBe(
+        'Tool and SDK downloads: Off',
+      );
+      expect(screen.getByLabelText('Run depth: Full').getAttribute('title')).toBe(
+        'Run depth: Full',
+      );
+      // The count tiles keep their word in the page; the stylesheet decides when to hide it.
+      expect(screen.getByLabelText('Running: 1').textContent).toContain('Running');
+    });
+
     it('shows the Secrets check as On for a production run and Off when it was turned off', () => {
       render(<RunSummaryPanel snapshot={mixed()} />);
       expect(screen.getByLabelText('Secrets check: On')).toBeTruthy();

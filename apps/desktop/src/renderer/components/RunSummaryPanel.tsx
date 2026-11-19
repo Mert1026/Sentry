@@ -1,7 +1,6 @@
 import React from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
-  Activity,
   BookOpen,
   KeyRound,
   CheckCircle2,
@@ -11,7 +10,8 @@ import {
   Globe,
   Layers,
   Timer,
-  Users,
+  PlayCircle,
+  UserCheck,
   XCircle,
 } from 'lucide-react';
 import { StatusPill } from './ui/StatusPill.js';
@@ -37,7 +37,13 @@ function AddOn({
   warn?: boolean;
 }): React.JSX.Element {
   return (
-    <li className="rs-addon" data-on={on} aria-label={label + ': ' + (on ? 'On' : 'Off')}>
+    <li
+      className="rs-addon"
+      data-on={on}
+      data-warn={warn}
+      aria-label={label + ': ' + (on ? 'On' : 'Off')}
+      title={label + ': ' + (on ? 'On' : 'Off')}
+    >
       <span className="rs-icon" aria-hidden="true">
         <Icon size={16} strokeWidth={1.8} />
       </span>
@@ -214,14 +220,14 @@ export function RunSummaryPanel({
         </div>
         <div className="rs-tiles">
           <Tile
-            icon={Users}
+            icon={UserCheck}
             label="Selected"
             value={String(selected.length)}
             count
             tone={selected.length === 0 ? 'zero' : undefined}
           />
           <Tile
-            icon={Activity}
+            icon={PlayCircle}
             label="Running"
             value={String(runningCount)}
             count
