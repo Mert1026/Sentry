@@ -1287,7 +1287,7 @@ textarea:focus {
 /* A stage no event showed, before the furthest one reached: drawn dimmer, so the bars still read as one line. */
 .canvas-legend .stage-dots i.passed,
 .flow-node .stage-dots i.passed {
-  background: rgba(146, 157, 144, 0.42);
+  background: rgba(146, 157, 144, 0.55);
 }
 .canvas-legend .stage-dots i.active,
 .flow-node .stage-dots i.active {

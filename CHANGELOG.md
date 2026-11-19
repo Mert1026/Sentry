@@ -24,6 +24,8 @@
   A **Show issues** button in the run header brings back the notes you closed. The stage bars on an agent box read as
   one line: a stage no event showed, before the furthest one reached, is drawn dimmer instead of empty, and the count
   beside it (for example 6/7) is the position of the furthest stage, so it agrees with the bars and the stage name.
+  While an agent is running, the active or warning marker sits on the furthest stage it reached (it used to stay on
+  Investigation after its commands had started), so the line is filled up to the marker and empty after it.
 - **More fixes from a second QA run on Sentry's own code.** Stored events now have secrets removed from the text of
   commands, tool summaries and errors, status, warnings, failures, cancel reasons and test suites, not only from
   messages, plans and findings. The redactor also catches a token after an underscore (`GH_ghp_…`), camelCase

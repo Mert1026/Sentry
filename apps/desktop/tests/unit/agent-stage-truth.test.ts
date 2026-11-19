@@ -254,4 +254,75 @@ describe('agent stage truth', () => {
       expect(byId.get(id)).toBe('not_started');
     }
   });
+
+  describe('a running agent shows one line, with its marker at the head', () => {
+    const running = (extra: Array<Record<string, unknown>> = []) => {
+      const agentRun = makeAgentRun({ status: 'running' });
+      const base = { agentRunId: agentRun.id, timestamp: '2026-11-19T09:00:00.000Z' };
+      return projectAgentTelemetry({
+        agentRun,
+        events: [
+          { type: 'run.started', ...base },
+          { type: 'agent.status', ...base, status: 'planning' },
+          { type: 'agent.status', ...base, status: 'running' },
+          { type: 'file.read', ...base, relativePath: 'a.ts' },
+          { type: 'tool.started', ...base, operationId: 'op1', tool: { name: 'Bash' } },
+          { type: 'tool.completed', ...base, operationId: 'op1', tool: { name: 'Bash' } },
+          ...extra,
+        ] as never,
+        activities: [],
+        findings: [],
+        evidence: [],
+      });
+    };
+    const states = (view: ReturnType<typeof running>) => view.stages.map((stage) => stage.state);
+
+    it('puts the active marker on the furthest stage, not on one the agent has already passed', () => {
+      // The lifecycle says "running" (Investigation), but the commands (a later stage) already ran.
+      const view = running();
+      expect(states(view)).toEqual([
+        'observed',
+        'observed',
+        'observed',
+        'active',
+        'not_started',
+        'not_started',
+        'not_started',
+      ]);
+      expect(view.currentStage).toBe('runtime');
+    });
+
+    it('does the same for a warning, so the striped bar sits at the head', () => {
+      const view = running([
+        { type: 'warning', agentRunId: 'a', timestamp: '2026-11-19T09:01:00.000Z', message: 'x' },
+      ]);
+      expect(states(view)).toEqual([
+        'observed',
+        'observed',
+        'observed',
+        'warning',
+        'not_started',
+        'not_started',
+        'not_started',
+      ]);
+    });
+
+    it('leaves a failure where it really happened', () => {
+      const agentRun = makeAgentRun({ status: 'failed' });
+      const base = { agentRunId: agentRun.id, timestamp: '2026-11-19T09:00:00.000Z' };
+      const view = projectAgentTelemetry({
+        agentRun,
+        events: [
+          { type: 'run.started', ...base },
+          { type: 'agent.status', ...base, status: 'planning' },
+          { type: 'tool.started', ...base, operationId: 'op1', tool: { name: 'Bash' } },
+        ] as never,
+        activities: [],
+        findings: [],
+        evidence: [],
+      });
+      expect(view.stages.find((stage) => stage.id === 'planning')?.state).toBe('failed');
+      expect(view.currentStage).toBe('planning');
+    });
+  });
 });
