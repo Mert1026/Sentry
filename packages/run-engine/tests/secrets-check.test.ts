@@ -19,6 +19,41 @@ const TOKEN = ['ghp_', 'a'.repeat(36)].join('');
 describe('redactEventSecrets', () => {
   const base = { schemaVersion: 1, eventId: 'e', agentRunId: 'a', timestamp: 't' };
 
+  it('removes known secret formats from the text of commands, tools, status, warnings and failures', () => {
+    const events = [
+      { type: 'command.executed', command: 'curl ' + TOKEN, exitCode: 0 },
+      { type: 'tool.started', operationId: 'o', tool: { name: 'bash', inputSummary: TOKEN } },
+      { type: 'tool.completed', operationId: 'o', tool: { name: 'bash', errorPreview: TOKEN } },
+      { type: 'agent.status', status: 'running', message: 'using ' + TOKEN },
+      { type: 'warning', message: 'saw ' + TOKEN },
+      {
+        type: 'run.failed',
+        failure: { code: 'X', message: 'failed with ' + TOKEN, retryable: false },
+      },
+      { type: 'run.cancelled', reason: 'stopped near ' + TOKEN },
+      { type: 'test.result', suite: 'suite ' + TOKEN },
+    ];
+    for (const event of events) {
+      const out = JSON.stringify(
+        redactEventSecrets({ ...base, ...event } as unknown as HarnessEvent),
+      );
+      expect(out, event.type).not.toContain(TOKEN);
+      expect(out, event.type).toContain('[redacted]');
+    }
+  });
+
+  it('leaves events without text, and fields that are not set, as they were', () => {
+    const status = { ...base, type: 'agent.status', status: 'running' } as unknown as HarnessEvent;
+    expect(redactEventSecrets(status)).toEqual(status);
+    const started = {
+      ...base,
+      type: 'tool.started',
+      operationId: 'o',
+      tool: { name: 'bash' },
+    } as unknown as HarnessEvent;
+    expect(redactEventSecrets(started)).toEqual(started);
+  });
+
   it('removes known secret formats from an investigation plan and a hypothesis', () => {
     const plan = redactEventSecrets({
       ...base,

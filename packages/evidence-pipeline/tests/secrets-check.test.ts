@@ -201,6 +201,34 @@ describe('redactSecrets: the credential shapes a run review found missing', () =
   });
 });
 
+describe('redactSecrets: more places a credential sits', () => {
+  const GH = ['ghp_', 'c'.repeat(36)].join('');
+  const cases: Array<[string, string]> = [
+    ['GH_' + GH, 'GH_[redacted]'],
+    ['abc.' + GH, 'abc.[redacted]'],
+    ['dbPassword = "my secret value"', 'dbPassword = "[redacted]"'],
+    [
+      'https://x.test/cb?access_token=' + TOKEN_A + '&a=1',
+      'https://x.test/cb?access_token=[redacted]&a=1',
+    ],
+    ['client_secret=' + TOKEN_A + '&grant=x', 'client_secret=[redacted]&grant=x'],
+  ];
+  for (const [input, expected] of cases)
+    it('redacts ' + input.slice(0, 36), () => {
+      expect(redactSecrets('see ' + input)).toBe('see ' + expected);
+    });
+
+  it('keeps a word that only contains a name, and a token written inside a longer word', () => {
+    for (const plain of [
+      'maxTokens = 4096',
+      'tokenizer = build()',
+      'passwordless login',
+      'abc' + 'ghp_short',
+    ])
+      expect(redactSecrets(plain), plain).toBe(plain);
+  });
+});
+
 describe('grounding the Secrets check', () => {
   const report = (name: string, coverage: 'complete' | 'partial' = 'complete') => ({
     schemaVersion: 2 as const,

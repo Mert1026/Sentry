@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- **More fixes from a second QA run on Sentry's own code.** Stored events now have secrets removed from the text of
+  commands, tool summaries and errors, status, warnings, failures, cancel reasons and test suites, not only from
+  messages, plans and findings. The redactor also catches a token after an underscore (`GH_ghp_…`), camelCase
+  names such as `dbPassword`, and a value followed by `&` in a URL. A failed workspace creation removes the
+  partial workspace it wrote. The check that a data root does not sit inside the project follows a link even
+  when two or more of its folders do not exist yet. The Claude sign-in refuses an account folder that is a link,
+  and the Claude agents delete their disposable home only when Sentry made it.
 - **Fixes from a QA run on Sentry's own code.** The Markdown export now escapes brackets and angle brackets
   in findings, so an agent's text cannot form a link, an image or an HTML tag (the file's own promise).
   Secret redaction now also covers investigation plans and hypotheses, `Bearer` and `Basic` credentials,

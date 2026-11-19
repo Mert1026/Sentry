@@ -29,6 +29,39 @@ export function redactEventSecrets(event: HarnessEvent): HarnessEvent {
       return { ...event, plan: redactDeep(event.plan) };
     case 'investigation.hypothesis.discovered':
       return { ...event, hypothesis: redactDeep(event.hypothesis) };
+    // The text of what the agent ran and of what went wrong is redacted here as well, whatever the harness
+    // already did before it built the event.
+    case 'agent.status':
+      return event.message === undefined
+        ? event
+        : { ...event, message: redactSecrets(event.message) };
+    case 'tool.started':
+      return event.tool.inputSummary === undefined
+        ? event
+        : {
+            ...event,
+            tool: { ...event.tool, inputSummary: redactSecrets(event.tool.inputSummary) },
+          };
+    case 'tool.completed':
+      return event.tool.errorPreview === undefined
+        ? event
+        : {
+            ...event,
+            tool: { ...event.tool, errorPreview: redactSecrets(event.tool.errorPreview) },
+          };
+    case 'command.executed':
+      return { ...event, command: redactSecrets(event.command) };
+    case 'test.result':
+      return event.suite === undefined ? event : { ...event, suite: redactSecrets(event.suite) };
+    case 'warning':
+      return { ...event, message: redactSecrets(event.message) };
+    case 'run.failed':
+      return {
+        ...event,
+        failure: { ...event.failure, message: redactSecrets(event.failure.message) },
+      };
+    case 'run.cancelled':
+      return event.reason === undefined ? event : { ...event, reason: redactSecrets(event.reason) };
     case 'finding.submitted':
       return { ...event, finding: redactDeep(event.finding) };
     case 'evidence.submitted':

@@ -87,27 +87,27 @@ const SECRET_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
     /-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z0-9 ]*PRIVATE KEY-----|$)/g,
     '[redacted private key]',
   ],
-  [/\b(?:AKIA|ASIA)[0-9A-Z]{16}\b/g, REDACTED],
-  [/\bgh[pousr]_[A-Za-z0-9]{30,}\b/g, REDACTED],
-  [/\bgithub_pat_[A-Za-z0-9_]{20,}\b/g, REDACTED],
-  [/\bxox[baprs]-[A-Za-z0-9-]{10,}\b/g, REDACTED],
-  [/\b(?:sk|rk)_live_[A-Za-z0-9]{16,}\b/g, REDACTED],
-  [/\bsk-(?:ant-|proj-)?[A-Za-z0-9_-]{32,}\b/g, REDACTED],
-  [/\bAIza[0-9A-Za-z_-]{35}\b/g, REDACTED],
-  [/\beyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g, REDACTED],
+  [/(?<![A-Za-z0-9])(?:AKIA|ASIA)[0-9A-Z]{16}\b/g, REDACTED],
+  [/(?<![A-Za-z0-9])gh[pousr]_[A-Za-z0-9]{30,}\b/g, REDACTED],
+  [/(?<![A-Za-z0-9])github_pat_[A-Za-z0-9_]{20,}\b/g, REDACTED],
+  [/(?<![A-Za-z0-9])xox[baprs]-[A-Za-z0-9-]{10,}\b/g, REDACTED],
+  [/(?<![A-Za-z0-9])(?:sk|rk)_live_[A-Za-z0-9]{16,}\b/g, REDACTED],
+  [/(?<![A-Za-z0-9])sk-(?:ant-|proj-)?[A-Za-z0-9_-]{32,}\b/g, REDACTED],
+  [/(?<![A-Za-z0-9])AIza[0-9A-Za-z_-]{35}\b/g, REDACTED],
+  [/(?<![A-Za-z0-9])eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g, REDACTED],
   // user:password@host inside a URL keeps everything but the password
   [/\b([a-z][a-z0-9+.-]*:\/\/[^\s:/@]+:)[^\s@/]{3,}(@)/gi, '$1' + REDACTED + '$2'],
   // password = "value" and friends keep the name and drop the value; a quoted value may hold spaces, and
-  // the name may carry a prefix (GITHUB_TOKEN, db-password) or sit in JSON ("password": "value")
+  // the name may carry a prefix (GITHUB_TOKEN, db-password, dbPassword) or sit in JSON ("password": "value")
   [
-    /\b((?:[A-Za-z0-9]{1,30}[_-]){0,4}(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key)["']?\s*[:=]\s*)(["'])[^"'\r\n]{6,120}\2/gi,
+    /\b([A-Za-z0-9_-]{0,40}(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key)["']?\s*[:=]\s*)(["'])[^"'\r\n]{6,120}\2/gi,
     '$1$2' + REDACTED + '$2',
   ],
   // The same names with a bare value (GITHUB_TOKEN=abcd1234, password: hunter2hunter2). Only a value that
   // ends cleanly and holds a digit counts, so code such as `password = get_password()` or
   // `token = process.env.TOKEN` keeps its text.
   [
-    /\b((?:[A-Za-z0-9]{1,30}[_-]){0,4}(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key)\s*[:=]\s*)(?=[A-Za-z0-9._~+/=@:#%^*!-]*\d)[A-Za-z0-9._~+/=@:#%^*!-]{8,}(?=[\s,;"')\]}]|$)/gi,
+    /\b([A-Za-z0-9_-]{0,40}(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key)\s*[:=]\s*)(?=[A-Za-z0-9._~+/=@:#%^*!-]*\d)[A-Za-z0-9._~+/=@:#%^*!-]{8,}(?=[\s,;"')\]}&]|$)/gi,
     '$1' + REDACTED,
   ],
   // Authorization headers: Bearer and Basic credentials (they hold a digit or a padding sign, so the

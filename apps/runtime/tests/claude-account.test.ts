@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -232,5 +232,20 @@ describe('Claude account sign-in', () => {
     await a.logout();
     expect(await a.signedIn()).toBe(false);
     expect(await a.token()).toBeUndefined();
+  });
+});
+
+describe('Claude account folder', () => {
+  it('refuses to sign in through an account folder that is a link, and writes nothing outside', async () => {
+    const outside = await mkdtemp(join(tmpdir(), 'sentry-outside-'));
+    try {
+      await symlink(outside, join(dir, 'claude-account'), 'junction');
+    } catch {
+      return; // links need privileges on Windows; covered on Linux CI
+    }
+    const a = await makeAccount();
+    await expect(a.startLogin()).rejects.toThrow();
+    expect(await readdir(outside)).toEqual([]);
+    await rm(outside, { recursive: true, force: true });
   });
 });
