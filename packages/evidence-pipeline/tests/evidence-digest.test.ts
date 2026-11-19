@@ -99,7 +99,23 @@ describe('observed tool digest', () => {
     notes.add(message('observed tool read output: ' + 'z'.repeat(5000)));
     const parsed = JSON.parse(notes.render());
     expect(parsed.outputs).toHaveLength(1);
-    expect(parsed.outputs[0].length).toBeLessThanOrEqual(260);
+    expect(parsed.outputs[0].length).toBeLessThanOrEqual(1500);
+  });
+
+  it('keeps the numbered lines of a small file read, without the long workspace path', () => {
+    const notes = new ObservedToolNotes();
+    const lines = Array.from({ length: 12 }, (_, i) => String(i + 1) + ': line ' + String(i + 1));
+    notes.add(
+      message(
+        'observed tool read output: <path>/home/u/.local/share/sentry/projects/proj_1/runs/run_1/agents/arun_1/workspace/project/settings.py</path>\n<type>file</type>\n<content>\n' +
+          lines.join('\n') +
+          '\n</content>',
+      ),
+    );
+    const text = JSON.parse(notes.render()).outputs[0] as string;
+    expect(text).toContain('settings.py');
+    expect(text).not.toContain('/home/u/.local');
+    expect(text).toContain('12: line 12');
   });
 });
 
