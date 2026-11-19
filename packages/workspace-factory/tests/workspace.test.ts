@@ -12,6 +12,7 @@ import {
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it } from 'vitest';
+import { createAgentRunId, createProjectId, createQARunId, createSnapshotId } from '@qa/shared';
 import { WorkspaceFactory } from '../src/index.js';
 
 const roots: string[] = [];
@@ -301,5 +302,35 @@ describe('WorkspaceFactory cleanup removes only agent workspaces', () => {
     expect((await cleanup(join(dataRoot, 'projects', 'proj_1', 'runs'))).cleaned).toBe(false);
     expect(await readFile(join(dataRoot, 'projects', 'proj_1', 'keep.txt'), 'utf8')).toBe('x');
     expect((await cleanup(join(workspace, 'project'))).cleaned).toBe(true);
+  });
+});
+
+describe('WorkspaceFactory create cleans up after itself', () => {
+  it('leaves no workspace folder behind when the copy fails', async () => {
+    const dataRoot = await mkdtemp(join(tmpdir(), 'sentry-workspaces-'));
+    roots.push(dataRoot);
+    const projectId = createProjectId();
+    const qaRunId = createQARunId();
+    const agentRunId = createAgentRunId();
+    await expect(
+      new WorkspaceFactory(dataRoot, false).create({
+        projectId,
+        qaRunId,
+        agentRunId,
+        workingCopyPath: join(dataRoot, 'no-such-working-copy'),
+        snapshotId: createSnapshotId(),
+      } as never),
+    ).rejects.toThrow();
+    const workspaceRoot = join(
+      dataRoot,
+      'projects',
+      projectId,
+      'runs',
+      qaRunId,
+      'agents',
+      agentRunId,
+      'workspace',
+    );
+    await expect(lstat(workspaceRoot)).rejects.toThrow();
   });
 });

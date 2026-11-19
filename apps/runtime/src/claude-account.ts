@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { assertNoSymlinkBelow } from '@qa/persistence';
 
 /**
  * Claude account sign-in (Claude Pro/Max) through the official Claude Code app.
@@ -198,9 +199,15 @@ export class ClaudeAccount {
     };
   }
 
+  /** The account folder must be a real folder inside the data root: a link planted there could send the token elsewhere. */
+  private async confirmDir(): Promise<void> {
+    await assertNoSymlinkBelow(this.options.dataRoot, this.dir);
+  }
+
   /** Start `claude setup-token` and resolve with the link the person opens in a browser. */
   async startLogin(): Promise<{ url: string }> {
     this.cancelLogin();
+    await this.confirmDir();
     await mkdir(this.dir, { recursive: true });
     this.configDir = await mkdtemp(join(this.dir, 'login-'));
     this.output = '';
@@ -316,6 +323,7 @@ export class ClaudeAccount {
       );
       throw new Error(this.error);
     }
+    await this.confirmDir();
     await writeFile(this.tokenFile, token + '\n', { mode: 0o600 });
     try {
       await chmod(this.tokenFile, 0o600);
@@ -347,6 +355,7 @@ export class ClaudeAccount {
       raw +
       '\n';
     try {
+      await this.confirmDir();
       await writeFile(join(this.dir, 'last-login-output.txt'), text, { mode: 0o600 });
     } catch {
       /* diagnostics only */

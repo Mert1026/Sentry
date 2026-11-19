@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import {
   createFindingId,
@@ -102,6 +102,7 @@ import { buildClaudeChildEnvironment } from './environment.js';
 import { SystemdIsolatedClaudeProcessLauncher, type ClaudeProcessLauncher } from './launcher.js';
 import { ClaudeCodeHarnessError } from './errors.js';
 import { redactDiagnostic, redactStructured, secretValues } from './redaction.js';
+import { claimEphemeralHome, releaseEphemeralHome } from './ephemeral-home.js';
 import {
   buildClaudeSettings,
   CLAUDE_CODE_TESTED_VERSION,
@@ -1545,6 +1546,7 @@ export class ClaudeCodeHarnessAdapter implements HarnessAdapter {
     const settingsPath = join(configDir, 'sentry-settings.json');
     let session: ClaudeSessionView | undefined;
     try {
+      await claimEphemeralHome(claudeHome);
       await mkdir(ephemeralClaudeDir, { recursive: true });
       await mkdir(configDir, { recursive: true });
       await writeFile(
@@ -2203,7 +2205,7 @@ export class ClaudeCodeHarnessAdapter implements HarnessAdapter {
       // transcripts, plugins, skills, hooks, MCP config, memory, settings.
       // Only canonical observable data already persisted by the
       // coordinator survives.
-      await rm(claudeHome, { recursive: true, force: true }).catch(() => undefined);
+      await releaseEphemeralHome(claudeHome);
     }
   }
 
