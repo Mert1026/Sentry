@@ -955,30 +955,65 @@ textarea:focus {
   color: var(--text-secondary);
   margin-top: 6px;
 }
-/* Run header facts: always visible, laid out in as many columns as fit. */
+/* Run header facts: three labelled groups side by side (the run, its results, its identifiers). */
 .run-details {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-  gap: 10px 24px;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 14px 28px;
   margin: 12px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
 }
-.run-detail {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+.run-group {
   min-width: 0;
 }
-.run-detail dt {
+.run-group + .run-group {
+  padding-left: 22px;
+  border-left: 1px solid var(--border-subtle);
+}
+.run-group-title {
+  margin: 0 0 8px;
   font-size: 11px;
-  letter-spacing: 0.04em;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-tertiary);
+}
+/* A label on the left, its value on the right, one fact per line. */
+.run-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: baseline;
+  gap: 7px 16px;
+  margin: 0;
+}
+.run-detail {
+  display: contents;
+}
+.run-detail dt {
+  font-size: 12px;
+  color: var(--text-muted);
 }
 .run-detail dd {
   margin: 0;
   min-width: 0;
   font-size: 14px;
   overflow-wrap: anywhere;
+}
+.run-group--results .run-detail dd {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+/* When the groups stack there is no room for a divider beside them. */
+@media (max-width: 760px) {
+  .run-group + .run-group {
+    padding-left: 0;
+    border-left: 0;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-subtle);
+  }
 }
 .run-actions {
   margin-left: auto;

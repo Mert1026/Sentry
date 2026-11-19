@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- **A more structured run header.** The facts under the run title are three labelled groups side by side: the run
+  (project, started, completed, duration), its results (agents, findings, evidence, in larger numbers) and its
+  identifiers (run, snapshot and revision ids with copy buttons). Each fact is a label with its value on one line,
+  and the groups stack on a narrow window.
 - **More fixes from a second QA run on Sentry's own code.** Stored events now have secrets removed from the text of
   commands, tool summaries and errors, status, warnings, failures, cancel reasons and test suites, not only from
   messages, plans and findings. The redactor also catches a token after an underscore (`GH_ghp_…`), camelCase

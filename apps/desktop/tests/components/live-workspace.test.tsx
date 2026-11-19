@@ -131,6 +131,25 @@ describe('truthful run workspace', () => {
     expect(document.querySelector('header .rs-tile')).toBeNull();
   });
 
+  it('groups the run facts into the run, its results and its identifiers', async () => {
+    const data = snapshot('completed') as ReturnType<typeof snapshot> & {
+      run: { startedAt?: string; completedAt?: string };
+    };
+    data.run.startedAt = '2026-10-10T09:00:00Z';
+    data.run.completedAt = '2026-10-10T09:10:02Z';
+    workspace(data);
+    await screen.findByText('10m 02s');
+    const groups = [...document.querySelectorAll('.run-details .run-group')].map((group) => ({
+      title: group.querySelector('.run-group-title')?.textContent,
+      labels: [...group.querySelectorAll('dt')].map((dt) => dt.textContent),
+    }));
+    expect(groups).toEqual([
+      { title: 'Run', labels: ['Project', 'Started', 'Completed', 'Duration'] },
+      { title: 'Results', labels: ['Agents', 'Findings', 'Evidence'] },
+      { title: 'Identifiers', labels: expect.arrayContaining(['Run ID', 'Snapshot']) },
+    ]);
+  });
+
   it('a status query error does not leave a cached connected indicator or claim no active runs', async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     clients.push(client);
