@@ -7,8 +7,9 @@ import { useI18n } from '../../lib/i18n.js';
 import {
   formatCount,
   formatElapsed,
+  isBeyondHead,
   isPassedStage,
-  reachedStageIndex,
+  stageHeadIndex,
   stageStateLabel,
 } from '../../lib/agent-telemetry.js';
 import { SECRETS_LABEL } from '../../lib/secrets-light.js';
@@ -72,8 +73,8 @@ export function AgentCanvasNode({ data }: NodeProps): React.JSX.Element {
     view.currentOperation.title !== ''
       ? view.currentOperation.title
       : undefined;
-  // How far along the line the agent is: the position of the furthest stage it reached.
-  const stagesReached = reachedStageIndex(view.stages) + 1;
+  // How far along the line the agent is: the position of the stage its phase says it is in.
+  const stagesReached = stageHeadIndex(view.stages) + 1;
   const activeStage = view.stages.find((stage) => stage.state === 'active');
   // The stage in progress, or the last one reached: a word that says where the agent is.
   const stageWord = (
@@ -131,7 +132,13 @@ export function AgentCanvasNode({ data }: NodeProps): React.JSX.Element {
         {view.stages.map((stage, index) => (
           <i
             key={stage.id}
-            className={isPassedStage(view.stages, index) ? 'passed' : stageTone(stage.state)}
+            className={
+              isBeyondHead(view.stages, index)
+                ? ''
+                : isPassedStage(view.stages, index)
+                  ? 'passed'
+                  : stageTone(stage.state)
+            }
             title={stage.label + ' — ' + stageStateLabel(stage.state)}
           />
         ))}

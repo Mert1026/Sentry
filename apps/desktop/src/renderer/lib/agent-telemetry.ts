@@ -58,15 +58,36 @@ export function reachedStageIndex(stages: readonly { readonly state: StageState 
 }
 
 /**
- * A stage before the furthest one that no event showed. The events are milestones, not a required sequence,
- * so an agent can be reporting while "Evidence" never showed up; the bars still read as one line, with such a
- * stage drawn as passed. Its label stays "Not observed": nothing claims it was seen.
+ * Where the line of stage bars ends: the stage that carries the marker (active, warning, failed or cancelled),
+ * which is where the agent's own phase says it is, or the furthest stage reached when nothing carries it. The
+ * commands and findings an agent produces are activity inside a phase and do not move it (an agent that is
+ * still planning runs commands too), so the bars are filled up to this stage and empty after it.
+ */
+export function stageHeadIndex(stages: readonly { readonly state: StageState }[]): number {
+  const marker = stages.findIndex((stage) =>
+    ['active', 'warning', 'failed', 'cancelled'].includes(stage.state),
+  );
+  return marker >= 0 ? marker : reachedStageIndex(stages);
+}
+
+/** A bar after the head: whatever was observed there, the line has not got that far. */
+export function isBeyondHead(
+  stages: readonly { readonly state: StageState }[],
+  index: number,
+): boolean {
+  return index > stageHeadIndex(stages);
+}
+
+/**
+ * A stage before the head that no event showed. The events are milestones, not a required sequence, so an
+ * agent can be reporting while "Evidence" never showed up; the bars still read as one line, with such a stage
+ * drawn as passed. Its label stays "Not observed": nothing claims it was seen.
  */
 export function isPassedStage(
   stages: readonly { readonly state: StageState }[],
   index: number,
 ): boolean {
-  return stages[index]?.state === 'not_started' && index < reachedStageIndex(stages);
+  return stages[index]?.state === 'not_started' && index < stageHeadIndex(stages);
 }
 
 /** Human label for a stage id; falls back to the raw id for forward compatibility. */
@@ -368,26 +389,9 @@ function deriveStageStates(
     states.set('completed', 'completed');
     return { states, current: 'completed' };
   }
-  let current = furthestStage(agentRun, events, findings, evidence);
+  const current = furthestStage(agentRun, events, findings, evidence);
   if (current !== 'working') {
     const status = agentRun.status;
-    const ended = ['failed', 'timed_out', 'cancelled', 'interrupted'].includes(status);
-    // While the agent is still running, its lifecycle can say "investigating" although its commands and tests, a
-    // later stage, already ran: they happen inside that phase. The marker for where the agent is (active or
-    // warning) belongs on the furthest stage reached, so the bars read as one line with its head at the end:
-    // the stages before it are filled and the ones after it are empty. A run that ended keeps the marker where
-    // the failure really was (a planning failure is not a failure of "Commands / Tests").
-    if (!ended) {
-      const furthestReached = STAGE_ORDER.reduce<AgentStageId>(
-        (furthest, stage) =>
-          states.get(stage) !== 'not_started' || stage === current ? stage : furthest,
-        current,
-      );
-      if (STAGE_ORDER.indexOf(furthestReached) > STAGE_ORDER.indexOf(current)) {
-        states.set(current, 'observed');
-        current = furthestReached;
-      }
-    }
     states.set(
       current,
       ['failed', 'timed_out'].includes(status)

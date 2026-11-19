@@ -20,7 +20,7 @@ import {
   formatCount,
   isPassedStage,
   projectTimeline,
-  reachedStageIndex,
+  stageHeadIndex,
   stageLabel,
   stageStateLabel,
   truncateMiddle,
@@ -255,8 +255,8 @@ function RetestTab({
  * badge with its state. The count in the heading says how far the agent got.
  */
 function StageTimeline({ stages }: { stages: AgentNodeView['stages'] }): React.JSX.Element {
-  // The position of the furthest stage reached: how far along the line the agent is.
-  const reached = reachedStageIndex(stages) + 1;
+  // The position of the stage the agent's phase says it is in: how far along the line it is.
+  const reached = stageHeadIndex(stages) + 1;
   return (
     <section className="stage-timeline" aria-label="Stages">
       <div className="stage-timeline-head">

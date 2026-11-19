@@ -158,6 +158,64 @@ describe('canvas node components', () => {
     expect(html).toContain('<span class="node-stage-count">6/7</span>');
   });
 
+  it('fills the bars up to the stage the agent is in and leaves the rest empty, whatever else was observed', () => {
+    const render = (states: readonly string[]) => {
+      const base = makeAgentNodeView({ status: 'running' });
+      const view = {
+        ...base,
+        stages: base.stages.map((stage, index) => ({ ...stage, state: states[index]! as never })),
+      };
+      const html = renderToStaticMarkup(
+        withFlow(
+          React.createElement(AgentCanvasNode, {
+            id: 'agent-x',
+            type: 'agentNode',
+            selected: false,
+            zIndex: 1,
+            isConnectable: false,
+            xPos: 0,
+            yPos: 0,
+            dragging: false,
+            data: {
+              label: view.displayName,
+              status: view.status,
+              kind: 'agent',
+              payload: { view, agentStackId: view.agentStackId },
+            },
+          } as never),
+        ),
+      );
+      return {
+        bars: [...html.matchAll(/<i class="([^"]*)" title="/g)].map((m) => m[1]),
+        html,
+      };
+    };
+    // Planning, although commands already ran (they happen inside the phase): the commands bar stays empty.
+    const planning = render([
+      'observed',
+      'warning',
+      'not_started',
+      'observed',
+      'not_started',
+      'not_started',
+      'not_started',
+    ]);
+    expect(planning.bars).toEqual(['observed', 'warning', '', '', '', '', '']);
+    expect(planning.html).toContain('<span class="node-stage-count">2/7</span>');
+    // Investigating with commands and findings observed after it: still nothing filled after the marker.
+    const investigating = render([
+      'observed',
+      'observed',
+      'warning',
+      'observed',
+      'observed',
+      'not_started',
+      'not_started',
+    ]);
+    expect(investigating.bars).toEqual(['observed', 'observed', 'warning', '', '', '', '']);
+    expect(investigating.html).toContain('<span class="node-stage-count">3/7</span>');
+  });
+
   it('keeps every line of the agent node inside its width', () => {
     const css = readFileSync(resolve(process.cwd(), 'src/renderer/styles.css'), 'utf8');
     expect(css).toMatch(/\.flow-node\.agent-node \{[^}]*width: 244px/);
