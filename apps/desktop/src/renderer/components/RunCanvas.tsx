@@ -10,9 +10,10 @@ import {
   type Viewport,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Maximize, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react';
+import { Info, Maximize, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react';
 import type { RunGraphEdge, RunGraphNode } from '../lib/run-graph.js';
 import { AgentCanvasNode } from './nodes/AgentCanvasNode.js';
+import { CanvasLegend } from './CanvasLegend.js';
 import { PipelineNode } from './nodes/PipelineNode.js';
 import { NeonEdge } from './edges/NeonEdge.js';
 import { useReducedMotion } from '../lib/use-reduced-motion.js';
@@ -92,6 +93,8 @@ function loadViewport(runId: string): Viewport | undefined {
     return undefined;
   }
 }
+
+const LEGEND_KEY = 'sentry:canvas-legend';
 
 interface RunCanvasProps {
   runId: string;
@@ -258,6 +261,23 @@ function RunCanvasScene({
     );
   };
 
+  const [legendOpen, setLegendOpen] = React.useState<boolean>(() => {
+    try {
+      return window.localStorage.getItem(LEGEND_KEY) !== 'closed';
+    } catch {
+      return true;
+    }
+  });
+  const toggleLegend = (): void => {
+    const next = !legendOpen;
+    setLegendOpen(next);
+    try {
+      window.localStorage.setItem(LEGEND_KEY, next ? 'open' : 'closed');
+    } catch {
+      /* presentation-only storage */
+    }
+  };
+
   return (
     <div
       className="canvas-host"
@@ -305,6 +325,15 @@ function RunCanvasScene({
         </button>
         <button
           className="icon-btn ghost"
+          onClick={toggleLegend}
+          aria-label="Legend: what the colours in each box mean"
+          aria-pressed={legendOpen}
+          title="Legend: what the colours in each box mean"
+        >
+          <Info size={15} />
+        </button>
+        <button
+          className="icon-btn ghost"
           onClick={resetLayout}
           aria-label="Reset layout to canonical positions"
           title="Reset layout: restore canonical node positions and fit view"
@@ -312,6 +341,7 @@ function RunCanvasScene({
           <RotateCcw size={15} />
         </button>
       </div>
+      {legendOpen ? <CanvasLegend /> : null}
       <ReactFlow
         nodes={flowNodes}
         edges={flowEdges}

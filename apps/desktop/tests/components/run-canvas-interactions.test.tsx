@@ -145,3 +145,17 @@ describe('controlled graph lifecycle', () => {
     expect(flow.props.fitViewOptions?.duration).toBe(0);
   });
 });
+
+describe('the legend button', () => {
+  it('shows the legend first, hides it on a click and remembers that', () => {
+    const { unmount } = render(<RunCanvas {...props} />);
+    expect(screen.getByRole('region', { name: 'Legend' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /^Legend:/ }));
+    expect(screen.queryByRole('region', { name: 'Legend' })).toBeNull();
+    unmount();
+    render(<RunCanvas {...props} />);
+    expect(screen.queryByRole('region', { name: 'Legend' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /^Legend:/ }));
+    expect(screen.getByRole('region', { name: 'Legend' })).toBeTruthy();
+  });
+});

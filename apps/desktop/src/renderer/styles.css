@@ -44,6 +44,11 @@
   --warning: #c2a760;
   --danger: var(--sentry-danger);
   --failed: var(--danger);
+  --sev-critical: var(--danger);
+  --sev-high: #c98a64;
+  --sev-medium: var(--warning);
+  --sev-low: #8aa383;
+  --sev-info: #929d90;
   --cancelled: #737d71;
   --inconclusive: #a99870;
   /* Glows */
@@ -1232,13 +1237,16 @@ textarea:focus {
     background var(--dur-med) var(--ease-out),
     box-shadow var(--dur-med) var(--ease-out);
 }
+.canvas-legend .stage-dots i.done,
 .flow-node .stage-dots i.done {
   background: var(--success);
   box-shadow: 0 0 8px rgba(109, 155, 102, 0.55);
 }
+.canvas-legend .stage-dots i.observed,
 .flow-node .stage-dots i.observed {
   background: #929d90;
 }
+.canvas-legend .stage-dots i.active,
 .flow-node .stage-dots i.active {
   background: var(--running);
   box-shadow: 0 0 10px rgba(212, 192, 11, 0.75);
@@ -1255,6 +1263,7 @@ textarea:focus {
 }
 /* The agent hit a warning or error: a calm yellow blink in diagonal stripes. Only yellow is used
    (the gaps are a faint yellow), with a faint glow and a shallow blink so it never shines. */
+.canvas-legend .stage-dots i.warning,
 .flow-node .stage-dots i.warning {
   background-color: rgba(212, 192, 11, 0.14);
   background-image: repeating-linear-gradient(
@@ -1274,6 +1283,7 @@ textarea:focus {
     opacity: 0.72;
   }
 }
+.canvas-legend .stage-dots i.failed,
 .flow-node .stage-dots i.failed {
   background: var(--danger);
   box-shadow: 0 0 10px rgba(185, 100, 98, 0.7);
@@ -1484,20 +1494,25 @@ textarea:focus {
   flex-basis: 0;
   min-width: 4px;
 }
-.flow-node.agent-node .node-severity .sev-critical {
-  background: var(--danger);
+.flow-node.agent-node .node-severity .sev-critical,
+.legend-swatch.sev-critical {
+  background: var(--sev-critical);
 }
-.flow-node.agent-node .node-severity .sev-high {
-  background: #c98a64;
+.flow-node.agent-node .node-severity .sev-high,
+.legend-swatch.sev-high {
+  background: var(--sev-high);
 }
-.flow-node.agent-node .node-severity .sev-medium {
-  background: var(--warning);
+.flow-node.agent-node .node-severity .sev-medium,
+.legend-swatch.sev-medium {
+  background: var(--sev-medium);
 }
-.flow-node.agent-node .node-severity .sev-low {
-  background: #8aa383;
+.flow-node.agent-node .node-severity .sev-low,
+.legend-swatch.sev-low {
+  background: var(--sev-low);
 }
-.flow-node.agent-node .node-severity .sev-info {
-  background: #929d90;
+.flow-node.agent-node .node-severity .sev-info,
+.legend-swatch.sev-info {
+  background: var(--sev-info);
 }
 
 /* Agent state halos — each lifecycle phase reads instantly */
@@ -1797,4 +1812,81 @@ input:focus-visible,
 select:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* Legend card on the run canvas: what the stage bars and the findings bar colours mean. */
+.canvas-legend {
+  position: absolute;
+  top: 52px;
+  right: 10px;
+  z-index: 5;
+  width: 232px;
+  max-width: calc(100% - 20px);
+  max-height: calc(100% - 70px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  background: var(--glass-bg-strong);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+.canvas-legend .legend-heading {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+.canvas-legend .legend-heading:not(:first-child) {
+  margin-top: 10px;
+}
+.canvas-legend .legend-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 5px 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.canvas-legend .legend-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.canvas-legend .legend-list li > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.canvas-legend .legend-swatch {
+  flex: none;
+  width: 22px;
+  height: 5px;
+  border-radius: 2px;
+}
+.canvas-legend .stage-dots {
+  flex: none;
+  display: flex;
+}
+.canvas-legend .stage-dots i {
+  width: 22px;
+  height: 5px;
+  border-radius: 2px;
+  background: rgba(160, 190, 160, 0.18);
+}
+.canvas-legend .legend-note {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
 }

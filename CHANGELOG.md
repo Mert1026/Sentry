@@ -7,6 +7,8 @@
   provider prefix, a status badge with the elapsed time, the stage bars across the full width with how many
   stages are done and where the agent is, the live activity line while it works, three equal cells for
   findings, evidence and the secrets light, and a thin bar of the findings by severity.
+  A **Legend** button on the canvas toolbar shows or hides a card that names the colour of every stage bar
+  and every severity in the findings bar.
 - **Token counts mean the same for every agent.** Input is now the whole prompt (new tokens plus cache
   reads and writes) and cached is the cached part of it, so Claude no longer shows a few hundred input
   tokens next to the others' hundreds of thousands. OpenCode and ChatGPT count their reasoning tokens
