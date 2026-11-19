@@ -1,4 +1,5 @@
 import React from 'react';
+import type { LucideIcon } from 'lucide-react';
 import {
   Activity,
   BookOpen,
@@ -13,14 +14,45 @@ import {
   Users,
   XCircle,
 } from 'lucide-react';
-import { CopyId } from './CopyId.js';
-import { StatusPill, dotClassForStatus } from './ui/StatusPill.js';
-import { AGENT_DISPLAY_NAMES, formatCount } from '../lib/agent-telemetry.js';
+import { StatusPill } from './ui/StatusPill.js';
+import { AGENT_DISPLAY_NAMES } from '../lib/agent-telemetry.js';
 import { InfoTile as Tile } from './InfoTile.js';
 import { describeRunLimit } from '../lib/run-time-limit.js';
 import { hasUserNotes } from '../lib/run-notes.js';
 import { SeverityDisagreements } from './SeverityDisagreements.js';
 import { severityDisagreements, type SeverityFinding } from '../../shared/severity-disagreement.js';
+
+/** One add-on: its name and a clear On or Off, so a glance tells what the run used. */
+function AddOn({
+  icon: Icon,
+  label,
+  on,
+  hint,
+  warn = false,
+}: {
+  icon: LucideIcon;
+  label: string;
+  on: boolean;
+  hint?: string | undefined;
+  warn?: boolean;
+}): React.JSX.Element {
+  return (
+    <li className="rs-addon" data-on={on} aria-label={label + ': ' + (on ? 'On' : 'Off')}>
+      <span className="rs-icon" aria-hidden="true">
+        <Icon size={16} strokeWidth={1.8} />
+      </span>
+      <span className="rs-addon-text">
+        <span className="rs-addon-label">{label}</span>
+        {hint === undefined ? null : (
+          <span className={'rs-hint' + (warn ? ' rs-hint--warn' : '')}>{hint}</span>
+        )}
+      </span>
+      <span className="rs-addon-state" aria-hidden="true">
+        {on ? 'On' : 'Off'}
+      </span>
+    </li>
+  );
+}
 
 export function RunSummaryPanel({
   snapshot,
@@ -30,21 +62,8 @@ export function RunSummaryPanel({
   onFocusAgent?: (stackId: string) => void;
 }): React.JSX.Element {
   const run = snapshot['run'] as Record<string, unknown>;
-  const project = snapshot['project'] as Record<string, unknown> | undefined;
-  const revision = snapshot['revision'] as Record<string, unknown> | undefined;
   const agentRuns = (snapshot['agentRuns'] as Array<Record<string, unknown>>) ?? [];
   const findings = (snapshot['findings'] as unknown[]) ?? [];
-  const projectName =
-    project !== undefined
-      ? String(project['name'] ?? run['projectId'] ?? '')
-      : String(run['projectId'] ?? '');
-  const countsByAgent = new Map<string, number>();
-  for (const finding of findings) {
-    if (typeof finding === 'object' && finding !== null) {
-      const agentRunId = String((finding as Record<string, unknown>)['agentRunId'] ?? '');
-      countsByAgent.set(agentRunId, (countsByAgent.get(agentRunId) ?? 0) + 1);
-    }
-  }
   // Findings by the agent that reported them, to see where agents rated the same issue differently.
   const stackOfAgentRun = new Map<string, string>(
     agentRuns.map((agent) => [String(agent['id']), String(agent['agentStackId'])]),
@@ -92,7 +111,6 @@ export function RunSummaryPanel({
       configuration?.agentStackIds ?? agentRuns.map((agent) => String(agent['agentStackId'])),
     ),
   ];
-  const terminal = ['completed', 'partial', 'failed', 'cancelled'].includes(String(run['status']));
   const runningCount = agentRuns.filter((agent) =>
     ['starting', 'planning', 'running'].includes(String(agent['status'])),
   ).length;
@@ -103,6 +121,11 @@ export function RunSummaryPanel({
   const timeLimitMs = configuration?.executionSafeguards?.runTimeoutMs;
   const webOn = configuration?.executionSafeguards?.webAccess === true;
   const downloadsOn = configuration?.executionSafeguards?.toolDownloads === true;
+  // Only a switched-off check is stored; a production run otherwise ran it.
+  const secretsOn =
+    run['executionKind'] === 'production'
+      ? configuration?.executionSafeguards?.secretsCheck !== false
+      : undefined;
   const profileWithout =
     (profileUsage?.staleAgentStackIds.length ?? 0) +
     (profileUsage?.missingAgentStackIds.length ?? 0);
@@ -132,46 +155,37 @@ export function RunSummaryPanel({
           {timeLimitMs === undefined || timeLimitMs <= 0 ? null : (
             <Tile icon={Timer} label="Time limit" value={describeRunLimit(timeLimitMs)} compact />
           )}
-          <Tile
-            icon={Globe}
-            label="Web access"
-            value={webOn ? 'On' : 'Off'}
-            state={webOn ? 'on' : 'off'}
-            tone={webOn ? 'on' : undefined}
-            iconWhenNarrow
-          />
-          <Tile
-            icon={Download}
-            label="Tool and SDK downloads"
-            value={downloadsOn ? 'On' : 'Off'}
-            state={downloadsOn ? 'on' : 'off'}
-            tone={downloadsOn ? 'on' : undefined}
-            iconWhenNarrow
-          />
-          {configuration?.executionSafeguards?.secretsCheck === false ? (
-            <Tile icon={KeyRound} label="Secrets check" value="Off" state="off" iconWhenNarrow />
-          ) : null}
+        </div>
+      </section>
+      <section aria-label="Add-ons">
+        <div className="section-title" style={{ marginBottom: 8 }}>
+          Add-ons
+        </div>
+        <ul className="rs-addons">
+          <AddOn icon={Globe} label="Web access" on={webOn} />
+          <AddOn icon={Download} label="Tool and SDK downloads" on={downloadsOn} />
+          {secretsOn === undefined ? null : (
+            <AddOn icon={KeyRound} label="Secrets check" on={secretsOn} />
+          )}
           {profileUsage === undefined ? null : (
-            <Tile
+            <AddOn
               icon={BookOpen}
               label="Project profile"
-              value={
-                profileUsage.requested
-                  ? 'Used by ' + profileUsage.usedAgentStackIds.length + ' agent(s)'
-                  : 'Off'
-              }
-              state={profileUsage.requested ? 'on' : 'off'}
-              tone={profileUsage.requested ? (profileWithout > 0 ? 'warn' : 'on') : undefined}
+              on={profileUsage.requested}
               hint={
-                profileUsage.requested && profileWithout > 0
-                  ? profileWithout + ' without (out of date or not built)'
+                profileUsage.requested
+                  ? 'Used by ' +
+                    profileUsage.usedAgentStackIds.length +
+                    ' agent(s)' +
+                    (profileWithout > 0
+                      ? ' · ' + profileWithout + ' without (out of date or not built)'
+                      : '')
                   : undefined
               }
-              hintWarn
-              wide
+              warn={profileUsage.requested && profileWithout > 0}
             />
           )}
-        </div>
+        </ul>
       </section>
       {hasUserNotes(configuration?.userNotes) ? (
         <section aria-label="User description / note">
@@ -234,77 +248,6 @@ export function RunSummaryPanel({
             onClick={focusFirst(['failed', 'timed_out', 'interrupted'])}
           />
         </div>
-        {selected.length > 0 ? (
-          <div
-            className="result-observation"
-            role="img"
-            aria-label={
-              completedAgentCount +
-              ' of ' +
-              selected.length +
-              ' selected agent executions completed'
-            }
-          >
-            <div className="result-observation-count">
-              <strong>
-                {completedAgentCount} <span>/ {selected.length}</span>
-              </strong>
-              <small>AGENT EXECUTIONS COMPLETE</small>
-            </div>
-            <div className="result-observation-track" aria-hidden="true">
-              {selected.map((stackId) => (
-                <span
-                  key={stackId}
-                  className={
-                    'result-observation-node ' +
-                    String(
-                      agentRuns.find((agent) => agent['agentStackId'] === stackId)?.['status'] ??
-                        '',
-                    )
-                  }
-                />
-              ))}
-            </div>
-          </div>
-        ) : null}
-        {selected.length === 0 ? (
-          <p className="metadata">Agent selection was not recorded for this run.</p>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {selected.map((stackId) => {
-              const agent = agentRuns.find((item) => item['agentStackId'] === stackId);
-              const id = String(agent?.['id'] ?? '');
-              const status = String(agent?.['status'] ?? (terminal ? 'Not started' : 'Waiting'));
-              const count = countsByAgent.get(id) ?? 0;
-              return (
-                <button
-                  key={stackId}
-                  className="agent-row"
-                  onClick={() => onFocusAgent?.(stackId)}
-                  title="Select this agent on the canvas"
-                >
-                  <span className={dotClassForStatus(status)} aria-hidden="true" />
-                  <span className="grow" style={{ minWidth: 0 }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <span
-                        className="grow truncate"
-                        title={AGENT_DISPLAY_NAMES[stackId] ?? stackId}
-                      >
-                        {AGENT_DISPLAY_NAMES[stackId] ?? stackId}
-                      </span>
-                      <span className="metric-chip">
-                        {formatCount(count) + (count === 1 ? ' finding' : ' findings')}
-                      </span>
-                    </span>
-                    <span className="metadata" style={{ display: 'block' }}>
-                      {status}
-                    </span>
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        )}
         <SeverityDisagreements
           items={disagreements}
           agentName={(agent) => AGENT_DISPLAY_NAMES[agent] ?? agent}
@@ -315,31 +258,6 @@ export function RunSummaryPanel({
             agent.
           </p>
         ) : null}
-      </section>
-      <section aria-label="Snapshot details">
-        <div className="section-title" style={{ marginBottom: 8 }}>
-          Snapshot
-        </div>
-        <dl className="kv">
-          <dt>Project</dt>
-          <dd>
-            <span className="truncate" title={projectName} style={{ display: 'block' }}>
-              {projectName}
-            </span>
-          </dd>
-          <dt>Revision</dt>
-          <dd>
-            <CopyId id={String(revision?.['id'] ?? run['projectRevisionId'] ?? '')} />
-          </dd>
-          <dt>Snapshot</dt>
-          <dd>
-            <CopyId id={String(run['snapshotId'] ?? '')} />
-          </dd>
-          <dt>Run</dt>
-          <dd>
-            <CopyId id={String(run['id'] ?? '')} />
-          </dd>
-        </dl>
       </section>
     </div>
   );

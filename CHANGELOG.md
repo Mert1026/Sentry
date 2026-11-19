@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- **A tidier Overview on the run page.** It now shows only what the page does not already show: the run
+  status, mode, run depth, time limit, the add-ons and the agent counts. The add-ons (web access, tool
+  and SDK downloads, secrets check, project profile) are one list with a clear On or Off for each, and the
+  secrets check is listed for every production run. The per-agent rows, the progress bar and the
+  snapshot ids are gone because the canvas and the run header already show them.
 - **Token counts mean the same for every agent.** Input is now the whole prompt (new tokens plus cache
   reads and writes) and cached is the cached part of it, so Claude no longer shows a few hundred input
   tokens next to the others' hundreds of thousands. OpenCode and ChatGPT count their reasoning tokens

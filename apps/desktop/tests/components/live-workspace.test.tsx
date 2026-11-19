@@ -195,16 +195,15 @@ describe('truthful run workspace', () => {
   );
 
   it.each([1, 2, 3])(
-    'overview includes all %i selected agents even before workers exist',
+    'overview counts all %i selected agents even before workers exist',
     (count) => {
       const data = snapshot();
       data.run.configuration.agentStackIds = stacks.slice(0, count);
       data.agentRuns = [];
       render(<RunSummaryPanel snapshot={data} />);
       expect(screen.getByLabelText(`Selected: ${count}`)).toBeTruthy();
-      expect(
-        within(screen.getByRole('region', { name: 'Results by agent' })).getAllByRole('button'),
-      ).toHaveLength(count);
+      expect(screen.getByLabelText('Running: 0')).toBeTruthy();
+      expect(screen.getByLabelText('Completed: 0')).toBeTruthy();
     },
   );
   it('no longer prints the total findings and evidence line under the agents', () => {
@@ -263,18 +262,24 @@ describe('truthful run workspace', () => {
       return data;
     }
 
-    it('shows mode, web access, downloads and profile as labelled tiles, not plain lines', () => {
+    it('shows mode, depth and time limit as tiles and the add-ons as rows with a clear On or Off', () => {
       render(<RunSummaryPanel snapshot={mixed()} />);
       expect(screen.getByLabelText('Mode: FULL QA')).toBeTruthy();
       expect(screen.getByLabelText('Web access: On')).toBeTruthy();
       expect(screen.getByLabelText('Tool and SDK downloads: Off')).toBeTruthy();
-      const profile = screen.getByLabelText('Project profile: Used by 1 agent(s)');
+      const profile = screen.getByLabelText('Project profile: On');
+      expect(profile.textContent).toContain('Used by 1 agent(s)');
       expect(profile.textContent).toContain('1 without (out of date or not built)');
-      // Each tile carries an icon.
+      // Each add-on carries an icon and its state in words.
       expect(screen.getByLabelText('Web access: On').querySelector('svg')).not.toBeNull();
+      expect(screen.getByLabelText('Web access: On').textContent).toContain('On');
+      expect(screen.getByLabelText('Tool and SDK downloads: Off').textContent).toContain('Off');
     });
 
-    it('shows a Secrets check tile only for a run that turned the check off', () => {
+    it('shows the Secrets check as On for a production run and Off when it was turned off', () => {
+      render(<RunSummaryPanel snapshot={mixed()} />);
+      expect(screen.getByLabelText('Secrets check: On')).toBeTruthy();
+      cleanup();
       const off = mixed();
       (off.run.configuration as { executionSafeguards: object }).executionSafeguards = {
         webAccess: true,
@@ -282,9 +287,22 @@ describe('truthful run workspace', () => {
       };
       render(<RunSummaryPanel snapshot={off} />);
       expect(screen.getByLabelText('Secrets check: Off')).toBeTruthy();
-      cleanup();
-      render(<RunSummaryPanel snapshot={mixed()} />);
-      expect(screen.queryByLabelText(/Secrets check/)).toBeNull();
+    });
+
+    it('shows a switched-off profile as Off and leaves out what the header already shows', () => {
+      const data = mixed();
+      (data.run.configuration as { profileUsage: object }).profileUsage = {
+        requested: false,
+        usedAgentStackIds: [],
+        staleAgentStackIds: [],
+        missingAgentStackIds: [],
+      };
+      render(<RunSummaryPanel snapshot={data} />);
+      expect(screen.getByLabelText('Project profile: Off')).toBeTruthy();
+      // The ids sit in the run header and the agents on the canvas, so the panel does not repeat them.
+      expect(screen.queryByText('Snapshot')).toBeNull();
+      expect(screen.queryByText('AGENT EXECUTIONS COMPLETE')).toBeNull();
+      expect(screen.queryByTitle('Select this agent on the canvas')).toBeNull();
     });
 
     it('counts agents by state and makes each count a button that focuses the first such agent', () => {
@@ -316,7 +334,10 @@ describe('truthful run workspace', () => {
     data.agentRuns = [];
     render(<RunSummaryPanel snapshot={data} />);
     expect(screen.queryByText(/agents are waiting/)).toBeNull();
-    expect(screen.getAllByText('Not started')).toHaveLength(3);
+    // Nothing started, so nothing is counted as running or completed.
+    expect(screen.getByLabelText('Selected: 3')).toBeTruthy();
+    expect(screen.getByLabelText('Running: 0')).toBeTruthy();
+    expect(screen.getByLabelText('Completed: 0')).toBeTruthy();
   });
 });
 
