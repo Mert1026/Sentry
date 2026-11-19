@@ -59,6 +59,9 @@ function snapshot(status = 'agents_running') {
   };
 }
 function workspace(data = snapshot()) {
+  // A test window is short, which would fold the run facts away; most tests want them showing.
+  if (window.localStorage.getItem('sentry:run-layout:facts') === null)
+    window.localStorage.setItem('sentry:run-layout:facts', 'open');
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: Infinity } },
   });
@@ -192,6 +195,56 @@ describe('truthful run workspace', () => {
     );
     const details = row.querySelector('details') as HTMLDetailsElement;
     expect(details.textContent).toContain('OPENCODE_UPSTREAM_FAILED: OpenCode openai failed');
+  });
+
+  it('folds the run facts away with the chevron in the header, and remembers it', async () => {
+    workspace(snapshot('completed'));
+    const hide = await screen.findByRole('button', { name: 'Hide run facts' });
+    expect(document.querySelector('.run-details')).not.toBeNull();
+    fireEvent.click(hide);
+    expect(document.querySelector('.run-details')).toBeNull();
+    expect(window.localStorage.getItem('sentry:run-layout:facts')).toBe('closed');
+    fireEvent.click(screen.getByRole('button', { name: 'Show run facts' }));
+    expect(document.querySelector('.run-details')).not.toBeNull();
+    expect(window.localStorage.getItem('sentry:run-layout:facts')).toBe('open');
+  });
+
+  it('starts with the run facts folded on a short window when nothing was chosen', async () => {
+    window.localStorage.removeItem('sentry:run-layout:facts');
+    Object.defineProperty(window, 'innerHeight', { value: 700, configurable: true });
+    try {
+      // The helper would open them; set the storage back to nothing right after.
+      const data = snapshot('completed');
+      const client = new QueryClient({
+        defaultOptions: { queries: { retry: false, gcTime: Infinity } },
+      });
+      clients.push(client);
+      client.setQueryData(['run', 'r'], data);
+      vi.stubGlobal('sentry', {
+        runs: {
+          get: vi.fn(async () => data),
+          exportSave: vi.fn(),
+          revealExport: vi.fn(),
+          cancel: vi.fn(),
+        },
+        projects: { get: vi.fn(async () => ({ name: 'Fixture project' })) },
+        runtime: { status: vi.fn(async () => ({ connected: true })) },
+        subscribe: { onRunUpdate: () => () => undefined },
+      });
+      render(
+        <QueryClientProvider client={client}>
+          <MemoryRouter initialEntries={['/runs/r']}>
+            <Routes>
+              <Route path="/runs/:runId" element={<RunWorkspace />} />
+            </Routes>
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+      await screen.findByRole('button', { name: 'Show run facts' });
+      expect(document.querySelector('.run-details')).toBeNull();
+    } finally {
+      Object.defineProperty(window, 'innerHeight', { value: 768, configurable: true });
+    }
   });
 
   it('lets the person close the note about a partial run with the X in its corner', async () => {

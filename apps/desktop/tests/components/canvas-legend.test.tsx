@@ -46,9 +46,16 @@ describe('the canvas legend', () => {
 describe('the run page layout', () => {
   const css = readFileSync(resolve(process.cwd(), 'src/renderer/styles.css'), 'utf8');
 
-  it('scrolls when the window is short instead of squeezing the canvas', () => {
-    expect(css).toMatch(/\.run-page \{[^}]*overflow-y: auto/);
-    expect(css).toMatch(/\.workspace \{[^}]*min-height: 460px/);
+  it('never scrolls the page: the panels scroll inside themselves and what is in them cannot grow the workspace', () => {
+    expect(css).toMatch(/\.run-page \{[^}]*overflow: hidden/);
+    expect(css).not.toMatch(/\.run-page \{[^}]*overflow-y: auto/);
+    // A flex basis of zero: the height of a panel's content does not set the height of the workspace.
+    expect(css).toMatch(/\.workspace \{[^}]*flex: 1 1 0;[^}]*min-height: 0/);
+    expect(css).toMatch(/\.ws-panel \.panel-body \{[^}]*overflow: auto/);
+  });
+
+  it('keeps a long note about failed agents from pushing the canvas down', () => {
+    expect(css).toMatch(/\.run-notice \{[^}]*max-height: 30vh[^}]*overflow-y: auto/);
   });
 
   it('keeps the legend inside the canvas height', () => {

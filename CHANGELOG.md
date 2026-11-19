@@ -11,8 +11,10 @@
   as if it had ended before it began.
   In Bulgarian the date no longer carries the "г." mark, and the Low colour in the findings bar and the legend
   is a clear blue, so it is no longer mistaken for the green of Completed.
-  The run page no longer squeezes the canvas when the window is short: the page scrolls and the canvas keeps at least
-  460 px, so the side panels are not cut off. The legend opens inside the canvas and scrolls if it is taller than it.
+  The run page never scrolls: the panels scroll inside themselves, and opening or filling the details panel cannot make
+  the page taller. A chevron in the header folds the run facts away to give the canvas the room (folded by default on a
+  short window and remembered), and a long note about failed agents scrolls inside itself. The legend opens inside
+  the canvas and scrolls if it is taller than it.
   The note under the header for a partial or failed run has a row per agent that did not finish, with a plain
   sentence first (for example that the provider's usage limit was reached) and the code and the provider's own
   words under Technical details. The agent count in the header is a number with its unit beside it.

@@ -988,5 +988,7 @@
   "The agent stopped responding, so it was stopped.": "Агентът спря да отговаря, затова беше спрян.",
   "The agent used up the time limit of the run.": "Агентът изчерпа времевия лимит на изпълнението.",
   "Passed, not observed": "Преминат, без наблюдение",
-  "Show issues": "Покажи проблемите"
+  "Show issues": "Покажи проблемите",
+  "Hide run facts": "Скрий данните за изпълнението",
+  "Show run facts": "Покажи данните за изпълнението"
 }

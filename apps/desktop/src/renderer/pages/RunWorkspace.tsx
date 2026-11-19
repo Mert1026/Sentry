@@ -2,7 +2,7 @@ import React from 'react';
 import { LoadingOverlay } from '../components/BlockingOverlay.js';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronUp, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { RunCanvas } from '../components/RunCanvas.js';
 import { AgentInspector } from '../components/AgentInspector.js';
 import { RunSummaryPanel } from '../components/RunSummaryPanel.js';
@@ -21,6 +21,7 @@ import { formatDateTime } from '../lib/date-format.js';
 import { describeFailure } from '../lib/failure-text.js';
 import { useI18n } from '../lib/i18n.js';
 
+const FACTS_KEY = 'sentry:run-layout:facts';
 const LEFT_KEY = 'sentry:run-layout:left-width';
 const RIGHT_KEY = 'sentry:run-layout:right-width';
 const LEFT_DEFAULT = 280;
@@ -64,6 +65,25 @@ export function RunWorkspace(): React.JSX.Element {
   const [leftWidth, setLeftWidth] = React.useState(() => loadWidth(LEFT_KEY, LEFT_DEFAULT));
   const [rightWidth, setRightWidth] = React.useState(() => loadWidth(RIGHT_KEY, RIGHT_DEFAULT));
   const [confirmCancel, setConfirmCancel] = React.useState(false);
+  // The facts under the title can be folded away to give the canvas the room; folded by default on a short window.
+  const [factsOpen, setFactsOpen] = React.useState<boolean>(() => {
+    try {
+      const saved = window.localStorage.getItem(FACTS_KEY);
+      if (saved === 'open' || saved === 'closed') return saved === 'open';
+    } catch {
+      /* presentation-only storage */
+    }
+    return window.innerHeight >= 800;
+  });
+  const toggleFacts = (): void => {
+    const next = !factsOpen;
+    setFactsOpen(next);
+    try {
+      window.localStorage.setItem(FACTS_KEY, next ? 'open' : 'closed');
+    } catch {
+      /* presentation-only storage */
+    }
+  };
   // Notices the person closed, by what they said: a notice that changes (a new failure) shows again.
   const [dismissed, setDismissed] = React.useState<Record<string, string>>({});
   React.useEffect(() => setDismissed({}), [runId]);
@@ -366,6 +386,20 @@ export function RunWorkspace(): React.JSX.Element {
                 <span className="show-issues-count">{hiddenNotices}</span>
               </button>
             ) : null}
+            <button
+              type="button"
+              className="icon-btn ghost"
+              onClick={toggleFacts}
+              aria-expanded={factsOpen}
+              aria-label={factsOpen ? 'Hide run facts' : 'Show run facts'}
+              title={factsOpen ? 'Hide run facts' : 'Show run facts'}
+            >
+              {factsOpen ? (
+                <ChevronUp size={15} aria-hidden="true" />
+              ) : (
+                <ChevronDown size={15} aria-hidden="true" />
+              )}
+            </button>
             {terminal ? (
               <>
                 <button
@@ -410,92 +444,96 @@ export function RunWorkspace(): React.JSX.Element {
             ) : null}
           </div>
         </div>
-        <div className="run-details">
-          <section className="run-group" aria-label="Run">
-            <h2 className="run-group-title">Run</h2>
-            <dl className="run-facts">
-              <div className="run-detail">
-                <dt>Project</dt>
-                <dd>
-                  <Link to={'/projects/' + data.run.projectId}>{resolvedProjectName}</Link>
-                </dd>
-              </div>
-              <div className="run-detail">
-                <dt>Started</dt>
-                <dd className="mono" title={String(data.run.startedAt ?? data.run.createdAt)}>
-                  {formatDateTime(data.run.startedAt ?? data.run.createdAt, language)}
-                </dd>
-              </div>
-              {data.run.completedAt != null ? (
+        {factsOpen ? (
+          <div className="run-details">
+            <section className="run-group" aria-label="Run">
+              <h2 className="run-group-title">Run</h2>
+              <dl className="run-facts">
                 <div className="run-detail">
-                  <dt>Completed</dt>
-                  <dd className="mono" title={String(data.run.completedAt)}>
-                    {formatDateTime(data.run.completedAt, language)}
-                  </dd>
-                </div>
-              ) : null}
-              <div className="run-detail">
-                <dt>Duration</dt>
-                <dd className="mono">
-                  {formatDuration(data.run.startedAt ?? data.run.createdAt, data.run.completedAt)}
-                </dd>
-              </div>
-              {cancelState !== undefined ? (
-                <div className="run-detail">
-                  <dt>Cancellation</dt>
-                  <dd>{cancelState}</dd>
-                </div>
-              ) : null}
-            </dl>
-          </section>
-          <section className="run-group run-group--results" aria-label="Results">
-            <h2 className="run-group-title">Results</h2>
-            <dl className="run-facts">
-              <div className="run-detail">
-                <dt>Agents</dt>
-                <dd>
-                  <strong>
-                    {String(data.run.configuration?.agentStackIds?.length ?? data.agentRuns.length)}
-                  </strong>{' '}
-                  <span className="run-fact-unit">selected</span>
-                </dd>
-              </div>
-              <div className="run-detail">
-                <dt>Findings</dt>
-                <dd>{String(data.findings.length)}</dd>
-              </div>
-              <div className="run-detail">
-                <dt>Evidence</dt>
-                <dd>{String(data.evidence.length)}</dd>
-              </div>
-            </dl>
-          </section>
-          <section className="run-group" aria-label="Identifiers">
-            <h2 className="run-group-title">Identifiers</h2>
-            <dl className="run-facts">
-              <div className="run-detail">
-                <dt>Run ID</dt>
-                <dd>
-                  <CopyId id={data.run.id} short={22} />
-                </dd>
-              </div>
-              <div className="run-detail">
-                <dt>Snapshot</dt>
-                <dd>
-                  <CopyId id={data.run.snapshotId} short={22} />
-                </dd>
-              </div>
-              {data.run.projectRevisionId !== undefined ? (
-                <div className="run-detail">
-                  <dt>Revision</dt>
+                  <dt>Project</dt>
                   <dd>
-                    <CopyId id={data.run.projectRevisionId} short={22} />
+                    <Link to={'/projects/' + data.run.projectId}>{resolvedProjectName}</Link>
                   </dd>
                 </div>
-              ) : null}
-            </dl>
-          </section>
-        </div>
+                <div className="run-detail">
+                  <dt>Started</dt>
+                  <dd className="mono" title={String(data.run.startedAt ?? data.run.createdAt)}>
+                    {formatDateTime(data.run.startedAt ?? data.run.createdAt, language)}
+                  </dd>
+                </div>
+                {data.run.completedAt != null ? (
+                  <div className="run-detail">
+                    <dt>Completed</dt>
+                    <dd className="mono" title={String(data.run.completedAt)}>
+                      {formatDateTime(data.run.completedAt, language)}
+                    </dd>
+                  </div>
+                ) : null}
+                <div className="run-detail">
+                  <dt>Duration</dt>
+                  <dd className="mono">
+                    {formatDuration(data.run.startedAt ?? data.run.createdAt, data.run.completedAt)}
+                  </dd>
+                </div>
+                {cancelState !== undefined ? (
+                  <div className="run-detail">
+                    <dt>Cancellation</dt>
+                    <dd>{cancelState}</dd>
+                  </div>
+                ) : null}
+              </dl>
+            </section>
+            <section className="run-group run-group--results" aria-label="Results">
+              <h2 className="run-group-title">Results</h2>
+              <dl className="run-facts">
+                <div className="run-detail">
+                  <dt>Agents</dt>
+                  <dd>
+                    <strong>
+                      {String(
+                        data.run.configuration?.agentStackIds?.length ?? data.agentRuns.length,
+                      )}
+                    </strong>{' '}
+                    <span className="run-fact-unit">selected</span>
+                  </dd>
+                </div>
+                <div className="run-detail">
+                  <dt>Findings</dt>
+                  <dd>{String(data.findings.length)}</dd>
+                </div>
+                <div className="run-detail">
+                  <dt>Evidence</dt>
+                  <dd>{String(data.evidence.length)}</dd>
+                </div>
+              </dl>
+            </section>
+            <section className="run-group" aria-label="Identifiers">
+              <h2 className="run-group-title">Identifiers</h2>
+              <dl className="run-facts">
+                <div className="run-detail">
+                  <dt>Run ID</dt>
+                  <dd>
+                    <CopyId id={data.run.id} short={22} />
+                  </dd>
+                </div>
+                <div className="run-detail">
+                  <dt>Snapshot</dt>
+                  <dd>
+                    <CopyId id={data.run.snapshotId} short={22} />
+                  </dd>
+                </div>
+                {data.run.projectRevisionId !== undefined ? (
+                  <div className="run-detail">
+                    <dt>Revision</dt>
+                    <dd>
+                      <CopyId id={data.run.projectRevisionId} short={22} />
+                    </dd>
+                  </div>
+                ) : null}
+              </dl>
+            </section>
+          </div>
+        ) : null}
       </header>
       {['failed', 'partial', 'cancelled'].includes(data.run.status) &&
       dismissed['analysis'] !== analysisSignature ? (
