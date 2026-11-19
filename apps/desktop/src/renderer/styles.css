@@ -2129,3 +2129,30 @@ select:focus-visible {
   margin: 0;
   color: var(--text-secondary);
 }
+
+/* A notice the person can close: the X sits in its top right corner. */
+.inline-notice.has-close {
+  position: relative;
+  padding-right: 44px;
+}
+.notice-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.notice-close:hover,
+.notice-close:focus-visible {
+  color: var(--text-primary);
+  background: rgba(238, 241, 235, 0.08);
+  border-color: var(--border-default);
+}

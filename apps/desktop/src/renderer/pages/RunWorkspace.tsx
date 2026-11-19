@@ -9,6 +9,7 @@ import { RunSummaryPanel } from '../components/RunSummaryPanel.js';
 import { notesForAgent } from '../lib/run-notes.js';
 import { CopyId } from '../components/CopyId.js';
 import { StatusPill } from '../components/ui/StatusPill.js';
+import { NoticeClose } from '../components/ui/NoticeClose.js';
 import { ToastStack, type ToastItem } from '../components/ui/Toast.js';
 import { EdgeInspector, NodeStatusHeader } from '../components/PipelineInspectors.js';
 import { AGENT_DISPLAY_NAMES } from '../lib/agent-telemetry.js';
@@ -63,6 +64,9 @@ export function RunWorkspace(): React.JSX.Element {
   const [leftWidth, setLeftWidth] = React.useState(() => loadWidth(LEFT_KEY, LEFT_DEFAULT));
   const [rightWidth, setRightWidth] = React.useState(() => loadWidth(RIGHT_KEY, RIGHT_DEFAULT));
   const [confirmCancel, setConfirmCancel] = React.useState(false);
+  // Notices the person closed, by what they said: a notice that changes (a new failure) shows again.
+  const [dismissed, setDismissed] = React.useState<Record<string, string>>({});
+  React.useEffect(() => setDismissed({}), [runId]);
   const [toasts, setToasts] = React.useState<ToastItem[]>([]);
   const snapshot = useRunSnapshot(runId, 500);
 
@@ -298,6 +302,14 @@ export function RunWorkspace(): React.JSX.Element {
   const selectedAgent = graph?.agents.find((a) => 'agent-' + a.agentStackId === selectedId);
   const selectedEdge = graph?.edges.find((e) => e.id === selectedId);
   const cancelState = (cancel.data as { status?: string } | undefined)?.status;
+  // What the analysis note says: the status and which agents did not finish, and how.
+  const analysisSignature =
+    data.run.status +
+    '|' +
+    data.agentRuns
+      .filter((agent) => ['failed', 'timed_out', 'interrupted'].includes(agent.status))
+      .map((agent) => agent.id + ':' + agent.status)
+      .join(',');
   const focusAgent = (stackId: string): void => {
     const id = 'agent-' + stackId;
     setSelectedId(id);
@@ -307,8 +319,9 @@ export function RunWorkspace(): React.JSX.Element {
 
   return (
     <div className="run-page">
-      {snapshot.isError || snapshot.runtimeUnavailable ? (
-        <div className="inline-notice tone-warning" role="status">
+      {(snapshot.isError || snapshot.runtimeUnavailable) && dismissed['refresh'] !== 'refresh' ? (
+        <div className="inline-notice tone-warning has-close" role="status">
+          <NoticeClose onClick={() => setDismissed((all) => ({ ...all, refresh: 'refresh' }))} />
           {
             'Run refresh unavailable. Cached results remain available; the last recorded status below may have changed. Check'
           }{' '}
@@ -467,8 +480,12 @@ export function RunWorkspace(): React.JSX.Element {
           </section>
         </div>
       </header>
-      {['failed', 'partial', 'cancelled'].includes(data.run.status) ? (
-        <div className="inline-notice tone-warning run-notice" role="status">
+      {['failed', 'partial', 'cancelled'].includes(data.run.status) &&
+      dismissed['analysis'] !== analysisSignature ? (
+        <div className="inline-notice tone-warning run-notice has-close" role="status">
+          <NoticeClose
+            onClick={() => setDismissed((all) => ({ ...all, analysis: analysisSignature }))}
+          />
           <div className="run-notice-head">
             <AlertTriangle size={16} aria-hidden="true" />
             <strong>{'Analysis ' + data.run.status + '.'}</strong>

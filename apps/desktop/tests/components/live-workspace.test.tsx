@@ -194,6 +194,28 @@ describe('truthful run workspace', () => {
     expect(details.textContent).toContain('OPENCODE_UPSTREAM_FAILED: OpenCode openai failed');
   });
 
+  it('lets the person close the note about a partial run with the X in its corner', async () => {
+    const data = snapshot('partial') as ReturnType<typeof snapshot> & {
+      agentRuns: Array<{ status: string; failure?: { code: string; message: string } }>;
+    };
+    data.agentRuns[0] = {
+      ...data.agentRuns[0]!,
+      status: 'failed',
+      failure: { code: 'GLM_TURN_TIMEOUT', message: 'turn took too long' },
+    };
+    workspace(data);
+    await screen.findByText('Technical details');
+    // A plain sentence for this code, and the close button inside the note.
+    expect(document.querySelector('.run-notice-reason')?.textContent).toContain('took too long');
+    const notice = document.querySelector('.run-notice') as HTMLElement;
+    const close = within(notice).getByRole('button', { name: 'Dismiss notification' });
+    expect(close.closest('.has-close')).toBe(notice);
+    fireEvent.click(close);
+    expect(document.querySelector('.run-notice')).toBeNull();
+    // Closing the note changes nothing else on the page.
+    expect(document.querySelector('.run-details')).not.toBeNull();
+  });
+
   it('a status query error does not leave a cached connected indicator or claim no active runs', async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     clients.push(client);

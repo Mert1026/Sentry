@@ -16,6 +16,9 @@
   The note under the header for a partial or failed run has a row per agent that did not finish, with a plain
   sentence first (for example that the provider's usage limit was reached) and the code and the provider's own
   words under Technical details. The agent count in the header is a number with its unit beside it.
+  Every failure an agent or the run engine can record (about 80 codes across OpenCode, DeepSeek, GLM and Claude, plus
+  timeouts, interruptions and report deadlines) now has a plain sentence, in English and Bulgarian. The note has an X
+  in its corner to close it; it comes back if a new agent fails.
 - **More fixes from a second QA run on Sentry's own code.** Stored events now have secrets removed from the text of
   commands, tool summaries and errors, status, warnings, failures, cancel reasons and test suites, not only from
   messages, plans and findings. The redactor also catches a token after an underscore (`GH_ghp_…`), camelCase
