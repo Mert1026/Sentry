@@ -193,7 +193,14 @@ const WRITE_TOOLS =
 const FAILURE_SIGNAL =
   /exit code [1-9]|\b(?:FAIL(?:ED)?|AssertionError|Traceback|panic|ERR_[A-Z_]+|ELIFECYCLE)\b|Error:|✗|×/;
 const NOTES_BUDGET_CHARS = 120_000;
-const READ_NOTE_CHARS = 260;
+/**
+ * A read note keeps enough of the file for the report stage to cite real line numbers. At 260 characters
+ * the workspace path alone used up most of it, so agents that report in a fresh session saw no lines
+ * and wrote "line 1" (run_01M7SBDD4C).
+ */
+const READ_NOTE_CHARS = 1500;
+/** The agent's workspace path is long and says nothing the relative path does not. */
+const WORKSPACE_PATH_PREFIX = /<path>[^<\n]*\/workspace\/(?:project\/)?/;
 /** A passing command's note is cut to this many characters (head + tail) before it is evicted. */
 const SHRUNK_NOTE_CHARS = 1200;
 const SHRUNK_HEAD_CHARS = 400;
@@ -221,9 +228,11 @@ export class ObservedToolNotes {
       : WRITE_TOOLS.test(name)
         ? 'write'
         : 'command';
+    const message =
+      kind === 'read' ? event.message.replace(WORKSPACE_PATH_PREFIX, '<path>') : event.message;
     const limit = kind === 'read' ? READ_NOTE_CHARS : 4000;
-    const text = event.message.length > limit ? event.message.slice(0, limit) : event.message;
-    if (text.length < event.message.length) this.truncated = true;
+    const text = message.length > limit ? message.slice(0, limit) : message;
+    if (text.length < message.length) this.truncated = true;
     this.notes.push({ text, kind, important: kind === 'command' && FAILURE_SIGNAL.test(text) });
     this.chars += text.length;
     this.evict();

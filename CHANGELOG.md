@@ -7,6 +7,10 @@
   tokens next to the others' hundreds of thousands. OpenCode and ChatGPT count their reasoning tokens
   as output, which they used to leave out. Numbers for new runs are larger than before; old runs keep
   the figures they were stored with.
+- **Agents that report in a fresh session keep the lines they read.** Each file read was cut to 260
+  characters before the report stage, and the long workspace path used most of that, so OpenCode and
+  ChatGPT saw no line numbers (every finding said line 1) and listed the output as truncated. Reads now
+  keep up to 1,500 characters, without the workspace path.
 - A **Claude** agent, the fifth, opt-in like ChatGPT. It runs the official Claude Code app against
   Anthropic itself, in its own harness package (`@qa/harness-claude`), so it is fully apart from the
   GLM agent: GLM keeps its Z.AI endpoint and token, and the Claude agent never receives them (its
