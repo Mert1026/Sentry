@@ -832,6 +832,7 @@
   "This is what this agent reported after searching the project files. It names places and kinds only; known secret formats are removed from agent text before it is stored. Treat any secret it found as exposed and rotate it.": "Това е докладваното от агента след търсене в проектните файлове. Назовава само места и видове; известните формати на тайни се премахват от текста на агентите, преди да бъде записан. Приемете всяка намерена тайна за разкрита и я сменете.",
   "Check for secrets": "Проверка за тайни",
   "Secrets check": "Проверка за тайни",
+  "Add-ons": "Допълнения",
   "Each agent also searches the project files for hard-coded passwords, API keys, tokens and private keys, and its box on the run page shows a light with what it found. This adds about a minute or two per agent. Turn it off for the shortest run: no search is made and no secrets light is shown.": "Всеки агент търси и в проектните файлове за твърдо кодирани пароли, API ключове, токени и частни ключове, а кутията му на страницата на изпълнението показва светлина с това, което е намерил. Това добавя около минута-две за агент. Изключете го за най-краткото изпълнение: не се прави търсене и не се показва светлина за тайни.",
   "Exporting findings": "Експортиране на констатации",
   "Export as": "Експортиране като",
