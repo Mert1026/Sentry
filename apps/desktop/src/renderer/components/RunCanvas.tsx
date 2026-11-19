@@ -265,7 +265,9 @@ function RunCanvasScene({
   React.useEffect(() => {
     if (!legendOpen) return;
     const onPointerDown = (event: MouseEvent): void => {
-      if (legendRef.current?.contains(event.target as Node) !== true) setLegendOpen(false);
+      const inside =
+        event.target instanceof HTMLElement && legendRef.current?.contains(event.target) === true;
+      if (!inside) setLegendOpen(false);
     };
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') setLegendOpen(false);
