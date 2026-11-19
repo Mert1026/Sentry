@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- **Token counts mean the same for every agent.** Input is now the whole prompt (new tokens plus cache
+  reads and writes) and cached is the cached part of it, so Claude no longer shows a few hundred input
+  tokens next to the others' hundreds of thousands. OpenCode and ChatGPT count their reasoning tokens
+  as output, which they used to leave out. Numbers for new runs are larger than before; old runs keep
+  the figures they were stored with.
 - A **Claude** agent, the fifth, opt-in like ChatGPT. It runs the official Claude Code app against
   Anthropic itself, in its own harness package (`@qa/harness-claude`), so it is fully apart from the
   GLM agent: GLM keeps its Z.AI endpoint and token, and the Claude agent never receives them (its

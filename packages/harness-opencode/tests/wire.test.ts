@@ -26,10 +26,26 @@ describe('context occupancy of a multi-step turn', () => {
     );
     const parsed = parseOpenCodeTurn(jsonl);
     expect(parsed.steps).toBe(3);
-    // Billing figure: summed across steps.
-    expect(parsed.usage?.inputTokens).toBe(47_000);
+    // Billing figure: summed across steps, the whole prompt (new input plus cache reads and writes).
+    expect(parsed.usage?.inputTokens).toBe(130_000);
+    expect(parsed.usage?.cachedInputTokens).toBe(83_000);
     // Occupancy: the biggest prompt any one step sent (9k new + 43k cached = 52k; first step 35k).
     expect(parsed.peakContextTokens).toBe(52_000);
+  });
+
+  it('counts reasoning tokens as output', () => {
+    const line = JSON.stringify({
+      type: 'step_finish',
+      sessionID: 'ses_x',
+      part: {
+        id: 'prt_r',
+        sessionID: 'ses_x',
+        type: 'step-finish',
+        reason: 'stop',
+        tokens: { input: 100, output: 10, reasoning: 90, cache: { read: 0, write: 0 } },
+      },
+    });
+    expect(parseOpenCodeTurn(line).usage?.outputTokens).toBe(100);
   });
 
   it('leaves the figure absent when OpenCode reports no step tokens', () => {

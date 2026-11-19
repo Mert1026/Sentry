@@ -1072,7 +1072,11 @@ export class ClaudeCodeHarnessAdapter implements HarnessAdapter {
           cacheCreate !== undefined
         ) {
           turnUsage.usage = {
-            ...(inputTokens === undefined ? {} : { inputTokens }),
+            // Anthropic's input_tokens leaves out cached tokens; the figure kept here is the whole prompt
+            // (uncached + cache reads + cache writes) so it reads like every other agent's.
+            ...(inputTokens === undefined && cacheRead === undefined && cacheCreate === undefined
+              ? {}
+              : { inputTokens: (inputTokens ?? 0) + (cacheRead ?? 0) + (cacheCreate ?? 0) }),
             ...(outputTokens === undefined ? {} : { outputTokens }),
             ...(cacheRead === undefined && cacheCreate === undefined
               ? {}
