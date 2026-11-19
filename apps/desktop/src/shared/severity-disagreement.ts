@@ -43,6 +43,8 @@ const MIN_NAMING_WORD = 6;
 const GENERIC = new Set([
   'accept',
   'allow',
+  'attacker',
+  'attackers',
   'cannot',
   'cause',
   'default',
@@ -53,15 +55,19 @@ const GENERIC = new Set([
   'input',
   'instead',
   'invalid',
+  'malformed',
+  'malicious',
   'parser',
   'parsing',
   'raise',
   'return',
   'silent',
   'silently',
+  'supplied',
   'there',
   'their',
   'under',
+  'untrusted',
   'using',
   'which',
   'where',
@@ -126,12 +132,29 @@ export function severityDisagreements(
   const groups = new Map<string, SeverityFinding[]>();
   items.forEach((anchor, i) => {
     const members = [anchor];
+    const memberIndexes = [i];
     items.forEach((other, j) => {
       if (
-        i !== j &&
-        sameIssue(anchor, other, wordSets[i] as Set<string>, wordSets[j] as Set<string>)
+        i === j ||
+        !sameIssue(anchor, other, wordSets[i] as Set<string>, wordSets[j] as Set<string>)
       )
-        members.push(other);
+        return;
+      // Every member must look like the same issue as every other one, not only as the anchor:
+      // one long title that touches two different issues must not tie them together. Two findings
+      // of the same agent are never compared with each other.
+      const fits = memberIndexes.every(
+        (at) =>
+          (items[at] as SeverityFinding).agent === other.agent ||
+          sameIssue(
+            items[at] as SeverityFinding,
+            other,
+            wordSets[at] as Set<string>,
+            wordSets[j] as Set<string>,
+          ),
+      );
+      if (!fits) return;
+      members.push(other);
+      memberIndexes.push(j);
     });
     // One rating per agent: the highest it gave inside this issue.
     const best = new Map<string, SeverityFinding>();

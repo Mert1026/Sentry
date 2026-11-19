@@ -70,7 +70,7 @@ export function InfoTile({
   );
   const accessibleName = label + (value === undefined ? '' : ': ' + value);
   // The tooltip says what a tile shows even when its text is hidden in a narrow panel.
-  const tooltip = title ?? (iconWhenNarrow || count ? accessibleName : undefined);
+  const tooltip = title ?? (iconWhenNarrow || count || compact ? accessibleName : undefined);
   return onClick === undefined ? (
     <div className={className} role="group" aria-label={accessibleName} title={tooltip}>
       {body}

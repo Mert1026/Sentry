@@ -9,16 +9,21 @@ import type { SeverityDisagreement } from '../../shared/severity-disagreement.js
 export function SeverityDisagreements({
   items,
   agentName,
+  showTitle = true,
 }: {
   readonly items: readonly SeverityDisagreement[];
   readonly agentName: (agent: string) => string;
+  /** False where the caller already shows the title, such as the run Overview's own section. */
+  readonly showTitle?: boolean;
 }): React.JSX.Element | null {
   if (items.length === 0) return null;
   return (
     <div className="severity-disagreements" role="note">
-      <div className="section-title" style={{ marginBottom: 4 }}>
-        Agents rated these differently
-      </div>
+      {showTitle ? (
+        <div className="section-title" style={{ marginBottom: 4 }}>
+          Agents rated these differently
+        </div>
+      ) : null}
       <p className="metadata" style={{ margin: '0 0 6px' }}>
         Severity is each agent’s own judgment. These look like the same issue, rated differently:
       </p>
