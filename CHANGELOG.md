@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- **A clearer agent box on the run canvas.** Each box has a fixed width and every line is trimmed to it,
+  so long model names and translated words no longer spill out. It shows the name, the model without its
+  provider prefix, a status badge with the elapsed time, the stage bars across the full width with how many
+  stages are done and where the agent is, the live activity line while it works, three equal cells for
+  findings, evidence and the secrets light, and a thin bar of the findings by severity.
 - **Token counts mean the same for every agent.** Input is now the whole prompt (new tokens plus cache
   reads and writes) and cached is the cached part of it, so Claude no longer shows a few hundred input
   tokens next to the others' hundreds of thousands. OpenCode and ChatGPT count their reasoning tokens

@@ -37,10 +37,88 @@ describe('canvas node components', () => {
     expect(html).toContain('Muse');
     expect(html).toContain('muse-spark-1.3-contributor');
     expect(html).toContain('Read src/auth/session.ts');
-    expect(html).toContain('1 finding');
-    expect(html).toContain('4 evidence');
+    // Each count is a number with its word under it.
+    expect(html).toContain('<strong>1</strong><span>finding</span>');
+    expect(html).toContain('<strong>4</strong><span>evidence</span>');
     expect(html).not.toContain('Thinking');
     expect(html).not.toContain('%');
+  });
+
+  it('shows the model without its provider prefix, and keeps the full id in the tooltip', () => {
+    const view = { ...makeAgentNodeView(), model: 'opencode-go/muse-spark-1.3-contributor' };
+    const html = renderToStaticMarkup(
+      withFlow(
+        React.createElement(AgentCanvasNode, {
+          id: 'agent-x',
+          type: 'agentNode',
+          selected: false,
+          zIndex: 1,
+          isConnectable: false,
+          xPos: 0,
+          yPos: 0,
+          dragging: false,
+          data: {
+            label: view.displayName,
+            status: view.status,
+            kind: 'agent',
+            payload: { view, agentStackId: view.agentStackId },
+          },
+        } as never),
+      ),
+    );
+    expect(html).toContain(
+      'title="opencode-go/muse-spark-1.3-contributor">muse-spark-1.3-contributor<',
+    );
+  });
+
+  it('shows how far the agent got and where, and a severity bar for its findings', () => {
+    const base = makeAgentNodeView({ status: 'running' });
+    const view = {
+      ...base,
+      findingsCount: 4,
+      severityCounts: { critical: 1, medium: 3 },
+      stages: base.stages.map((stage, index) => ({
+        ...stage,
+        state:
+          index < 3
+            ? ('completed' as const)
+            : index === 3
+              ? ('active' as const)
+              : ('not_started' as const),
+      })),
+    };
+    const html = renderToStaticMarkup(
+      withFlow(
+        React.createElement(AgentCanvasNode, {
+          id: 'agent-x',
+          type: 'agentNode',
+          selected: false,
+          zIndex: 1,
+          isConnectable: false,
+          xPos: 0,
+          yPos: 0,
+          dragging: false,
+          data: {
+            label: view.displayName,
+            status: view.status,
+            kind: 'agent',
+            payload: { view, agentStackId: view.agentStackId },
+          },
+        } as never),
+      ),
+    );
+    expect(html).toContain('<span class="node-stage-count">3/' + view.stages.length + '</span>');
+    expect(html).toContain('aria-label="1 critical, 3 medium"');
+    // Widths come from flex proportions, never from percentages.
+    expect(html).toContain('class="sev-critical" style="flex-grow:1"');
+    expect(html).toContain('class="sev-medium" style="flex-grow:3"');
+  });
+
+  it('keeps every line of the agent node inside its width', () => {
+    const css = readFileSync(resolve(process.cwd(), 'src/renderer/styles.css'), 'utf8');
+    expect(css).toMatch(/\.flow-node\.agent-node \{[^}]*width: 244px/);
+    expect(css).toMatch(/\.flow-node\.agent-node \.node-name \{[^}]*text-overflow: ellipsis/);
+    expect(css).toMatch(/\.flow-node\.agent-node \.node-stat span \{[^}]*text-overflow: ellipsis/);
   });
 
   it('has no clock chip in the footer, only the counts', () => {
@@ -65,9 +143,9 @@ describe('canvas node components', () => {
         } as never),
       ),
     );
-    const footer = html.slice(html.indexOf('class="metrics"'));
+    const footer = html.slice(html.indexOf('class="node-stats"'));
     expect(footer).not.toContain('Elapsed time');
-    expect(footer.match(/metric-chip/g)).toHaveLength(2);
+    expect(footer.match(/class="node-stat[ "]/g)).toHaveLength(2);
     // The time stays in the status line under the name.
     expect(html).toContain('01:42');
   });
