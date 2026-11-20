@@ -94,6 +94,10 @@ const api: SentryDesktopApi & {
         input?.agentStackIds === undefined ? {} : { agentStackIds: input.agentStackIds },
       ),
   },
+  models: {
+    catalog: () => invoke('models:catalog', {}),
+    refresh: () => invoke('models:refresh', {}),
+  },
   toolchains: {
     status: () => invoke('toolchains:status', {}),
     install: (packId: string, version: string) => invoke('toolchains:install', { packId, version }),

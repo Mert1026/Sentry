@@ -167,6 +167,8 @@ export const DesktopChannelSchemas: Record<string, z.ZodTypeAny> = {
     .object({ agentStackIds: z.array(z.string().min(1).max(200)).max(10).optional() })
     .strict(),
   'system:info': z.object({}).strict(),
+  'models:catalog': z.object({}).strict(),
+  'models:refresh': z.object({}).strict(),
   'toolchains:status': z.object({}).strict(),
   'toolchains:custom-status': z.object({}).strict(),
   'toolchains:custom-install': z
@@ -488,6 +490,10 @@ export async function dispatchDesktopCommand(
       return service.claudeAccountCancelLogin();
     case 'claude:account-logout':
       return service.claudeAccountLogout();
+    case 'models:catalog':
+      return service.modelCatalog();
+    case 'models:refresh':
+      return service.refreshModelCatalog();
     case 'toolchains:status':
       return service.toolchainStatus();
     case 'toolchains:install':

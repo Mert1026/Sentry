@@ -54,6 +54,27 @@ function mount(status: ReturnType<typeof vi.fn>, save = vi.fn()) {
   };
 }
 
+/** Opens the model picker of a field and chooses the model with this exact id. */
+function choose(trigger: HTMLElement, id: string): void {
+  fireEvent.click(trigger);
+  const list = within(trigger.closest('.model-picker') as HTMLElement).getByRole('listbox');
+  const option = within(list)
+    .getAllByRole('option')
+    .find((candidate) => candidate.querySelector('.model-row-id')?.textContent === id);
+  if (option === undefined) throw new Error('No option with the id ' + id);
+  fireEvent.click(option);
+}
+
+/** The ids a field's picker offers, with the list opened and closed again. */
+function offered(trigger: HTMLElement): string[] {
+  fireEvent.click(trigger);
+  const ids = within(trigger.closest('.model-picker') as HTMLElement)
+    .getAllByRole('option')
+    .map((option) => option.querySelector('.model-row-id')?.textContent ?? '');
+  fireEvent.click(trigger);
+  return ids;
+}
+
 const bothKeys = (providerHint: string, modelHint = 'kimi-k3'): Status[] => [
   statusRow('SENTRY_OPENCODE_PROVIDER', providerHint, providerHint !== ''),
   statusRow('SENTRY_OPENCODE_MODEL', modelHint),
@@ -128,20 +149,15 @@ describe('ChatGPT reasoning effort', () => {
 });
 
 describe('Providers model controls', () => {
-  it('shows a Go subscription dropdown and switches to a manual input for pay-as-you-go modes', async () => {
+  it('shows a Go subscription picker and switches to a manual input for pay-as-you-go modes', async () => {
     const query = vi.fn().mockResolvedValue(bothKeys('opencode-go'));
     const s = mount(query);
-    await waitFor(() =>
-      expect(
-        (s.openCodeCard().getByLabelText('Value for SENTRY_OPENCODE_MODEL') as HTMLElement).tagName,
-      ).toBe('SELECT'),
-    );
-    const modelSelect = s
+    const trigger = await s
       .openCodeCard()
-      .getByLabelText('Value for SENTRY_OPENCODE_MODEL') as HTMLSelectElement;
-    expect(modelSelect.tagName).toBe('SELECT');
-    expect(modelSelect.value).toBe('kimi-k3');
-    expect(within(modelSelect).getByRole('option', { name: 'glm-5.3-flash' })).toBeTruthy();
+      .findByRole('button', { name: 'Value for SENTRY_OPENCODE_MODEL' });
+    // The picker shows the saved model, and its list holds the Go models.
+    expect(trigger.textContent).toContain('kimi-k3');
+    expect(offered(trigger)).toContain('glm-5.3-flash');
 
     const providerSelect = s
       .openCodeCard()
@@ -151,7 +167,7 @@ describe('Providers model controls', () => {
       .openCodeCard()
       .getByLabelText('Value for SENTRY_OPENCODE_MODEL') as HTMLInputElement;
     expect(manual.tagName).toBe('INPUT');
-    // No model dropdown in pay-as-you-go modes: only the manual text input.
+    // No model picker in pay-as-you-go modes: only the manual text input.
     expect(manual.id).toBe('provider-SENTRY_OPENCODE_MODEL');
 
     fireEvent.change(providerSelect, { target: { value: 'openrouter' } });
@@ -160,11 +176,8 @@ describe('Providers model controls', () => {
     ).toBe('INPUT');
 
     fireEvent.change(providerSelect, { target: { value: 'opencode-go' } });
-    const back = s
-      .openCodeCard()
-      .getByLabelText('Value for SENTRY_OPENCODE_MODEL') as HTMLSelectElement;
-    expect(back.tagName).toBe('SELECT');
-    expect(within(back).getByRole('option', { name: 'gpt-6-luna' })).toBeTruthy();
+    const back = s.openCodeCard().getByRole('button', { name: 'Value for SENTRY_OPENCODE_MODEL' });
+    expect(offered(back)).toContain('gpt-6-luna');
     // Switching modes is local draft state: nothing is saved implicitly.
     expect(query).toHaveBeenCalledOnce();
   });
@@ -179,18 +192,26 @@ describe('Providers model controls', () => {
     const deepseekSelect = (await s
       .deepSeekCard()
       .findByLabelText('Value for SENTRY_DEEPSEEK_MODEL')) as HTMLSelectElement;
-    fireEvent.change(deepseekSelect, { target: { value: 'deepseek-v4-pro' } });
-    fireEvent.click(within(deepseekSelect.parentElement!).getByRole('button', { name: 'Save' }));
+    choose(deepseekSelect, 'deepseek-v4-pro');
+    fireEvent.click(
+      within(deepseekSelect.closest('.model-picker')!.parentElement!).getByRole('button', {
+        name: 'Save',
+      }),
+    );
     await waitFor(() =>
       expect(save).toHaveBeenCalledWith('SENTRY_DEEPSEEK_MODEL', 'deepseek-v4-pro'),
     );
 
-    fireEvent.change(deepseekSelect, { target: { value: 'deepseek-v4-flash' } });
+    choose(deepseekSelect, 'deepseek-v4-flash');
     expect(s.deepSeekCard().getByText(/is a legacy alias/)).toBeTruthy();
 
-    const glmSelect = s.glmCard().getByLabelText('Value for SENTRY_GLM_MODEL') as HTMLSelectElement;
-    fireEvent.change(glmSelect, { target: { value: 'glm-5.3-flash' } });
-    fireEvent.click(within(glmSelect.parentElement!).getByRole('button', { name: 'Save' }));
+    const glmSelect = s.glmCard().getByRole('button', { name: 'Value for SENTRY_GLM_MODEL' });
+    choose(glmSelect, 'glm-5.3-flash');
+    fireEvent.click(
+      within(glmSelect.closest('.model-picker')!.parentElement!).getByRole('button', {
+        name: 'Save',
+      }),
+    );
     await waitFor(() => expect(save).toHaveBeenCalledWith('SENTRY_GLM_MODEL', 'glm-5.3-flash'));
   });
 
@@ -206,13 +227,12 @@ describe('Providers model controls', () => {
     const save = vi.fn();
     const s = mount(query, save);
 
-    // Wait for the Go dropdown (its options render only in dropdown mode).
-    await s.openCodeCard().findByRole('option', { name: 'kimi-k3' });
-    const modelSelect = s
+    // Wait for the Go picker (it only exists in the Go mode).
+    const modelTrigger = await s
       .openCodeCard()
-      .getByLabelText('Value for SENTRY_OPENCODE_MODEL') as HTMLSelectElement;
+      .findByRole('button', { name: 'Value for SENTRY_OPENCODE_MODEL' });
     // Provider prefix is understood for display; the saved id is untouched.
-    expect(modelSelect.value).toBe('kimi-k3');
+    expect(modelTrigger.textContent).toContain('kimi-k3');
     expect(s.openCodeCard().queryByText(/not in the current list/)).toBeNull();
 
     expect(s.deepSeekCard().getByText(/is a legacy alias/)).toBeTruthy();
@@ -278,8 +298,12 @@ describe('Providers model controls', () => {
     const modelSelect = (await s
       .deepSeekCard()
       .findByLabelText('Value for SENTRY_DEEPSEEK_MODEL')) as HTMLSelectElement;
-    fireEvent.change(modelSelect, { target: { value: 'deepseek-v4-pro' } });
-    fireEvent.click(within(modelSelect.parentElement!).getByRole('button', { name: 'Save' }));
+    choose(modelSelect, 'deepseek-v4-pro');
+    fireEvent.click(
+      within(modelSelect.closest('.model-picker')!.parentElement!).getByRole('button', {
+        name: 'Save',
+      }),
+    );
     await waitFor(() =>
       expect(save).toHaveBeenCalledWith('SENTRY_DEEPSEEK_MODEL', 'deepseek-v4-pro'),
     );
@@ -300,8 +324,12 @@ describe('Providers model controls', () => {
     const modelSelect = (await s
       .deepSeekCard()
       .findByLabelText('Value for SENTRY_DEEPSEEK_MODEL')) as HTMLSelectElement;
-    fireEvent.change(modelSelect, { target: { value: 'deepseek-v4-pro' } });
-    fireEvent.click(within(modelSelect.parentElement!).getByRole('button', { name: 'Save' }));
+    choose(modelSelect, 'deepseek-v4-pro');
+    fireEvent.click(
+      within(modelSelect.closest('.model-picker')!.parentElement!).getByRole('button', {
+        name: 'Save',
+      }),
+    );
     await waitFor(() =>
       expect(save).toHaveBeenCalledWith('SENTRY_DEEPSEEK_MODEL', 'deepseek-v4-pro'),
     );
@@ -351,8 +379,12 @@ describe('Providers model controls', () => {
     const modelSelect = (await s
       .deepSeekCard()
       .findByLabelText('Value for SENTRY_DEEPSEEK_MODEL')) as HTMLSelectElement;
-    fireEvent.change(modelSelect, { target: { value: 'deepseek-flash' } });
-    fireEvent.click(within(modelSelect.parentElement!).getByRole('button', { name: 'Save' }));
+    choose(modelSelect, 'deepseek-flash');
+    fireEvent.click(
+      within(modelSelect.closest('.model-picker')!.parentElement!).getByRole('button', {
+        name: 'Save',
+      }),
+    );
     await waitFor(() =>
       expect(screen.getByRole('alert').textContent).toContain('could not be stored'),
     );
@@ -374,13 +406,16 @@ describe('Providers model controls', () => {
     const modelSelect = (await s
       .deepSeekCard()
       .findByLabelText('Value for SENTRY_DEEPSEEK_MODEL')) as HTMLSelectElement;
-    const saveButton = within(modelSelect.parentElement!).getByRole('button', {
-      name: 'Save',
-    }) as HTMLButtonElement;
+    const saveButton = within(modelSelect.closest('.model-picker')!.parentElement!).getByRole(
+      'button',
+      {
+        name: 'Save',
+      },
+    ) as HTMLButtonElement;
     // The saved model is shown, but with no unsaved draft Save stays dimmed.
     expect(saveButton.disabled).toBe(true);
 
-    fireEvent.change(modelSelect, { target: { value: 'deepseek-v4-pro' } });
+    choose(modelSelect, 'deepseek-v4-pro');
     expect(saveButton.disabled).toBe(false);
     fireEvent.click(saveButton);
     await waitFor(() =>
@@ -404,8 +439,12 @@ describe('Providers model controls', () => {
     const modelSelect = (await s
       .deepSeekCard()
       .findByLabelText('Value for SENTRY_DEEPSEEK_MODEL')) as HTMLSelectElement;
-    fireEvent.change(modelSelect, { target: { value: 'deepseek-flash' } });
-    fireEvent.click(within(modelSelect.parentElement!).getByRole('button', { name: 'Save' }));
+    choose(modelSelect, 'deepseek-flash');
+    fireEvent.click(
+      within(modelSelect.closest('.model-picker')!.parentElement!).getByRole('button', {
+        name: 'Save',
+      }),
+    );
     await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Saved'));
     expect(
       (s.deepSeekCard().getByLabelText('Value for DEEPSEEK_API_KEY') as HTMLInputElement).value,

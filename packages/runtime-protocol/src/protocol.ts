@@ -115,6 +115,8 @@ export const RUNTIME_METHODS = [
   'projects.findingsByRevision',
   'projects.exportFindings',
   'projects.toolchainSelection',
+  'models.catalog',
+  'models.refresh',
   'toolchains.status',
   'toolchains.install',
   'toolchains.remove',

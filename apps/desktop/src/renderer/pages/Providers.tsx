@@ -7,7 +7,6 @@ import { Check } from 'lucide-react';
 import { sentryApi } from '../lib/sentry-api.js';
 import { AGENT_EFFORT_SETTING, effortOptions, type EffortAgent } from '../lib/agent-effort.js';
 import {
-  CUSTOM_MODEL_VALUE,
   CHATGPT_MODELS,
   DEEPSEEK_MODELS,
   LEGACY_DEEPSEEK_ALIASES,
@@ -21,6 +20,10 @@ import {
   resolveOpenCodeModelMode,
   stripKnownOpenCodePrefix,
 } from '../lib/provider-models.js';
+import { buildModelOptions } from '../lib/model-options.js';
+import { useModelCatalog } from '../lib/use-model-catalog.js';
+import { ModelPicker } from '../components/ModelPicker.js';
+import { ModelListUpdate } from '../components/ModelListUpdate.js';
 import { PageHeader } from '../components/ui/PageHeader.js';
 import { OpenAiAccountPanel } from '../components/OpenAiAccountPanel.js';
 import { ClaudeAccountPanel } from '../components/ClaudeAccountPanel.js';
@@ -442,6 +445,16 @@ export function Providers(): React.JSX.Element {
                             : OPENCODE_GO_MODELS
                     }
                     optionNote={field.modelList === 'deepseek' ? deepSeekOptionNote : undefined}
+                    legacyIds={field.modelList === 'deepseek' ? LEGACY_DEEPSEEK_ALIASES : undefined}
+                    catalogKey={
+                      field.modelList === 'deepseek'
+                        ? 'deepseek'
+                        : field.modelList === 'glm'
+                          ? 'zai'
+                          : field.modelList === 'claude'
+                            ? 'anthropic'
+                            : 'opencode-go'
+                    }
                     {...fieldProps}
                   />
                 ),
@@ -703,6 +716,10 @@ interface ModelFieldProps {
   readonly detailsLabel?: string | null | undefined;
   readonly description?: string | undefined;
   readonly optionNote?: ((id: string) => string | undefined) | undefined;
+  /** The provider in the model catalog whose updated list adds to `options`. */
+  readonly catalogKey?: string | undefined;
+  /** Ids in `options` that are old aliases rather than current models. */
+  readonly legacyIds?: readonly string[] | undefined;
 }
 function modelFieldValue(
   values: Record<string, string>,
@@ -729,26 +746,31 @@ function ModelSelectField(props: ModelFieldProps): React.JSX.Element {
   const current = modelFieldValue(props.values, props.name, activeHint);
   const trimmed = current.trim();
   const stripped = stripKnownOpenCodePrefix(trimmed);
-  const known =
-    trimmed === '' || props.options.includes(trimmed) || props.options.includes(stripped);
-  const selectedOption = props.options.includes(trimmed)
+  // The list that comes with the app, plus what the last update of the list added.
+  const { catalog } = useModelCatalog();
+  const modelOptions = React.useMemo(
+    () =>
+      buildModelOptions(
+        props.options,
+        props.catalogKey === undefined ? undefined : catalog?.providers[props.catalogKey],
+        { legacyIds: props.legacyIds, note: props.optionNote },
+      ),
+    [props.options, props.catalogKey, props.legacyIds, props.optionNote, catalog],
+  );
+  const optionIds = modelOptions.map((option) => option.id);
+  const known = trimmed === '' || optionIds.includes(trimmed) || optionIds.includes(stripped);
+  const selectedOption = optionIds.includes(trimmed)
     ? trimmed
-    : stripped !== trimmed && props.options.includes(stripped)
+    : stripped !== trimmed && optionIds.includes(stripped)
       ? stripped
       : '';
   const [customMode, setCustomMode] = React.useState(false);
   const showCustom = customMode || (!known && trimmed !== '');
-  const selectValue =
-    known && selectedOption !== '' ? selectedOption : customMode ? CUSTOM_MODEL_VALUE : '';
   // Save tracks the unsaved draft only: the saved hint stays visible as the
   // current value, but the button dims once there is nothing new to save.
   const hasDraft = draft.trim() !== '';
   const saveValue = current.trim();
   const onSelect = (raw: string): void => {
-    if (raw === CUSTOM_MODEL_VALUE) {
-      setCustomMode(true);
-      return;
-    }
     setCustomMode(false);
     props.setValues((prev) => ({ ...prev, [props.name]: raw }));
   };
@@ -793,27 +815,20 @@ function ModelSelectField(props: ModelFieldProps): React.JSX.Element {
           </InfoPopover>
         ) : null}
       </div>
+      {props.catalogKey === undefined ? null : <ModelListUpdate providerKey={props.catalogKey} />}
       <div
         style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 4 }}
       >
-        <select
+        <ModelPicker
           id={'provider-' + props.name}
-          aria-label={'Value for ' + props.name}
-          value={selectValue}
-          onChange={(e) => onSelect(e.target.value)}
-          style={{ minWidth: 200, flex: 1 }}
-        >
-          <option value="">Select a model…</option>
-          {props.options.map((id) => {
-            const note = props.optionNote?.(id);
-            return (
-              <option key={id} value={id}>
-                {note === undefined ? id : id + ' (' + note + ')'}
-              </option>
-            );
-          })}
-          <option value={CUSTOM_MODEL_VALUE}>Custom model id…</option>
-        </select>
+          label={'Value for ' + props.name}
+          options={modelOptions}
+          value={known ? selectedOption : ''}
+          customActive={customMode}
+          placeholder="Select a model…"
+          onSelect={onSelect}
+          onCustom={() => setCustomMode(true)}
+        />
         <button
           className="primary compact"
           disabled={!hasDraft || props.savePending}
@@ -986,6 +1001,17 @@ function OpenCodeCard(props: {
 }): React.JSX.Element {
   const providerStatus = props.byName.get('SENTRY_OPENCODE_PROVIDER');
   const modelStatus = props.byName.get('SENTRY_OPENCODE_MODEL');
+  // The suggestions for a Zen model: the list that comes with the app plus what the last update added.
+  const { catalog } = useModelCatalog();
+  const zenSuggestions = React.useMemo(
+    () => [
+      ...new Set([
+        ...OPENCODE_ZEN_MODELS,
+        ...(catalog?.providers['opencode']?.map((model) => model.id) ?? []),
+      ]),
+    ],
+    [catalog],
+  );
   const persistedProvider =
     providerStatus?.configured === true ? providerStatus.hint.trim().toLowerCase() : '';
   const draftRaw = props.values['SENTRY_OPENCODE_PROVIDER'];
@@ -1103,25 +1129,29 @@ function OpenCodeCard(props: {
           detailsLabel={null}
           description={DESCRIPTIONS['SENTRY_OPENCODE_MODEL']}
           options={modelsForOpenCodeMode('go')}
+          catalogKey="opencode-go"
           {...common}
         />
       ) : (
-        <CredentialField
-          label="Model"
-          name="SENTRY_OPENCODE_MODEL"
-          placeholder={
-            mode === 'zen'
-              ? 'e.g. gpt-5.5, claude-opus-4-6, or kimi-k3'
-              : 'e.g. anthropic/claude-sonnet-4'
-          }
-          detailsLabel={null}
-          listId={mode === 'zen' ? 'opencode-zen-model-suggestions' : undefined}
-          {...common}
-        />
+        <>
+          {mode === 'zen' ? <ModelListUpdate providerKey="opencode" /> : null}
+          <CredentialField
+            label="Model"
+            name="SENTRY_OPENCODE_MODEL"
+            placeholder={
+              mode === 'zen'
+                ? 'e.g. gpt-5.5, claude-opus-4-6, or kimi-k3'
+                : 'e.g. anthropic/claude-sonnet-4'
+            }
+            detailsLabel={null}
+            listId={mode === 'zen' ? 'opencode-zen-model-suggestions' : undefined}
+            {...common}
+          />
+        </>
       )}
       {mode === 'zen' ? (
         <datalist id="opencode-zen-model-suggestions">
-          {OPENCODE_ZEN_MODELS.map((id) => (
+          {zenSuggestions.map((id) => (
             <option key={id} value={id} />
           ))}
         </datalist>
@@ -1236,6 +1266,7 @@ function ChatGptCard(props: {
         description={DESCRIPTIONS['SENTRY_CHATGPT_MODEL']}
         options={CHATGPT_MODELS}
         optionNote={chatGptModelNote}
+        catalogKey="openai"
         {...common}
       />
       <div style={{ marginBottom: 12 }}>
@@ -1310,6 +1341,7 @@ function ClaudeCard(props: {
         detailsLabel="Explanation"
         description={DESCRIPTIONS['SENTRY_ANTHROPIC_MODEL']}
         options={ANTHROPIC_CLAUDE_MODELS}
+        catalogKey="anthropic"
         {...common}
       />
       <div style={{ marginBottom: 12 }}>

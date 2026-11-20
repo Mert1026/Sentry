@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+- **A better model picker, with an Update list button.** In Settings → Providers the model of each agent is chosen in
+  a searchable list instead of a plain drop-down: every row shows the model's name and its exact id, a badge (New or
+  Legacy), its context size and release date, current models first and older ones after. **Update list** fetches the
+  public model catalog (models.dev, the one OpenCode uses; no account, nothing of yours is sent), keeps it under the
+  data folder so it works offline, and adds the models the app did not know, marked New. The list that comes with the
+  app stays as the baseline and nothing is taken away. Writing your own model id is still the last row of every list,
+  for a model that is in no list. New runtime methods `models.catalog` and `models.refresh`; Bulgarian text included.
 - **A more structured run header.** The facts under the run title are three labelled groups side by side: the run
   (project, started, completed, duration), its results (agents, findings, evidence, in larger numbers) and its
   identifiers (run, snapshot and revision ids with copy buttons). Each fact is a label with its value on one line,

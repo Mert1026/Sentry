@@ -73,9 +73,9 @@ describe('Providers harness binary section', () => {
     expect(html).toContain('OpenAI API key');
     expect(html).toContain('Value for OPENAI_API_KEY');
     expect(html).toContain('Value for SENTRY_CHATGPT_MODEL');
-    // The ChatGPT model is a dropdown of OpenAI models, like the other agents.
-    expect(html).toContain('<option value="gpt-6.1-sol">gpt-6.1-sol</option>');
-    expect(html).toContain('gpt-5.5-pro (higher-effort Pro model (slower, costs more))');
+    // The ChatGPT model is a picker of OpenAI models, like the other agents, with a button to update its list.
+    expect(html).toContain('aria-label="Value for SENTRY_CHATGPT_MODEL"');
+    expect(html).toContain('Update list');
     expect(html).toContain('ChatGPT');
     expect(html).toContain('Value for DEEPSEEK_API_KEY');
     expect(html).toContain('Value for ANTHROPIC_AUTH_TOKEN');
@@ -91,7 +91,7 @@ describe('Providers harness binary section', () => {
     );
     expect(html).toContain('Claude');
     expect(html).toContain('Value for SENTRY_ANTHROPIC_MODEL');
-    expect(html).toContain('<option value="claude-sonnet-5-5">claude-sonnet-5-5</option>');
+    expect(html).toContain('aria-label="Value for SENTRY_ANTHROPIC_MODEL"');
     // Two ways to sign in, chosen with a switch like ChatGPT's: an Anthropic API key (shown by
     // default) or a Claude account sign-in, never a pasted token field.
     expect(html).toContain('Sign in with');

@@ -44,6 +44,8 @@ export const IPC_CHANNELS = [
   'settings:set',
   'production:readiness',
   'system:info',
+  'models:catalog',
+  'models:refresh',
   'toolchains:status',
   'toolchains:install',
   'toolchains:remove',
@@ -230,6 +232,28 @@ export interface ClaudeAccountStatus {
   /** Sign-in link while a login is waiting. */
   readonly loginUrl?: string;
   readonly error?: string;
+}
+
+/** One model a provider offers, from the public model catalog. */
+export interface CatalogModel {
+  readonly id: string;
+  readonly name: string;
+  readonly releasedAt?: string;
+  readonly context?: number;
+  readonly deprecated?: boolean;
+}
+
+/** The models each agent's provider offers, as of the last update of the list. */
+export interface ModelCatalog {
+  readonly fetchedAt: string;
+  readonly source: string;
+  readonly providers: Readonly<Record<string, readonly CatalogModel[]>>;
+}
+
+export interface ModelCatalogRefresh {
+  readonly catalog: ModelCatalog;
+  /** Model ids that were not in the previous copy, per provider. */
+  readonly added: Readonly<Record<string, readonly string[]>>;
 }
 
 export interface CustomAddonStatus {
@@ -435,6 +459,12 @@ export interface SentryDesktopApi {
     }>;
     selectDistro(distro: string): Promise<{ saved: string; restartRequired: boolean }>;
     reclaimSpace(): Promise<WslSpaceResult>;
+  };
+  readonly models: {
+    /** The list from the last update, or null before the first one. */
+    catalog(): Promise<ModelCatalog | null>;
+    /** Fetches the public model catalog and keeps it. */
+    refresh(): Promise<ModelCatalogRefresh>;
   };
   readonly toolchains: {
     status(): Promise<ToolchainPackStatus[]>;

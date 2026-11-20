@@ -79,6 +79,7 @@ import {
 } from '@qa/runtime-protocol';
 
 import { runtimeReleaseIdentity } from './distribution.js';
+import { ModelCatalogStore } from './model-catalog.js';
 import { ToolchainManager } from './toolchains.js';
 import { OpenAiAccount } from './openai-account.js';
 import { ClaudeAccount } from './claude-account.js';
@@ -543,6 +544,7 @@ export class SentryRuntimeHost {
   private readonly needsBuilds = new Map<string, AbortController>();
   private readonly needsErrors = new Map<string, string>();
   private readonly toolchains: ToolchainManager;
+  private readonly modelCatalog: ModelCatalogStore;
   private readonly openAiAccount: OpenAiAccount;
   private readonly claudeAccount: ClaudeAccount;
   private readonly activeImports = new Set<AbortController>();
@@ -565,6 +567,7 @@ export class SentryRuntimeHost {
     this.notify = notify;
     this.dataRoot = dataRootOverride ?? defaultLinuxDataRoot();
     this.toolchains = new ToolchainManager(this.dataRoot);
+    this.modelCatalog = new ModelCatalogStore(this.dataRoot);
     this.openAiAccount = new OpenAiAccount({ dataRoot: this.dataRoot });
     void this.refreshOpenAiAccountReady();
     this.claudeAccount = new ClaudeAccount({
@@ -1765,6 +1768,10 @@ export class SentryRuntimeHost {
         return this.projectDoctor(requireString(params, 'projectId'));
       case 'projects.suggestTargets':
         return this.suggestTargets(requireString(params, 'projectId'));
+      case 'models.catalog':
+        return (await this.modelCatalog.read()) ?? null;
+      case 'models.refresh':
+        return this.modelCatalog.refresh();
       case 'toolchains.status':
         return this.toolchains.status();
       case 'toolchains.install':
