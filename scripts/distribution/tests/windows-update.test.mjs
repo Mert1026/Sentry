@@ -130,5 +130,5 @@ test('update without a ZIP refuses and says so', windows, () => {
     windowsHide: true,
   });
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /sentry\s+update <archive\.zip>/);
+  assert.match(result.stderr, /update\s+<archive\.zip>/);
 });

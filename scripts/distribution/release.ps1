@@ -88,7 +88,7 @@ switch ($Command) {
     if ([IO.Path]::GetExtension($archive) -ne '.zip') { throw 'Pass the .zip release archive.' }
     [void](Confirm-SentryArchiveChecksum -Archive $archive)
     $trust = Confirm-SentryArchiveAttestation -Archive $archive -Skip ([bool]$SkipAttestation)
-    $hash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+    $hash = Get-SentryFileSha256 -Path $archive
     $target = Join-Path $env:LOCALAPPDATA ('Sentry\distributions\' + $hash.Substring(0, 12))
     $newRoot = Expand-SentryArchive -Archive $archive -Destination $target
     # The running archive's own checker judges the new one: the new archive's code is not trusted yet.

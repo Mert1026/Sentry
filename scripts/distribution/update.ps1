@@ -30,6 +30,14 @@ function Compare-SentryVersion {
   return $(if ($preParts.Count -lt $otherParts.Count) { -1 } else { 1 })
 }
 
+# SHA256 of a file, lower case. Plain .NET, so it does not depend on module auto-loading.
+function Get-SentryFileSha256 {
+  param([Parameter(Mandatory = $true)][string]$Path)
+  $stream = [IO.File]::OpenRead($Path)
+  try { return ([BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash($stream)) -replace '-', '').ToLowerInvariant() }
+  finally { $stream.Dispose() }
+}
+
 # The SHA256 the .sha256 file beside the ZIP promises, checked against the ZIP itself. Returns the hash.
 function Confirm-SentryArchiveChecksum {
   param([Parameter(Mandatory = $true)][string]$Archive)
@@ -40,7 +48,7 @@ function Confirm-SentryArchiveChecksum {
   $line = (Get-Content -LiteralPath $sidecar -TotalCount 1)
   $expected = ([string]$line -split '\s+')[0].ToLowerInvariant()
   if ($expected -notmatch '^[0-9a-f]{64}$') { throw 'The checksum file is not a SHA256 checksum.' }
-  $actual = (Get-FileHash -LiteralPath $Archive -Algorithm SHA256).Hash.ToLowerInvariant()
+  $actual = Get-SentryFileSha256 -Path $Archive
   if ($actual -ne $expected) { throw 'The ZIP does not match its checksum. It is damaged or was changed; download it again.' }
   return $actual
 }
