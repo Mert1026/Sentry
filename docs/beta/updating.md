@@ -3,8 +3,8 @@
 Packaged Windows Stable uses the [distribution upgrade procedure](../setup/distribution.md).
 This path is retained for source-launcher compatibility; source channels below are separate from packaged installation.
 
-Archive `update` refuses development tracking; source commands below keep their
-existing policy.
+Archive `update` never tracks a branch: it installs only a ZIP you name (`sentry update <archive.zip>`, see the
+distribution guide); source commands below keep their existing policy.
 
 ## Beta channel: explicit tags
 
