@@ -243,7 +243,16 @@ Environment's matching runtime, existing projects/history/provider settings and
 stopped backup until acceptance. A new archive does not require deleting WSL or
 removing user data. Failed setup must preserve the prior active runtime.
 
-`sentry update` in an archive always refuses. It never follows origin/dev,
+`sentry update` in an archive installs only a ZIP you name: `sentry update <archive.zip>`. Download the ZIP
+and its `.sha256` file from the Release page into the same folder first. The command checks the checksum
+and, when the GitHub CLI (`gh`) is installed, the build attestation that shows the ZIP was built by this
+repository's workflow (without `gh` it warns that only the checksum was checked). It extracts the ZIP into
+`%LOCALAPPDATA%\Sentry\distributions\<id>`, validates it, and refuses the same or an older version, since
+an older program can corrupt data a newer one migrated. It asks before continuing (`-NonInteractive` skips the
+question), stops Desktop, saves a backup of the Desktop profile and the Linux data (database, accounts,
+projects; not the reinstallable tools) under `Documents\Sentry backups\<time>-before-<version>`, then
+runs the new archive's own `setup`. If setup fails, the previous install and runtime stay in place. The
+previous archive folder is kept until you delete it. The command never follows origin/dev,
 origin/main, or downloads another candidate. Source clones retain the development-only updater;
 pinned source-beta tags retain their existing refusal. Successful Windows v1.0.1 and later
 setup registers the per-user command for the chosen archive. Keep that directory

@@ -4,6 +4,7 @@ $CommandArguments = @($args)
 $Command = 'help'
 $Distro = ''
 $NonInteractive = $false
+$UpdateArchive = ''
 if ($CommandArguments.Count -gt 0) {
   if ($CommandArguments[0] -eq '-Command') {
     if ($CommandArguments.Count -lt 2) { throw '-Command requires a value' }
@@ -20,18 +21,22 @@ if ($Command -ne 'cli') {
         $index++; $Distro = [string]$CommandArguments[$index]
       }
       '-NonInteractive' { $NonInteractive = $true }
-      default { throw ('Unknown launcher argument: ' + $CommandArguments[$index]) }
+      default {
+        # `update` takes the ZIP to install as its one positional argument.
+        if ($Command -eq 'update' -and $UpdateArchive -eq '' -and -not ([string]$CommandArguments[$index]).StartsWith('-')) { $UpdateArchive = [string]$CommandArguments[$index] }
+        else { throw ('Unknown launcher argument: ' + $CommandArguments[$index]) }
+      }
     }
   }
 }
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 if ($Command -in @('help', '--help', '-h')) {
-  Write-Host 'Sentry pinned distribution: setup | tools | open | stop | status | doctor | version | cli | register-command | help'
-  Write-Host 'Extract every approved archive into a separate version/SHA directory. See INSTALL.md. No automatic updates.'
+  Write-Host 'Sentry pinned distribution: setup | update <archive.zip> | tools | open | stop | status | doctor | version | cli | register-command | help'
+  Write-Host 'Extract every approved archive into a separate version/SHA directory. See INSTALL.md. Updates are manual: download the ZIP and its .sha256, then run: sentry update <archive.zip>'
   exit 0
 }
-if ($Command -eq 'update') { Write-Error 'Pinned release: verify an approved archive, stop Sentry, then run its setup. No development update.'; exit 1 }
+if ($Command -eq 'update' -and $UpdateArchive -eq '') { Write-Error 'Pass the release ZIP you downloaded: sentry update <archive.zip>. Sentry never downloads or follows a branch itself.'; exit 1 }
 . (Join-Path $root 'scripts/distribution/verify.ps1')
 $manifest = Get-SentryDistribution -Root $root
 if ($Command -eq 'version') { $manifest | Select-Object product,version,sourceCommit,targetPlatform | ConvertTo-Json; exit 0 }
@@ -48,6 +53,7 @@ Import-Module (Join-Path $root 'scripts/launcher/SentryLauncher.psm1') -Force -D
 $exe = Join-Path $root 'desktop/Sentry.exe'
 . (Join-Path $root 'scripts/distribution/maintenance.ps1')
 . (Join-Path $root 'scripts/distribution/register-command.ps1')
+. (Join-Path $root 'scripts/distribution/update.ps1')
 function Get-DistributionDistro {
   $cfg = Get-SentryLauncherConfig
   $previous = [string]$cfg['selectedDistro']
@@ -74,6 +80,41 @@ switch ($Command) {
     Set-SentryLauncherConfig @{ selectedDistro = $selected }
     Register-SentryDistributionCommand -Root $root
     Write-Host 'Core installed. Next: sentry tools, then sentry open (new terminal). Configure credentials in Settings -> Providers.'
+  }
+  'update' {
+    $archive = (Resolve-Path -LiteralPath $UpdateArchive).Path
+    if ([IO.Path]::GetExtension($archive) -ne '.zip') { throw 'Pass the .zip release archive.' }
+    [void](Confirm-SentryArchiveChecksum -Archive $archive)
+    $trust = Confirm-SentryArchiveAttestation -Archive $archive
+    $hash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+    $target = Join-Path $env:LOCALAPPDATA ('Sentry\distributions\' + $hash.Substring(0, 12))
+    $newRoot = Expand-SentryArchive -Archive $archive -Destination $target
+    # The running archive's own checker judges the new one: the new archive's code is not trusted yet.
+    $incoming = Get-SentryDistribution -Root $newRoot
+    $order = Compare-SentryVersion -Left ([string]$incoming.version) -Right ([string]$manifest.version)
+    if ($order -le 0) {
+      Remove-Item -LiteralPath $target -Recurse -Force
+      throw ('This archive is ' + $incoming.version + ' and this install is ' + $manifest.version + '. Sentry only updates to a newer version; installing an older one can corrupt the data.')
+    }
+    $majorJump = ([int](([string]$incoming.version) -split '\.')[0]) -gt ([int](([string]$manifest.version) -split '\.')[0])
+    Write-Host ('Updating Sentry ' + $manifest.version + ' to ' + $incoming.version + ' (publisher: ' + $trust + ').')
+    if ($majorJump) { Write-Host 'This is a major version: it may migrate your data in a way that cannot be undone. A backup is taken first.' }
+    if (-not $NonInteractive) {
+      if ((Read-Host 'Continue? Finish or cancel active runs first (y/N)') -notmatch '^(y|yes)$') { Remove-Item -LiteralPath $target -Recurse -Force; Write-Host 'Cancelled. Nothing was changed.'; exit 0 }
+    }
+    Stop-DistributionDesktop -Executable $exe
+    $selected = Get-DistributionDistro
+    $backup = Join-Path ([Environment]::GetFolderPath('MyDocuments')) ('Sentry backups\' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-before-' + $incoming.version)
+    Backup-SentryData -Distro $selected -Folder $backup
+    Write-Host ('Backup saved to ' + $backup)
+    $setupArguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $newRoot 'sentry.ps1'), 'setup', '-Distro', $selected)
+    if ($NonInteractive) { $setupArguments += '-NonInteractive' }
+    & powershell.exe @setupArguments
+    if ($LASTEXITCODE -ne 0) {
+      Write-Host ('Update stopped: the new version did not finish setup. The previous install is untouched at ' + $root + '. Backup: ' + $backup)
+      exit 1
+    }
+    Write-Host ('Updated to ' + $incoming.version + '. The previous version stays at ' + $root + ' until you delete that folder. Backup: ' + $backup)
   }
   'register-command' { Register-SentryDistributionCommand -Root $root }
   'open' { [void](Start-Process -FilePath $exe -ArgumentList @('--sentry-app') -WorkingDirectory (Join-Path $root 'desktop') -WindowStyle Normal); Write-Host 'Desktop launch requested; check Environment for readiness.' }

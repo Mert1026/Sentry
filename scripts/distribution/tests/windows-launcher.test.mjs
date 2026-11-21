@@ -31,6 +31,7 @@ async function invoke(t, command, failure = '') {
     join(root, 'scripts/distribution/maintenance.ps1'),
     "function Stop-DistributionDesktop { param($Executable) Write-FixtureCall 'stop' @($Executable) }\n",
   );
+  await cp(join(scripts, 'update.ps1'), join(root, 'scripts/distribution/update.ps1'));
   await writeFile(join(root, 'scripts/launcher/prerequisites.ps1'), '');
   await writeFile(
     join(root, 'scripts/launcher/wsl-setup.ps1'),

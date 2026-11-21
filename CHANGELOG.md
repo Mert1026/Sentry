@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- **`sentry update <archive.zip>` for the packaged Windows release.** Download a release ZIP and its `.sha256` file,
+  then run the command: it checks the checksum (and the GitHub build attestation when `gh` is installed), extracts the
+  ZIP beside the current install, refuses the same or an older version, backs up the Desktop profile and Linux data
+  into `Documents\Sentry backups`, and runs the new archive's own setup. A failed setup leaves the previous install
+  untouched. It never downloads or follows a branch. The distribution workflow now attests the ZIPs it builds.
 - **A more structured run header.** The facts under the run title are three labelled groups side by side: the run
   (project, started, completed, duration), its results (agents, findings, evidence, in larger numbers) and its
   identifiers (run, snapshot and revision ids with copy buttons). Each fact is a label with its value on one line,
