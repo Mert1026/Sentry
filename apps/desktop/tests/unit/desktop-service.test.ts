@@ -297,6 +297,19 @@ describe('run time limit and depth reach the runtime', () => {
     );
   });
 
+  it('sets the note limit through settings, and refuses a value outside the range', async () => {
+    const h = await harness();
+    const note = (value: string) => h.service.setRunSetting({ setting: 'note-limit', value });
+    expect(await note('20000')).toEqual({ chars: 20000, isDefault: false, unlimited: false });
+    expect(h.credentials.getValue('SENTRY_NOTE_LIMIT_CHARS')).toBe('20000');
+    expect(await note('none')).toEqual({ chars: 1_000_000, isDefault: false, unlimited: true });
+    expect(h.credentials.getValue('SENTRY_NOTE_LIMIT_CHARS')).toBe('1000000');
+    expect(await note('default')).toEqual({ chars: 5000, isDefault: true, unlimited: false });
+    expect(h.credentials.getValue('SENTRY_NOTE_LIMIT_CHARS')).toBeUndefined();
+    for (const bad of ['499', '200001', '999999', 'x', '1e5'])
+      await expect(note(bad), bad).rejects.toThrow(/note limit must be/);
+  });
+
   it('forwards the run depth', async () => {
     const h = await harness();
     const id = 'proj_01K7777777777777777777A8W1';

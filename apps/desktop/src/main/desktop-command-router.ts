@@ -167,6 +167,7 @@ export const DesktopChannelSchemas: Record<string, z.ZodTypeAny> = {
       })
       .strict(),
     z.object({ setting: z.literal('run-time-limit'), value: z.string().min(1).max(20) }).strict(),
+    z.object({ setting: z.literal('note-limit'), value: z.string().min(1).max(20) }).strict(),
   ]),
   'production:readiness': z
     .object({ agentStackIds: z.array(z.string().min(1).max(200)).max(10).optional() })

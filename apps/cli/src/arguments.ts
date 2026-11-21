@@ -2,6 +2,9 @@ import type { CliCommand } from '@qa/schemas';
 import type { SimulationScenario } from '@qa/run-engine';
 import {
   AGENT_EFFORT_LEVELS,
+  NOTE_LIMIT_CUSTOM_MAX,
+  NOTE_LIMIT_CUSTOM_MIN,
+  NOTE_LIMIT_DEFAULT,
   NOTE_LIMIT_UNLIMITED,
   RUN_TIME_LIMIT_CUSTOM_MIN_MS,
   RUN_TIME_LIMIT_DEFAULT_MS,
@@ -118,6 +121,9 @@ export type ParsedCliCommand =
   | BaseCommand<'settings.show'>
   | (BaseCommand<'settings.set-effort'> & { readonly agent: AgentName; readonly value: string })
   | (BaseCommand<'settings.set-run-limit'> & { readonly value: string })
+  | (BaseCommand<'settings.set-note-limit'> & { readonly value: string })
+  | (BaseCommand<'models.list'> & { readonly agent?: AgentName })
+  | BaseCommand<'models.update'>
   | (BaseCommand<'project.suggest-targets'> & { readonly projectId: string })
   | (BaseCommand<'project.toolchain-needs'> & { readonly projectId: string })
   | (BaseCommand<'project.toolchain-selection'> & { readonly projectId: string })
@@ -161,6 +167,28 @@ export function parseRunLimit(text: string): string {
       text,
     );
   return ms === RUN_TIME_LIMIT_DEFAULT_MS ? 'default' : String(ms);
+}
+
+/**
+ * The note limit as Desktop's setting takes it: default (5,000, the same as 5k), none (no limit), or a number of
+ * characters. Written as 5k, 20k, 12000 or 12k.
+ */
+export function parseNoteLimitArgument(text: string): string {
+  const value = text.trim().toLowerCase().replaceAll(',', '');
+  if (value === 'default' || value === '5k') return 'default';
+  if (value === 'none') return 'none';
+  const match = /^(\d{1,7})(k?)$/.exec(value);
+  const chars = match === null ? NaN : Number(match[1]) * (match[2] === 'k' ? 1000 : 1);
+  if (!(chars >= NOTE_LIMIT_CUSTOM_MIN && chars <= NOTE_LIMIT_CUSTOM_MAX))
+    fail(
+      'The note limit is default, 5k, 20k, none, or ' +
+        NOTE_LIMIT_CUSTOM_MIN +
+        ' to ' +
+        NOTE_LIMIT_CUSTOM_MAX +
+        ' characters (for example 12000 or 12k)',
+      text,
+    );
+  return chars === NOTE_LIMIT_DEFAULT ? 'default' : String(chars);
 }
 
 function fail(message: string, argument?: string): never {
@@ -223,6 +251,9 @@ export function commandHint(args: readonly string[]): CliCommand | 'unknown' {
     'settings.show',
     'settings.set-effort',
     'settings.set-run-limit',
+    'settings.set-note-limit',
+    'models.list',
+    'models.update',
     'agent.list',
     'agent.doctor',
     'run.simulate',
@@ -711,6 +742,35 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
       'qa settings run-limit <default|3h|6h|none|<number>m|<number>h>',
     );
     return { command: 'settings.set-run-limit', value: parseRunLimit(text as string) };
+  }
+  if (area === 'settings' && action === 'note-limit') {
+    assertFlags(tail, []);
+    const [text] = assertPositionals(
+      tail,
+      1,
+      'qa settings note-limit <default|5k|20k|none|<characters>>',
+    );
+    return { command: 'settings.set-note-limit', value: parseNoteLimitArgument(text as string) };
+  }
+  if (area === 'models' && action === 'list') {
+    assertFlags(tail, ['--agent']);
+    assertPositionals(
+      tail.filter((value, index) => value !== '--agent' && tail[index - 1] !== '--agent'),
+      0,
+      'qa models list [--agent opencode|deepseek|glm|chatgpt|claude]',
+    );
+    const agent = option(tail, '--agent');
+    if (agent !== undefined && !isAgentName(agent))
+      fail(
+        'Unknown agent: ' + agent + ' (expected opencode, deepseek, glm, chatgpt, or claude)',
+        agent,
+      );
+    return { command: 'models.list', ...(agent === undefined ? {} : { agent }) };
+  }
+  if (area === 'models' && action === 'update') {
+    assertFlags(tail, []);
+    assertPositionals(tail, 0, 'qa models update');
+    return { command: 'models.update' };
   }
   if (area === 'toolchain' && action === 'status') {
     assertFlags(tail, []);

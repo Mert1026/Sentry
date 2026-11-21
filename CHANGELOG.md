@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- **The command line follows Desktop.** `sentry cli settings note-limit <default|5k|20k|none|12000>` reads and sets the
+  note length limit from Settings → Application, and `settings show` reports it. `sentry cli models list [--agent ...]`
+  prints the model list behind the model picker, and `sentry cli models update` fetches the public catalog and
+  lists the new models. `capabilities` reports `features.models`. The run time limit, the reasoning effort and
+  `sentry update <archive.zip>` were already there.
 - **Settings → Application: the note length limit, and the run time limit moved here.** The counter under the notes
   for the agents (the "0 / 5000") is now a setting: 5,000 characters (default), 20,000, No limit or a custom length
   between 500 and 200,000. No limit takes any length up to one million characters. The limit holds for the note

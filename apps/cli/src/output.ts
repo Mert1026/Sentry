@@ -41,7 +41,8 @@ export function emitHumanSuccess(response: CliSuccessEnvelope, io: CliIo): void 
           'Custom add-ons: yes (toolchain custom status|remove)',
           'Notes for the agents: yes (run start --instructions, --agent-note)',
           'Run depth: yes (run start --depth fast|full)',
-          'Settings: yes (settings show|effort|run-limit)',
+          'Settings: yes (settings show|effort|run-limit|note-limit)',
+          'Models: yes (models list, models update)',
           'Run cancellation: yes',
           'Run result export: yes (run result)',
           'Async run start: yes (default; pass --wait to observe)',
@@ -184,6 +185,9 @@ export function emitHumanSuccess(response: CliSuccessEnvelope, io: CliIo): void 
           'Run time limit: ' +
             describeRunLimit(response.data.runTimeLimit.ms) +
             (response.data.runTimeLimit.isDefault ? ' (the default)' : ''),
+          ...(response.data.noteLimit === undefined
+            ? []
+            : ['Note limit: ' + describeNoteLimit(response.data.noteLimit)]),
         ].join('\n'),
       );
       return;
@@ -197,6 +201,25 @@ export function emitHumanSuccess(response: CliSuccessEnvelope, io: CliIo): void 
           (response.data.isDefault ? ' (the default)' : ''),
       );
       return;
+    case 'settings.set-note-limit':
+      io.stdout('Note limit: ' + describeNoteLimit(response.data));
+      return;
+    case 'models.list':
+      io.stdout(formatCatalog(response.data));
+      return;
+    case 'models.update': {
+      const added = Object.entries(response.data.added).flatMap(([provider, ids]) =>
+        ids.map((id) => '  ' + provider + '  ' + id),
+      );
+      io.stdout(
+        [
+          'Model list updated from ' + response.data.catalog.source,
+          added.length === 0 ? 'No new models.' : 'New models:',
+          ...added,
+        ].join('\n'),
+      );
+      return;
+    }
     case 'project.export-findings':
       io.stdout(
         'Exported ' +
@@ -308,4 +331,48 @@ export function describeRunLimit(ms: number): string {
   if (hours === 0) return minutes + (minutes === 1 ? ' minute' : ' minutes');
   if (minutes === 0) return hours + (hours === 1 ? ' hour' : ' hours');
   return hours + ' h ' + minutes + ' min';
+}
+
+function describeNoteLimit(limit: {
+  readonly chars: number;
+  readonly isDefault: boolean;
+  readonly unlimited: boolean;
+}): string {
+  return limit.unlimited
+    ? 'no limit'
+    : limit.chars.toLocaleString('en-US') +
+        ' characters' +
+        (limit.isDefault ? ' (the default)' : '');
+}
+
+function formatCatalog(catalog: {
+  readonly fetchedAt: string;
+  readonly source: string;
+  readonly providers: Readonly<
+    Record<
+      string,
+      ReadonlyArray<{
+        id: string;
+        name: string;
+        releasedAt?: string | undefined;
+        context?: number | undefined;
+      }>
+    >
+  >;
+}): string {
+  const lines = ['Model list from ' + catalog.source + ', updated ' + catalog.fetchedAt];
+  for (const [provider, models] of Object.entries(catalog.providers)) {
+    lines.push('', provider + ' (' + models.length + ')');
+    for (const model of models)
+      lines.push(
+        '  ' +
+          model.id +
+          (model.name === model.id ? '' : '  ' + model.name) +
+          (model.context === undefined
+            ? ''
+            : '  ' + Math.round(model.context / 1000) + 'k context') +
+          (model.releasedAt === undefined ? '' : '  ' + model.releasedAt.slice(0, 10)),
+      );
+  }
+  return lines.join('\n');
 }

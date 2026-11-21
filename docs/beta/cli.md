@@ -103,35 +103,54 @@ connection never cancels a run; cancel explicitly with `run cancel`.
 capabilities [--json]
 project list/add/show/update/delete/revisions/doctor
 project findings | export-findings | profile | profile-build
-settings show | effort | run-limit
+settings show | effort | run-limit | note-limit
+models list | update
 agent list | agent doctor opencode|deepseek|glm|chatgpt|claude
 run start/list/show/status/cancel/result/export
 toolchain status | install | remove
 ```
 
-### Settings: reasoning effort and the run time limit
+### Settings: reasoning effort, the run time limit and the note limit
 
 ```text
 sentry cli settings show
 sentry cli settings effort <opencode|deepseek|glm|chatgpt|claude> <level|default>
 sentry cli settings run-limit <default|3h|6h|none|90m|12h>
+sentry cli settings note-limit <default|5k|20k|none|12000>
 ```
 
-These read and change the same two settings as Desktop (Settings → Providers → Reasoning effort and
-Settings → Application → Run time limit); a change made here shows up in Desktop at once and the other way
+These read and change the same settings as Desktop (Settings → Providers → Reasoning effort and
+Settings → Application → Run time limit and Note length limit); a change made here shows up in Desktop at once and the other way
 round. `settings show` lists each agent's reasoning effort (`default` when none is saved) and the
-default run time limit with `isDefault`.
+default run time limit with `isDefault`, and the note limit (`noteLimit`: `chars`, `isDefault`, `unlimited`).
 
 - `settings effort` takes the levels that agent's tool accepts: OpenCode and ChatGPT `low`, `medium`,
   `high`; GLM `low`, `medium`, `high`, `xhigh`, `max`; DeepSeek `off`, `low`, `high`, `max`.
   `default` removes the setting. Any other level is refused with `INVALID_ARGUMENT`.
 - `settings run-limit` takes `3h` (the default, same as `default`), `6h`, `none` (the longest window,
   7 days) or a custom window from `10m` to `168h`, such as `90m` or `12h`.
-- Only these two settings can be changed this way. Credentials, models and every other setting stay
+- `settings note-limit` sets how long a note for the agents may be (`run start --instructions` and
+  `--agent-note`, and the notes fields in Desktop): `default` or `5k` (5,000 characters, the default), `20k`,
+  `none` (no limit, up to one million characters) or a number from 500 to 200,000 such as `12000` or `12k`. A
+  note longer than the saved limit is refused when the run starts, with `INVALID_ARGUMENT`.
+- Only these three settings can be changed this way. Credentials, models and every other setting stay
   in Desktop; the broker refuses them (`settings:set` accepts nothing else).
 - `run list` and `run status` report each run's `depth` (`fast` or `full`) and `timeLimitMs`, and
   `run list` and `project findings` mark fast runs with `FAST`.
-- `capabilities` reports `features.settings: true` and `features.runDepth: true`.
+- `capabilities` reports `features.settings: true`, `features.models: true` and `features.runDepth: true`.
+
+### Models: the list the model picker uses
+
+```text
+sentry cli models list [--agent opencode|deepseek|glm|chatgpt|claude] [--json]
+sentry cli models update [--json]
+```
+
+`models list` prints the model list Desktop's model picker shows (Settings → Providers): for each provider the
+exact model ids, names, context size and release date. `--agent` keeps only that agent's provider. `models
+update` fetches the public model catalog (models.dev) now, stores it and reports the model ids that were not in
+the list before (`added`). The list is only a help for choosing: an id that is in no list can still be saved in
+Desktop as a custom model id, and a model is still chosen in Desktop, not from the command line.
 
 ### Secrets check
 
