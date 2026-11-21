@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+- **A better model picker, with an Update list button.** In Settings → Providers the model of each agent is chosen in
+  a searchable list instead of a plain drop-down: every row shows the model's name and its exact id, a badge (New or
+  Legacy), its context size and release date, current models first and older ones after. **Update list** fetches the
+  public model catalog (models.dev, the one OpenCode uses; no account, nothing of yours is sent), keeps it under the
+  data folder so it works offline, and adds the models the app did not know, marked New. The list that comes with the
+  app stays as the baseline and nothing is taken away. Writing your own model id is still the last row of every list,
+  for a model that is in no list. New runtime methods `models.catalog` and `models.refresh`; Bulgarian text included.
+
 - **`sentry update <archive.zip>` for the packaged Windows release.** Download a release ZIP and its `.sha256` file,
   then run the command: it checks the checksum (and the GitHub build attestation when `gh` is installed), extracts the
   ZIP beside the current install, refuses the same or an older version, backs up the Desktop profile and Linux data

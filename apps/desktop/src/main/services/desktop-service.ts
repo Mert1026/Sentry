@@ -205,6 +205,14 @@ export class DesktopApplicationService {
     return this.call('claude.accountLogout', {});
   }
 
+  modelCatalog(): Promise<unknown> {
+    return this.call('models.catalog', {});
+  }
+
+  refreshModelCatalog(): Promise<unknown> {
+    return this.call('models.refresh', {});
+  }
+
   toolchainStatus(): Promise<unknown> {
     return this.call('toolchains.status', {});
   }
