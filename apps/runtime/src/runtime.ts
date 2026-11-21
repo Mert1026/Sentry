@@ -63,7 +63,13 @@ import {
   resolveClaudeRuntime,
 } from '@qa/harness-claude';
 import { HarnessAdapterRegistry } from '@qa/harness-protocol';
-import { RUN_TIMEOUT_MS_MAX, RUN_TIMEOUT_MS_MIN, createQARunId, nowIsoTimestamp } from '@qa/shared';
+import {
+  NOTE_LIMIT_UNLIMITED,
+  RUN_TIMEOUT_MS_MAX,
+  RUN_TIMEOUT_MS_MIN,
+  createQARunId,
+  nowIsoTimestamp,
+} from '@qa/shared';
 import { FindingExportRequestSchema } from '@qa/schemas';
 import {
   RUNTIME_EXPORT_MAX_RAW_BYTES,
@@ -1903,8 +1909,10 @@ const StartRunParamsSchema = z
       .regex(/^rev_[0-9A-HJKMNP-TV-Z]{26}$/)
       .optional(),
     includePaths: z.array(z.string().min(1).max(500)).max(100).optional(),
-    instructions: z.string().min(1).max(5000).optional(),
-    agentInstructions: z.record(z.string().min(1).max(200), z.string().min(1).max(5000)).optional(),
+    instructions: z.string().min(1).max(NOTE_LIMIT_UNLIMITED).optional(),
+    agentInstructions: z
+      .record(z.string().min(1).max(200), z.string().min(1).max(NOTE_LIMIT_UNLIMITED))
+      .optional(),
     agentStackIds: z.array(z.string().min(1).max(200)).min(1).max(10).optional(),
     runTimeoutMs: z.number().int().min(RUN_TIMEOUT_MS_MIN).max(RUN_TIMEOUT_MS_MAX).optional(),
     webAccess: z.boolean().optional(),

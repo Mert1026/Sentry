@@ -64,6 +64,9 @@ export const CLI_COMMANDS = [
   'settings.show',
   'settings.set-effort',
   'settings.set-run-limit',
+  'settings.set-note-limit',
+  'models.list',
+  'models.update',
 ] as const;
 export const CliCommandSchema = z.enum(CLI_COMMANDS);
 export type CliCommand = z.infer<typeof CliCommandSchema>;
@@ -570,6 +573,7 @@ export const CapabilitiesResultSchema = z
         findingsExport: z.literal(true).optional(),
         runDepth: z.literal(true).optional(),
         settings: z.literal(true).optional(),
+        models: z.literal(true).optional(),
         projectProfile: z.literal(true).optional(),
         toolchains: z.literal(true).optional(),
         suggestTargets: z.literal(true).optional(),
@@ -668,6 +672,9 @@ export const ToolchainChangeResultSchema = z
   .strict();
 
 /** The reasoning effort chosen for each agent and the default run time limit. */
+const NoteLimitSchema = z
+  .object({ chars: NonNegativeIntSchema, isDefault: z.boolean(), unlimited: z.boolean() })
+  .strict();
 export const SettingsShowResultSchema = z
   .object({
     reasoningEffort: z
@@ -680,6 +687,7 @@ export const SettingsShowResultSchema = z
       })
       .strict(),
     runTimeLimit: z.object({ ms: NonNegativeIntSchema, isDefault: z.boolean() }).strict(),
+    noteLimit: NoteLimitSchema.optional(),
   })
   .strict();
 export const SettingsSetEffortResultSchema = z
@@ -690,6 +698,32 @@ export const SettingsSetEffortResultSchema = z
   .strict();
 export const SettingsSetRunLimitResultSchema = z
   .object({ ms: NonNegativeIntSchema, isDefault: z.boolean() })
+  .strict();
+
+export const SettingsSetNoteLimitResultSchema = NoteLimitSchema;
+
+const CatalogModelSchema = z
+  .object({
+    id: z.string().min(1).max(300),
+    name: z.string().min(1).max(300),
+    releasedAt: z.string().max(40).optional(),
+    context: NonNegativeIntSchema.optional(),
+    deprecated: z.boolean().optional(),
+  })
+  .strict();
+const ModelCatalogSchema = z
+  .object({
+    fetchedAt: z.string().max(40),
+    source: z.string().max(300),
+    providers: z.record(z.string().max(100), z.array(CatalogModelSchema)),
+  })
+  .strict();
+export const ModelsListResultSchema = ModelCatalogSchema;
+export const ModelsUpdateResultSchema = z
+  .object({
+    catalog: ModelCatalogSchema,
+    added: z.record(z.string().max(100), z.array(z.string().max(300))),
+  })
   .strict();
 
 export const CliResultSchemas = {
@@ -730,6 +764,9 @@ export const CliResultSchemas = {
   'settings.show': SettingsShowResultSchema,
   'settings.set-effort': SettingsSetEffortResultSchema,
   'settings.set-run-limit': SettingsSetRunLimitResultSchema,
+  'settings.set-note-limit': SettingsSetNoteLimitResultSchema,
+  'models.list': ModelsListResultSchema,
+  'models.update': ModelsUpdateResultSchema,
 } as const;
 
 function successEnvelope<C extends CliCommand>(

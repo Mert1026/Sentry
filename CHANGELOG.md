@@ -4,6 +4,27 @@
 
 - **The sidebar closes from a tab on its edge.** The double-arrow button under the menu is gone. A small tab sits on
   the sidebar's right edge, like the split handle of a spreadsheet, and closes or opens the sidebar when pressed.
+
+- **A more organised Providers page.** Each agent (OpenCode, DeepSeek, GLM, ChatGPT, Claude) is one wide card with a
+  title bar, and its settings (model, keys, endpoint, reasoning effort) sit in equal panels in two columns, one column
+  on a narrow window. The two floating info buttons are now one row under the title.
+  Every card now carries the agent's logo (the marks come from the MIT-licensed `@lobehub/icons-static-svg` set and
+  belong to their owners), a line saying what the agent is for, a Ready / Needs a key chip, a brand-coloured accent,
+  and a gentle entrance and hover. Every drop-down on the page (OpenCode provider, reasoning effort) is now the same
+  custom list as the model picker, with the same keyboard use, instead of the browser's own.
+  The ChatGPT and Claude account sections are panels like the other settings, with a Signed in / Not signed in pill, and
+  the two page-level info buttons are labelled buttons (Provider credentials, Advanced runtime binaries).
+
+- **The command line follows Desktop.** `sentry cli settings note-limit <default|5k|20k|none|12000>` reads and sets the
+  note length limit from Settings → Application, and `settings show` reports it. `sentry cli models list [--agent ...]`
+  prints the model list behind the model picker, and `sentry cli models update` fetches the public catalog and
+  lists the new models. `capabilities` reports `features.models`. The run time limit, the reasoning effort and
+  `sentry update <archive.zip>` were already there.
+- **Settings → Application: the note length limit, and the run time limit moved here.** The counter under the notes
+  for the agents (the "0 / 5000") is now a setting: 5,000 characters (default), 20,000, No limit or a custom length
+  between 500 and 200,000. No limit takes any length up to one million characters. The limit holds for the note
+  to all agents and for each agent's own note, in Desktop and from the command line. The Run time limit card moved
+  from Settings → Runtime to the same new Runs section in Settings → Application.
 - **A better model picker, with an Update list button.** In Settings → Providers the model of each agent is chosen in
   a searchable list instead of a plain drop-down: every row shows the model's name and its exact id, a badge (New or
   Legacy), its context size and release date, current models first and older ones after. **Update list** fetches the

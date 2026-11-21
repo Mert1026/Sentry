@@ -45,6 +45,7 @@ export const MANAGED_PROVIDER_KEYS = [
   'SENTRY_DEEPSEEK_BINARY',
   'SENTRY_GLM_BINARY',
   'SENTRY_RUN_TIME_LIMIT_MS',
+  'SENTRY_NOTE_LIMIT_CHARS',
 ] as const;
 
 export type ManagedProviderKey = (typeof MANAGED_PROVIDER_KEYS)[number];
@@ -81,6 +82,7 @@ const MODEL_KEYS: ReadonlySet<string> = new Set([
   'SENTRY_DEEPSEEK_BINARY',
   'SENTRY_GLM_BINARY',
   'SENTRY_RUN_TIME_LIMIT_MS',
+  'SENTRY_NOTE_LIMIT_CHARS',
 ]);
 
 export interface SafeStorageLike {

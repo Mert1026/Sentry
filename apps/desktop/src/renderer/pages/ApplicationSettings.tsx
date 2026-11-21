@@ -10,6 +10,8 @@ import { SwitchButton } from '../components/SwitchButton.js';
 import { DEVELOPER_MODE_KEY, isDeveloperModeEnabled } from '../lib/developer-mode.js';
 import { useAppPreferences, type AppLanguage, type ThemeMode } from '../lib/app-preferences.js';
 import { useI18n } from '../lib/i18n.js';
+import { RunTimeLimitCard } from '../components/RunTimeLimitCard.js';
+import { NoteLimitCard } from '../components/NoteLimitCard.js';
 
 const ROW_STYLE: React.CSSProperties = {
   display: 'flex',
@@ -299,6 +301,12 @@ export function ApplicationSettings(): React.JSX.Element {
       />
       <PageSection title={t('Application')}>
         <ApplicationSettingsContent />
+      </PageSection>
+      <PageSection title={t('Runs')}>
+        <div className="settings-stack">
+          <RunTimeLimitCard />
+          <NoteLimitCard />
+        </div>
       </PageSection>
     </div>
   );
