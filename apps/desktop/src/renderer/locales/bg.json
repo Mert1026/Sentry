@@ -1012,6 +1012,5 @@
   "The model catalog is not in the expected format.": "Каталогът с модели не е в очаквания формат.",
   "The model catalog had none of the providers Sentry uses.": "В каталога с модели няма нито един от доставчиците, които Sentry използва.",
   "The model list could not be updated. Try again in a moment.": "Списъкът с модели не можа да бъде обновен. Опитайте отново след малко.",
-  "Credentials and advanced binaries": "Данни за достъп и допълнителни програми",
   "Needs a key": "Нужен е ключ"
 }

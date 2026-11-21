@@ -380,13 +380,12 @@ export function Providers(): React.JSX.Element {
         }
       />
       <div className="provider-toolbar">
-        <span className="metadata">Credentials and advanced binaries</span>
-        <InfoPopover title="Provider credentials">
+        <InfoPopover title="Provider credentials" showLabel>
           Save encrypts the credential with the OS keychain, persists it, and loads it into the host
           process immediately — it survives application restarts. Secret values are never displayed
           and never leave the desktop host process.
         </InfoPopover>
-        <InfoPopover title="Advanced runtime binaries">
+        <InfoPopover title="Advanced runtime binaries" showLabel>
           <HarnessBinaryCard
             statuses={statuses.isError ? [] : (statuses.data ?? [])}
             statusPending={statuses.isLoading}

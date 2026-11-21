@@ -9,6 +9,8 @@
   belong to their owners), a line saying what the agent is for, a Ready / Needs a key chip, a brand-coloured accent,
   and a gentle entrance and hover. Every drop-down on the page (OpenCode provider, reasoning effort) is now the same
   custom list as the model picker, with the same keyboard use, instead of the browser's own.
+  The ChatGPT and Claude account sections are panels like the other settings, with a Signed in / Not signed in pill, and
+  the two page-level info buttons are labelled buttons (Provider credentials, Advanced runtime binaries).
 - **A better model picker, with an Update list button.** In Settings → Providers the model of each agent is chosen in
   a searchable list instead of a plain drop-down: every row shows the model's name and its exact id, a badge (New or
   Legacy), its context size and release date, current models first and older ones after. **Update list** fetches the
