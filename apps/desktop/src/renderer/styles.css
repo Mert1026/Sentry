@@ -436,14 +436,14 @@ textarea:focus {
 }
 .sidebar-handle {
   position: absolute;
-  top: 50%;
+  /* Centred without a transform: the global button:active rule moves buttons by a pixel with one. */
+  top: calc(50% - 26px);
   right: -12px;
   width: 12px;
   height: 52px;
   padding: 0;
   display: grid;
   place-items: center;
-  transform: translateY(-50%);
   background: var(--surface-2);
   border: 1px solid var(--border-default);
   border-left: 0;
@@ -454,6 +454,9 @@ textarea:focus {
     right var(--dur-med) var(--ease-out),
     background var(--dur-med) var(--ease-out),
     border-color var(--dur-med) var(--ease-out);
+}
+.sidebar-handle:active:not(:disabled) {
+  transform: none;
 }
 .sidebar-handle-grip {
   width: 2px;

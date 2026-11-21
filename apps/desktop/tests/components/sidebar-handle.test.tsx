@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import React from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -38,5 +40,15 @@ describe('the sidebar handle', () => {
     expect(sidebar.className).toContain('collapsed');
     fireEvent.click(screen.getByRole('button', { name: 'Expand sidebar' }));
     expect(sidebar.className).not.toContain('collapsed');
+  });
+});
+
+describe('the sidebar handle position', () => {
+  it('does not use a transform to centre itself, so pressing it cannot move it', () => {
+    const css = readFileSync(resolve(process.cwd(), 'src/renderer/styles.css'), 'utf8');
+    const rule = /\.sidebar-handle \{([^}]*)\}/.exec(css)?.[1] ?? '';
+    expect(rule).toContain('top: calc(50% - 26px)');
+    expect(rule).not.toMatch(/^\s*transform:/m);
+    expect(css).toMatch(/\.sidebar-handle:active:not\(:disabled\) \{\s*transform: none/);
   });
 });
