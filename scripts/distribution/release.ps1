@@ -5,6 +5,7 @@ $Command = 'help'
 $Distro = ''
 $NonInteractive = $false
 $UpdateArchive = ''
+$SkipAttestation = $false
 if ($CommandArguments.Count -gt 0) {
   if ($CommandArguments[0] -eq '-Command') {
     if ($CommandArguments.Count -lt 2) { throw '-Command requires a value' }
@@ -21,6 +22,7 @@ if ($Command -ne 'cli') {
         $index++; $Distro = [string]$CommandArguments[$index]
       }
       '-NonInteractive' { $NonInteractive = $true }
+      '-SkipAttestation' { $SkipAttestation = $true }
       default {
         # `update` takes the ZIP to install as its one positional argument.
         if ($Command -eq 'update' -and $UpdateArchive -eq '' -and -not ([string]$CommandArguments[$index]).StartsWith('-')) { $UpdateArchive = [string]$CommandArguments[$index] }
@@ -85,7 +87,7 @@ switch ($Command) {
     $archive = (Resolve-Path -LiteralPath $UpdateArchive).Path
     if ([IO.Path]::GetExtension($archive) -ne '.zip') { throw 'Pass the .zip release archive.' }
     [void](Confirm-SentryArchiveChecksum -Archive $archive)
-    $trust = Confirm-SentryArchiveAttestation -Archive $archive
+    $trust = Confirm-SentryArchiveAttestation -Archive $archive -Skip ([bool]$SkipAttestation)
     $hash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
     $target = Join-Path $env:LOCALAPPDATA ('Sentry\distributions\' + $hash.Substring(0, 12))
     $newRoot = Expand-SentryArchive -Archive $archive -Destination $target

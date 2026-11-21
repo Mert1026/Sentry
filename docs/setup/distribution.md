@@ -246,7 +246,7 @@ removing user data. Failed setup must preserve the prior active runtime.
 `sentry update` in an archive installs only a ZIP you name: `sentry update <archive.zip>`. Download the ZIP
 and its `.sha256` file from the Release page into the same folder first. The command checks the checksum
 and, when the GitHub CLI (`gh`) is installed, the build attestation that shows the ZIP was built by this
-repository's workflow (without `gh` it warns that only the checksum was checked). It extracts the ZIP into
+repository's workflow (without `gh` it warns that only the checksum was checked; a release built before attestations existed has none, so pass `-SkipAttestation` for it and accept a checksum-only check). It extracts the ZIP into
 `%LOCALAPPDATA%\Sentry\distributions\<id>`, validates it, and refuses the same or an older version, since
 an older program can corrupt data a newer one migrated. It asks before continuing (`-NonInteractive` skips the
 question), stops Desktop, saves a backup of the Desktop profile and the Linux data (database, accounts,

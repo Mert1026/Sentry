@@ -48,7 +48,11 @@ function Confirm-SentryArchiveChecksum {
 # Checks the GitHub build attestation (who built the ZIP) when the GitHub CLI is installed.
 # Returns 'verified', or 'unchecked' with a warning when gh is missing; throws when gh says the ZIP is not ours.
 function Confirm-SentryArchiveAttestation {
-  param([Parameter(Mandatory = $true)][string]$Archive, [string]$Repository = 'Mert1026/Sentry')
+  param([Parameter(Mandatory = $true)][string]$Archive, [string]$Repository = 'Mert1026/Sentry', [bool]$Skip = $false)
+  if ($Skip) {
+    Write-Warning 'Publisher check skipped (-SkipAttestation): only the checksum was checked. Use this only for a release built before attestations existed.'
+    return 'unchecked'
+  }
   $gh = Get-Command gh -ErrorAction SilentlyContinue
   if ($null -eq $gh) {
     Write-Warning 'GitHub CLI (gh) is not installed, so only the checksum was checked: it proves the ZIP is not damaged, not who published it. Install gh to verify the publisher.'
