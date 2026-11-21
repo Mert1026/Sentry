@@ -4,6 +4,7 @@ import React from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Providers } from '../../src/renderer/pages/Providers.js';
+import { EFFORT_LABELS } from '../../src/renderer/lib/agent-effort.js';
 
 interface Status {
   name: string;
@@ -65,6 +66,30 @@ function choose(trigger: HTMLElement, id: string): void {
   fireEvent.click(option);
 }
 
+/** The labels a custom drop-down offers, with the list opened and closed again. */
+function labelsOf(trigger: HTMLElement): string[] {
+  fireEvent.click(trigger);
+  const labels = within(trigger.closest('.model-picker') as HTMLElement)
+    .getAllByRole('option')
+    .map((option) => option.querySelector('.model-row-name')?.textContent ?? '');
+  fireEvent.click(trigger);
+  return labels;
+}
+
+/** Opens a custom drop-down and chooses the entry with this label. */
+function pick(trigger: HTMLElement, label: string): void {
+  fireEvent.click(trigger);
+  const option = within(trigger.closest('.model-picker') as HTMLElement)
+    .getAllByRole('option')
+    .find((candidate) => candidate.querySelector('.model-row-name')?.textContent === label);
+  if (option === undefined) throw new Error('No entry labelled ' + label);
+  fireEvent.click(option);
+}
+
+/** The label the effort drop-down shows for a level ('' is the default). */
+const effortLabel = (value: string): string =>
+  value === '' ? 'Default (provider setting)' : (EFFORT_LABELS[value] as string);
+
 /** The ids a field's picker offers, with the list opened and closed again. */
 function offered(trigger: HTMLElement): string[] {
   fireEvent.click(trigger);
@@ -99,16 +124,11 @@ describe('ChatGPT reasoning effort', () => {
   it('offers Default, Low, Medium and High and shows the saved choice', async () => {
     const s = mount(vi.fn().mockResolvedValue(rows('high')));
     const card = () => within(screen.getByRole('region', { name: 'ChatGPT provider settings' }));
-    const select = (await waitFor(() =>
-      card().getByLabelText('Value for SENTRY_CHATGPT_REASONING'),
-    )) as HTMLSelectElement;
-    await waitFor(() => expect(select.value).toBe('high'));
-    expect(Array.from(select.querySelectorAll('option')).map((option) => option.value)).toEqual([
-      '',
-      'low',
-      'medium',
-      'high',
-    ]);
+    const select = await waitFor(() =>
+      card().getByRole('button', { name: 'Value for SENTRY_CHATGPT_REASONING' }),
+    );
+    await waitFor(() => expect(select.textContent).toContain(effortLabel('high')));
+    expect(labelsOf(select)).toEqual(['', 'low', 'medium', 'high'].map(effortLabel));
     expect(s.client).toBeDefined();
   });
 
@@ -137,13 +157,13 @@ describe('ChatGPT reasoning effort', () => {
         </MemoryRouter>
       </QueryClientProvider>,
     );
-    const select = (await screen.findByLabelText(
-      'Value for SENTRY_CHATGPT_REASONING',
-    )) as HTMLSelectElement;
-    await waitFor(() => expect(select.value).toBe('low'));
-    fireEvent.change(select, { target: { value: 'high' } });
+    const select = await screen.findByRole('button', {
+      name: 'Value for SENTRY_CHATGPT_REASONING',
+    });
+    await waitFor(() => expect(select.textContent).toContain(effortLabel('low')));
+    pick(select, effortLabel('high'));
     await waitFor(() => expect(save).toHaveBeenCalledWith('SENTRY_CHATGPT_REASONING', 'high'));
-    fireEvent.change(select, { target: { value: '' } });
+    pick(select, effortLabel(''));
     await waitFor(() => expect(clearKey).toHaveBeenCalledWith('SENTRY_CHATGPT_REASONING'));
   });
 });
@@ -161,8 +181,8 @@ describe('Providers model controls', () => {
 
     const providerSelect = s
       .openCodeCard()
-      .getByLabelText('Value for SENTRY_OPENCODE_PROVIDER') as HTMLSelectElement;
-    fireEvent.change(providerSelect, { target: { value: 'opencode' } });
+      .getByRole('button', { name: 'Value for SENTRY_OPENCODE_PROVIDER' });
+    pick(providerSelect, 'OpenCode Zen — pay-as-you-go (uses the OpenCode API key)');
     const manual = s
       .openCodeCard()
       .getByLabelText('Value for SENTRY_OPENCODE_MODEL') as HTMLInputElement;
@@ -170,12 +190,15 @@ describe('Providers model controls', () => {
     // No model picker in pay-as-you-go modes: only the manual text input.
     expect(manual.id).toBe('provider-SENTRY_OPENCODE_MODEL');
 
-    fireEvent.change(providerSelect, { target: { value: 'openrouter' } });
+    pick(providerSelect, 'OpenRouter — pay-as-you-go (uses the OpenRouter API key)');
     expect(
       (s.openCodeCard().getByLabelText('Value for SENTRY_OPENCODE_MODEL') as HTMLElement).tagName,
     ).toBe('INPUT');
 
-    fireEvent.change(providerSelect, { target: { value: 'opencode-go' } });
+    pick(
+      providerSelect,
+      'OpenCode Go / Go Plus — monthly subscription (uses the OpenCode API key)',
+    );
     const back = s.openCodeCard().getByRole('button', { name: 'Value for SENTRY_OPENCODE_MODEL' });
     expect(offered(back)).toContain('gpt-6-luna');
     // Switching modes is local draft state: nothing is saved implicitly.
@@ -505,15 +528,13 @@ describe('Reasoning effort for every agent', () => {
         </QueryClientProvider>,
       );
       const region = within(screen.getByRole('region', { name: `${card} provider settings` }));
-      const select = (await region.findByLabelText(`Value for ${setting}`)) as HTMLSelectElement;
-      await waitFor(() => expect(select.value).toBe(options[1]));
-      expect(Array.from(select.querySelectorAll('option')).map((option) => option.value)).toEqual(
-        options,
-      );
+      const select = await region.findByRole('button', { name: `Value for ${setting}` });
+      await waitFor(() => expect(select.textContent).toContain(effortLabel(options[1] as string)));
+      expect(labelsOf(select)).toEqual(options.map(effortLabel));
       const other = options[options.length - 1] as string;
-      fireEvent.change(select, { target: { value: other } });
+      pick(select, effortLabel(other));
       await waitFor(() => expect(save).toHaveBeenCalledWith(setting, other));
-      fireEvent.change(select, { target: { value: '' } });
+      pick(select, effortLabel(''));
       await waitFor(() => expect(clearKey).toHaveBeenCalledWith(setting));
     });
   }

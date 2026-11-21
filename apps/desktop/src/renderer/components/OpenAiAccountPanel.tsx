@@ -71,10 +71,12 @@ export function OpenAiAccountPanel({
   }, [data?.login, queryClient]);
   const shownLink = waiting ? (link ?? data?.loginUrl) : undefined;
   return (
-    <div style={{ marginBottom: 12 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+    <div className="provider-field provider-account">
+      <div className="provider-account-head">
         <span className="card-title">ChatGPT account</span>
-        <span className={data?.signedIn ? 'metadata' : 'metadata faint'}>
+        <span
+          className={'account-status ' + (data?.signedIn ? 'signed' : waiting ? 'waiting' : 'idle')}
+        >
           {data?.signedIn ? <Check size={12} aria-hidden="true" /> : null}
           {data === undefined
             ? status.isError

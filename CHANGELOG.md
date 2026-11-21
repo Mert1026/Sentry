@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+- **A more organised Providers page.** Each agent (OpenCode, DeepSeek, GLM, ChatGPT, Claude) is one wide card with a
+  title bar, and its settings (model, keys, endpoint, reasoning effort) sit in equal panels in two columns, one column
+  on a narrow window. The two floating info buttons are now one row under the title.
+  Every card now carries the agent's logo (the marks come from the MIT-licensed `@lobehub/icons-static-svg` set and
+  belong to their owners), a line saying what the agent is for, a Ready / Needs a key chip, a brand-coloured accent,
+  and a gentle entrance and hover. Every drop-down on the page (OpenCode provider, reasoning effort) is now the same
+  custom list as the model picker, with the same keyboard use, instead of the browser's own.
+  The ChatGPT and Claude account sections are panels like the other settings, with a Signed in / Not signed in pill, and
+  the two page-level info buttons are labelled buttons (Provider credentials, Advanced runtime binaries).
+
 - **The command line follows Desktop.** `sentry cli settings note-limit <default|5k|20k|none|12000>` reads and sets the
   note length limit from Settings → Application, and `settings show` reports it. `sentry cli models list [--agent ...]`
   prints the model list behind the model picker, and `sentry cli models update` fetches the public catalog and

@@ -1012,6 +1012,7 @@
   "The model catalog is not in the expected format.": "Каталогът с модели не е в очаквания формат.",
   "The model catalog had none of the providers Sentry uses.": "В каталога с модели няма нито един от доставчиците, които Sentry използва.",
   "The model list could not be updated. Try again in a moment.": "Списъкът с модели не можа да бъде обновен. Опитайте отново след малко.",
+  "Needs a key": "Нужен е ключ",
   "5,000 characters": "5 000 знака",
   "20,000 characters": "20 000 знака",
   "Note length limit": "Ограничение на дължината на бележката",
