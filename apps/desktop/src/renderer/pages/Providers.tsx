@@ -348,11 +348,26 @@ export function Providers(): React.JSX.Element {
           </>
         }
       />
-      <div className="info-aligned-row" style={{ justifyContent: 'flex-end' }}>
+      <div className="provider-toolbar">
+        <span className="metadata">Credentials and advanced binaries</span>
         <InfoPopover title="Provider credentials">
           Save encrypts the credential with the OS keychain, persists it, and loads it into the host
           process immediately — it survives application restarts. Secret values are never displayed
           and never leave the desktop host process.
+        </InfoPopover>
+        <InfoPopover title="Advanced runtime binaries">
+          <HarnessBinaryCard
+            statuses={statuses.isError ? [] : (statuses.data ?? [])}
+            statusPending={statuses.isLoading}
+            detectedOpenCodeBinary={detectedOpenCodeBinary}
+            values={values}
+            setValues={setValues}
+            onSave={(name, value) => save.mutate({ name, value })}
+            onClear={(name) => clear.mutate(name)}
+            savePending={save.isPending}
+            clearPending={clear.isPending}
+            onError={fail}
+          />
         </InfoPopover>
       </div>
       {error !== undefined ? (
@@ -394,100 +409,84 @@ export function Providers(): React.JSX.Element {
           </button>
         </div>
       ) : null}
-      <div className="cards">
+      <div className="provider-cards">
         {AGENT_CARDS.map((card) => (
-          <section className="card" key={card.title} aria-label={card.title + ' provider settings'}>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                marginBottom: 12,
-                justifyContent: 'space-between',
-              }}
-            >
+          <section
+            className="card provider-card"
+            key={card.title}
+            aria-label={card.title + ' provider settings'}
+          >
+            <div className="provider-card-head">
               <h2 className="section-title">{card.title}</h2>
               <InfoPopover title={card.title}>{card.subtitle}</InfoPopover>
             </div>
-            {card.title === 'OpenCode' ? <OpenCodeProviderGuidance byName={byName} /> : null}
-            {card.title === 'OpenCode' ? (
-              <OpenCodeCard {...fieldProps} />
-            ) : card.title === 'ChatGPT' ? (
-              <ChatGptCard {...fieldProps} onError={fail} />
-            ) : card.title === 'Claude' ? (
-              <ClaudeCard {...fieldProps} onError={fail} />
-            ) : (
-              card.fields.map((field) =>
-                field.modelList === undefined ? (
-                  <CredentialField
-                    key={field.name}
-                    label={field.label}
-                    name={field.name}
-                    placeholder={field.placeholder}
-                    detailsLabel={field.detailsLabel}
-                    {...fieldProps}
-                  />
-                ) : (
-                  <ModelSelectField
-                    key={field.name}
-                    label={field.label}
-                    name={field.name}
-                    placeholder={field.placeholder ?? 'Select a model…'}
-                    detailsLabel={field.detailsLabel}
-                    description={DESCRIPTIONS[field.name]}
-                    options={
-                      field.modelList === 'deepseek'
-                        ? DEEPSEEK_MODELS
-                        : field.modelList === 'glm'
-                          ? ZAI_GLM_MODELS
-                          : field.modelList === 'claude'
-                            ? ANTHROPIC_CLAUDE_MODELS
-                            : OPENCODE_GO_MODELS
-                    }
-                    optionNote={field.modelList === 'deepseek' ? deepSeekOptionNote : undefined}
-                    legacyIds={field.modelList === 'deepseek' ? LEGACY_DEEPSEEK_ALIASES : undefined}
-                    catalogKey={
-                      field.modelList === 'deepseek'
-                        ? 'deepseek'
-                        : field.modelList === 'glm'
-                          ? 'zai'
-                          : field.modelList === 'claude'
-                            ? 'anthropic'
-                            : 'opencode-go'
-                    }
-                    {...fieldProps}
-                  />
-                ),
-              )
-            )}
-            {/* OpenCode, ChatGPT and Claude show their own effort field inside their card. */}
-            {card.title === 'DeepSeek' || card.title === 'GLM' ? (
-              <ReasoningEffortField
-                agent={card.title === 'GLM' ? 'glm' : 'deepseek'}
-                byName={byName}
-                pending={save.isPending || clear.isPending}
-                onSave={fieldProps.onSave}
-                onClear={fieldProps.onClear}
-              />
-            ) : null}
+            <div className="provider-card-body">
+              {card.title === 'OpenCode' ? <OpenCodeProviderGuidance byName={byName} /> : null}
+              {card.title === 'OpenCode' ? (
+                <OpenCodeCard {...fieldProps} />
+              ) : card.title === 'ChatGPT' ? (
+                <ChatGptCard {...fieldProps} onError={fail} />
+              ) : card.title === 'Claude' ? (
+                <ClaudeCard {...fieldProps} onError={fail} />
+              ) : (
+                card.fields.map((field) =>
+                  field.modelList === undefined ? (
+                    <CredentialField
+                      key={field.name}
+                      label={field.label}
+                      name={field.name}
+                      placeholder={field.placeholder}
+                      detailsLabel={field.detailsLabel}
+                      {...fieldProps}
+                    />
+                  ) : (
+                    <ModelSelectField
+                      key={field.name}
+                      label={field.label}
+                      name={field.name}
+                      placeholder={field.placeholder ?? 'Select a model…'}
+                      detailsLabel={field.detailsLabel}
+                      description={DESCRIPTIONS[field.name]}
+                      options={
+                        field.modelList === 'deepseek'
+                          ? DEEPSEEK_MODELS
+                          : field.modelList === 'glm'
+                            ? ZAI_GLM_MODELS
+                            : field.modelList === 'claude'
+                              ? ANTHROPIC_CLAUDE_MODELS
+                              : OPENCODE_GO_MODELS
+                      }
+                      optionNote={field.modelList === 'deepseek' ? deepSeekOptionNote : undefined}
+                      legacyIds={
+                        field.modelList === 'deepseek' ? LEGACY_DEEPSEEK_ALIASES : undefined
+                      }
+                      catalogKey={
+                        field.modelList === 'deepseek'
+                          ? 'deepseek'
+                          : field.modelList === 'glm'
+                            ? 'zai'
+                            : field.modelList === 'claude'
+                              ? 'anthropic'
+                              : 'opencode-go'
+                      }
+                      {...fieldProps}
+                    />
+                  ),
+                )
+              )}
+              {/* OpenCode, ChatGPT and Claude show their own effort field inside their card. */}
+              {card.title === 'DeepSeek' || card.title === 'GLM' ? (
+                <ReasoningEffortField
+                  agent={card.title === 'GLM' ? 'glm' : 'deepseek'}
+                  byName={byName}
+                  pending={save.isPending || clear.isPending}
+                  onSave={fieldProps.onSave}
+                  onClear={fieldProps.onClear}
+                />
+              ) : null}
+            </div>
           </section>
         ))}
-      </div>
-      <div className="info-aligned-row" style={{ justifyContent: 'flex-end' }}>
-        <InfoPopover title="Advanced runtime binaries">
-          <HarnessBinaryCard
-            statuses={statuses.isError ? [] : (statuses.data ?? [])}
-            statusPending={statuses.isLoading}
-            detectedOpenCodeBinary={detectedOpenCodeBinary}
-            values={values}
-            setValues={setValues}
-            onSave={(name, value) => save.mutate({ name, value })}
-            onClear={(name) => clear.mutate(name)}
-            savePending={save.isPending}
-            clearPending={clear.isPending}
-            onError={fail}
-          />
-        </InfoPopover>
       </div>
       <div className="card">
         <h2 className="section-title">Forget all provider credentials</h2>
@@ -559,7 +558,7 @@ function OpenCodeProviderGuidance(props: {
 
   if (!explicit && hasOpenCodeKey && !hasOpenRouterKey) {
     return (
-      <div className="inline-notice" style={{ marginBottom: 12 }}>
+      <div className="inline-notice provider-wide">
         <strong>Provider selection needed:</strong> You saved an{' '}
         <strong>OpenCode API key (Zen &amp; Go)</strong>, while <strong>Provider</strong> is unset
         (defaults to <code>openrouter</code>). Save <code>opencode-go</code> (for an OpenCode Go
@@ -574,7 +573,7 @@ function OpenCodeProviderGuidance(props: {
     hasOpenRouterKey
   ) {
     return (
-      <div className="inline-notice" style={{ marginBottom: 12 }}>
+      <div className="inline-notice provider-wide">
         <strong>Key field mismatch:</strong> <strong>Provider</strong> is set to{' '}
         <code>{provider}</code>, which uses the <strong>OpenCode API key (Zen &amp; Go)</strong>{' '}
         field. The <strong>OpenRouter API key (Pay-as-you-go)</strong> field is only used when{' '}
@@ -607,7 +606,7 @@ function CredentialField(props: {
     !secret && item?.configured === true && item.hint !== '' ? item.hint : undefined;
   const disclosureLabel = props.detailsLabel === undefined ? 'Advanced' : props.detailsLabel;
   return (
-    <div style={{ marginBottom: 12 }}>
+    <div className="provider-field">
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <label htmlFor={'provider-' + props.name} className="card-title">
           {props.label}
@@ -777,7 +776,7 @@ function ModelSelectField(props: ModelFieldProps): React.JSX.Element {
   const selectedNote = selectedOption !== '' ? props.optionNote?.(selectedOption) : undefined;
   const disclosureLabel = props.detailsLabel === undefined ? 'Advanced' : props.detailsLabel;
   return (
-    <div style={{ marginBottom: 12 }}>
+    <div className="provider-field">
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <label htmlFor={'provider-' + props.name} className="card-title">
           {props.label}
@@ -941,7 +940,7 @@ function CredentialSourceSelector(props: {
   const active = draft !== '' ? draft : persistedValue;
   const usingOpenRouter = active === '' || active === 'openrouter';
   return (
-    <div style={{ marginBottom: 12 }}>
+    <div className="provider-field">
       <span id="credential-source-label" className="card-title">
         Credential source
       </span>
@@ -1046,13 +1045,13 @@ function OpenCodeCard(props: {
     statusPending: props.statusPending,
   };
   return (
-    <div>
+    <div className="provider-fields-root">
       {hasPersistedState ? (
-        <p className="metadata" style={{ margin: '0 0 12px' }}>
+        <p className="metadata provider-wide">
           {`Active upstream: ${persistedProvider === '' ? 'openrouter (default)' : persistedProvider}${activeModel !== undefined ? ' · ' + activeModel : ' · no model saved'}`}
         </p>
       ) : null}
-      <div style={{ marginBottom: 12 }}>
+      <div className="provider-field">
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <label htmlFor="provider-SENTRY_OPENCODE_PROVIDER" className="card-title">
             Provider
@@ -1199,7 +1198,7 @@ function ReasoningEffortField(props: {
   const options = effortOptions(props.agent);
   const known = options.some((option) => option.value === value);
   return (
-    <div style={{ marginBottom: 12 }}>
+    <div className="provider-field">
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <label htmlFor={'provider-' + name} className="card-title">
           Reasoning effort
@@ -1257,7 +1256,7 @@ function ChatGptCard(props: {
     statusPending: props.statusPending,
   };
   return (
-    <div>
+    <div className="provider-fields-root">
       <ModelSelectField
         label="Model"
         name="SENTRY_CHATGPT_MODEL"
@@ -1269,7 +1268,7 @@ function ChatGptCard(props: {
         catalogKey="openai"
         {...common}
       />
-      <div style={{ marginBottom: 12 }}>
+      <div className="provider-field">
         <span id="openai-auth-label" className="metadata">
           Sign in with
         </span>
@@ -1333,7 +1332,7 @@ function ClaudeCard(props: {
     statusPending: props.statusPending,
   };
   return (
-    <div>
+    <div className="provider-fields-root">
       <ModelSelectField
         label="Model"
         name="SENTRY_ANTHROPIC_MODEL"
@@ -1344,7 +1343,7 @@ function ClaudeCard(props: {
         catalogKey="anthropic"
         {...common}
       />
-      <div style={{ marginBottom: 12 }}>
+      <div className="provider-field">
         <span id="claude-auth-label" className="metadata">
           Sign in with
         </span>

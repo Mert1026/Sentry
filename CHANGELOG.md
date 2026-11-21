@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- **A more organised Providers page.** Each agent (OpenCode, DeepSeek, GLM, ChatGPT, Claude) is one wide card with a
+  title bar, and its settings (model, keys, endpoint, reasoning effort) sit in equal panels in two columns, one column
+  on a narrow window. The two floating info buttons are now one row under the title.
 - **A better model picker, with an Update list button.** In Settings → Providers the model of each agent is chosen in
   a searchable list instead of a plain drop-down: every row shows the model's name and its exact id, a badge (New or
   Legacy), its context size and release date, current models first and older ones after. **Update list** fetches the
