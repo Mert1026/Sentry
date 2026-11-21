@@ -39,6 +39,7 @@ test(
       'scripts/launcher/wsl-setup.ps1',
       'scripts/distribution/maintenance.ps1',
       'scripts/distribution/register-command.ps1',
+      'scripts/distribution/update.ps1',
     ])
       await writeFile(join(root, path), '');
     await writeFile(

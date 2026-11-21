@@ -52,7 +52,8 @@ What changed: [What's new](#whats-new).
 - Provider accounts for the agents you want to use. Third-party accounts and
   provider charges may apply.
 
-There is no automatic updater and no signed installer.
+There is no automatic updater and no signed installer. To move to a newer release, download its ZIP and
+`.sha256` file and run `sentry update <archive.zip>`.
 
 ## Install and start
 
@@ -78,8 +79,9 @@ More detail: [getting started](docs/getting-started.md) and the
 
 ## Updating from 2.0.0
 
-There is no automatic updater. Finish or cancel active runs, stop Sentry (`sentry stop`) and back up
-your data, then run the **Update an existing installation** block on the
+There is no automatic updater. Finish or cancel active runs, then run `sentry update <archive.zip>` with the
+downloaded ZIP (it verifies it, backs up your data and sets up the new version), or stop Sentry (`sentry stop`),
+back up your data and run the **Update an existing installation** block on the
 [v2.0.1 Release page](https://github.com/Mert1026/Sentry/releases/tag/v2.0.1): it downloads and
 verifies the new ZIP, sets up the matching runtime and registers the new command. Your projects,
 runs, history and provider settings are kept (no database migration). Afterwards check

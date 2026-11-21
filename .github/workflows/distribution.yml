@@ -6,6 +6,8 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  id-token: write
+  attestations: write
 jobs:
   archive:
     name: Windows release archive
@@ -36,6 +38,11 @@ jobs:
           }
       - name: Build and extract unsigned candidate (never publish)
         run: pnpm distribution:build windows-x64
+      # Proves which workflow built the ZIP, so `sentry update` can check the publisher with `gh attestation verify`.
+      - uses: actions/attest-build-provenance@v2
+        if: github.event_name != 'pull_request'
+        with:
+          subject-path: dist/distributions/*.zip
       # Private workflow artifacts are review candidates, not GitHub Releases.
       - uses: actions/upload-artifact@v4
         with:
