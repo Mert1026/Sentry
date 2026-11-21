@@ -48,6 +48,8 @@ export const CLI_BROKER_COMMANDS: readonly string[] = [
   'providers:status',
   'providers:detect-binaries',
   'settings:set',
+  'models:catalog',
+  'models:refresh',
   'production:readiness',
   'system:info',
   'system:active-runs',

@@ -12,6 +12,9 @@ import {
   AGENT_EFFORT_SETTING,
   EFFORT_AGENTS,
   RUN_TIME_LIMIT_DEFAULT_MS,
+  NOTE_LIMIT_CUSTOM_MAX,
+  NOTE_LIMIT_CUSTOM_MIN,
+  NOTE_LIMIT_DEFAULT,
   NOTE_LIMIT_SETTING,
   NOTE_LIMIT_UNLIMITED,
   RUN_TIME_LIMIT_SETTING,
@@ -481,8 +484,42 @@ export class DesktopApplicationService {
         z
           .object({ setting: z.literal('run-time-limit'), value: z.string().min(1).max(20) })
           .strict(),
+        z.object({ setting: z.literal('note-limit'), value: z.string().min(1).max(20) }).strict(),
       ])
       .parse(input);
+    if (parsed.setting === 'note-limit') {
+      // "default" removes the setting; "none" is the longest note; otherwise a whole number of characters.
+      if (parsed.value === 'default') {
+        await this.providerClearKey(NOTE_LIMIT_SETTING);
+        return { chars: NOTE_LIMIT_DEFAULT, isDefault: true, unlimited: false };
+      }
+      const requested = parsed.value === 'none' ? String(NOTE_LIMIT_UNLIMITED) : parsed.value;
+      const chars = /^\d{1,8}$/.test(requested) ? Number(requested) : NaN;
+      if (!(chars >= NOTE_LIMIT_CUSTOM_MIN && chars <= NOTE_LIMIT_UNLIMITED))
+        throw toError(
+          'INVALID_ARGUMENT',
+          'The note limit must be default, none, or ' +
+            NOTE_LIMIT_CUSTOM_MIN +
+            ' to ' +
+            NOTE_LIMIT_CUSTOM_MAX +
+            ' characters',
+        );
+      if (chars > NOTE_LIMIT_CUSTOM_MAX && chars !== NOTE_LIMIT_UNLIMITED)
+        throw toError(
+          'INVALID_ARGUMENT',
+          'The note limit must be default, none, or ' +
+            NOTE_LIMIT_CUSTOM_MIN +
+            ' to ' +
+            NOTE_LIMIT_CUSTOM_MAX +
+            ' characters',
+        );
+      await this.providerSaveKey(NOTE_LIMIT_SETTING, String(chars));
+      return {
+        chars,
+        isDefault: chars === NOTE_LIMIT_DEFAULT,
+        unlimited: chars === NOTE_LIMIT_UNLIMITED,
+      };
+    }
     if (parsed.setting === 'reasoning-effort') {
       const agent = parsed.agent as (typeof EFFORT_AGENTS)[number];
       const name = AGENT_EFFORT_SETTING[agent];

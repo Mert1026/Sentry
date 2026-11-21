@@ -1028,13 +1028,154 @@ describe('settings and run depth through the CLI', () => {
     }
   });
 
+  it('parses the note limit in the words and numbers Desktop knows', () => {
+    const parse = (text: string) =>
+      (parseCommand(['settings', 'note-limit', text]) as { value: string }).value;
+    expect(parse('default')).toBe('default');
+    expect(parse('5k')).toBe('default');
+    expect(parse('5000')).toBe('default');
+    expect(parse('20k')).toBe('20000');
+    expect(parse('12,000')).toBe('12000');
+    expect(parse('NONE')).toBe('none');
+    expect(parse('500')).toBe('500');
+    for (const bad of ['499', '200001', '1m', 'lots', '-5', '']) {
+      expect(() => parseCommand(['settings', 'note-limit', bad]), bad).toThrow(/note limit|Usage/);
+    }
+    expect(() => parseCommand(['settings', 'note-limit'])).toThrow(/Usage/);
+  });
+
+  it('shows and changes the note limit through the same settings channels', async () => {
+    const broker = await startFakeBroker((command, payload) => {
+      if (command === 'providers:status')
+        return [{ name: 'SENTRY_NOTE_LIMIT_CHARS', configured: true, hint: '20000' }];
+      if (command === 'settings:set') {
+        const body = payload as { setting: string; value: string };
+        if (body.setting !== 'note-limit') throw new Error('unexpected ' + body.setting);
+        const chars =
+          body.value === 'default' ? 5000 : body.value === 'none' ? 1_000_000 : Number(body.value);
+        return { chars, isDefault: chars === 5000, unlimited: chars === 1_000_000 };
+      }
+      throw new Error('unexpected ' + command);
+    });
+    try {
+      const run = (args: string[]) =>
+        executeFrontendCommand(parseCommand(args), { createClient: () => clientFor(broker) });
+      expect(await run(['settings', 'show'])).toMatchObject({
+        data: { noteLimit: { chars: 20000, isDefault: false, unlimited: false } },
+      });
+      expect(await run(['settings', 'note-limit', 'none'])).toMatchObject({
+        command: 'settings.set-note-limit',
+        data: { chars: 1_000_000, unlimited: true },
+      });
+      expect(await run(['settings', 'note-limit', '12k'])).toMatchObject({
+        data: { chars: 12000, isDefault: false, unlimited: false },
+      });
+      expect(await run(['settings', 'note-limit', 'default'])).toMatchObject({
+        data: { chars: 5000, isDefault: true },
+      });
+      expect(
+        broker.seen.filter((call) => call.command === 'settings:set').map((c) => c.payload),
+      ).toEqual([
+        { setting: 'note-limit', value: 'none' },
+        { setting: 'note-limit', value: '12000' },
+        { setting: 'note-limit', value: 'default' },
+      ]);
+    } finally {
+      await broker.close();
+    }
+  });
+
+  it('lists the model catalog, for one agent or all, and updates it', async () => {
+    const catalog = {
+      fetchedAt: '2026-11-20T09:20:00.000Z',
+      source: 'models.dev',
+      providers: {
+        deepseek: [{ id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro', context: 200000 }],
+        zai: [{ id: 'glm-5.3', name: 'GLM 5.3' }],
+        anthropic: [{ id: 'claude-opus-5-5', name: 'Claude Opus 5.5', releasedAt: '2026-05-01' }],
+      },
+    };
+    const broker = await startFakeBroker((command) => {
+      if (command === 'models:catalog') return catalog;
+      if (command === 'models:refresh')
+        return { catalog, added: { deepseek: ['deepseek-v4-pro'] } };
+      throw new Error('unexpected ' + command);
+    });
+    try {
+      const run = (args: string[]) =>
+        executeFrontendCommand(parseCommand(args), { createClient: () => clientFor(broker) });
+      const all = (await run(['models', 'list'])) as { data: { providers: object } };
+      expect(Object.keys(all.data.providers)).toEqual(['deepseek', 'zai', 'anthropic']);
+      const one = (await run(['models', 'list', '--agent', 'glm'])) as {
+        data: { providers: object };
+      };
+      expect(Object.keys(one.data.providers)).toEqual(['zai']);
+      expect(await run(['models', 'update'])).toMatchObject({
+        command: 'models.update',
+        data: { added: { deepseek: ['deepseek-v4-pro'] } },
+      });
+      expect(broker.seen.map((call) => call.command)).toEqual([
+        'models:catalog',
+        'models:catalog',
+        'models:refresh',
+      ]);
+    } finally {
+      await broker.close();
+    }
+    expect(() => parseCommand(['models', 'list', '--agent', 'bash'])).toThrow(/Unknown agent/);
+    expect(() => parseCommand(['models', 'list', 'extra'])).toThrow(/Usage/);
+    expect(() => parseCommand(['models', 'update', '--now'])).toThrow();
+  });
+
+  it('prints the note limit and the model list for people', () => {
+    const lines: string[] = [];
+    const io = { stdout: (text: string) => lines.push(text), stderr: () => undefined };
+    emitHumanSuccess(
+      {
+        schemaVersion: 1,
+        command: 'settings.set-note-limit',
+        ok: true,
+        data: { chars: 1_000_000, isDefault: false, unlimited: true },
+      } as never,
+      io,
+    );
+    emitHumanSuccess(
+      {
+        schemaVersion: 1,
+        command: 'settings.set-note-limit',
+        ok: true,
+        data: { chars: 5000, isDefault: true, unlimited: false },
+      } as never,
+      io,
+    );
+    emitHumanSuccess(
+      {
+        schemaVersion: 1,
+        command: 'models.list',
+        ok: true,
+        data: {
+          fetchedAt: '2026-11-20T09:20:00.000Z',
+          source: 'models.dev',
+          providers: { zai: [{ id: 'glm-5.3', name: 'GLM 5.3', context: 200000 }] },
+        },
+      } as never,
+      io,
+    );
+    expect(lines[0]).toBe('Note limit: no limit');
+    expect(lines[1]).toBe('Note limit: 5,000 characters (the default)');
+    expect(lines[2]).toContain('zai (1)');
+    expect(lines[2]).toContain('glm-5.3  GLM 5.3  200k context');
+  });
+
   it('says it supports settings and run depth', async () => {
     const broker = await startFakeBroker(() => ({}));
     try {
       const result = await executeFrontendCommand(parseCommand(['capabilities']), {
         createClient: () => clientFor(broker),
       });
-      expect(result).toMatchObject({ data: { features: { runDepth: true, settings: true } } });
+      expect(result).toMatchObject({
+        data: { features: { runDepth: true, settings: true, models: true } },
+      });
     } finally {
       await broker.close();
     }

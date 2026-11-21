@@ -492,6 +492,9 @@ export async function executeCommand(
     input.command === 'settings.show' ||
     input.command === 'settings.set-effort' ||
     input.command === 'settings.set-run-limit' ||
+    input.command === 'settings.set-note-limit' ||
+    input.command === 'models.list' ||
+    input.command === 'models.update' ||
     input.command === 'toolchain.status' ||
     input.command === 'toolchain.install' ||
     input.command === 'toolchain.remove' ||
