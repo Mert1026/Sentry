@@ -118,7 +118,7 @@ sentry cli settings run-limit <default|3h|6h|none|90m|12h>
 ```
 
 These read and change the same two settings as Desktop (Settings → Providers → Reasoning effort and
-Settings → Runtime → Run time limit); a change made here shows up in Desktop at once and the other way
+Settings → Application → Run time limit); a change made here shows up in Desktop at once and the other way
 round. `settings show` lists each agent's reasoning effort (`default` when none is saved) and the
 default run time limit with `isDefault`.
 
@@ -362,7 +362,7 @@ The CLI contract version stays 1; all new fields are additive and optional.
 window for that run and propagates canonically:
 CLI parser → frontend → Desktop `runs:start` → WSL `runs.start` →
 RunCoordinator execution safeguards. Omitted uses the default chosen in
-Settings → Runtime (3 hours, 6 hours, No limit or a custom value); with nothing
+Settings → Application (3 hours, 6 hours, No limit or a custom value); with nothing
 chosen that is **3 hours**. The window is a ceiling, not a target: a run ends
 when its work is done. It also decides which extra passes still have time (a
 second pass needs 40% of the window left, deepening 50% and the hazard sweep

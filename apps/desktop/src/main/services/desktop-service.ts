@@ -12,10 +12,13 @@ import {
   AGENT_EFFORT_SETTING,
   EFFORT_AGENTS,
   RUN_TIME_LIMIT_DEFAULT_MS,
+  NOTE_LIMIT_SETTING,
+  NOTE_LIMIT_UNLIMITED,
   RUN_TIME_LIMIT_SETTING,
   RUN_TIMEOUT_MS_MAX,
   RUN_TIMEOUT_MS_MIN,
   parseAgentEffort,
+  parseNoteLimit,
   parseRunTimeLimit,
 } from '@qa/shared';
 import {
@@ -47,8 +50,10 @@ const StartRunOptions = z
       .regex(/^rev_[0-9A-HJKMNP-TV-Z]{26}$/)
       .optional(),
     includePaths: z.array(z.string().min(1).max(500)).max(100).optional(),
-    instructions: z.string().min(1).max(5000).optional(),
-    agentInstructions: z.record(z.string().min(1).max(200), z.string().min(1).max(5000)).optional(),
+    instructions: z.string().min(1).max(NOTE_LIMIT_UNLIMITED).optional(),
+    agentInstructions: z
+      .record(z.string().min(1).max(200), z.string().min(1).max(NOTE_LIMIT_UNLIMITED))
+      .optional(),
     agentStackIds: z.array(z.string().min(1).max(200)).min(1).max(10).optional(),
     runTimeoutMs: z.number().int().min(RUN_TIMEOUT_MS_MIN).max(RUN_TIMEOUT_MS_MAX).optional(),
     webAccess: z.boolean().optional(),
@@ -328,6 +333,16 @@ export class DesktopApplicationService {
   async startRun(projectId: string, options: unknown): Promise<DesktopOperation> {
     const id = ProjectIdInput.parse(projectId);
     const parsed = StartRunOptions.parse(options);
+    // The notes may be as long as Settings → Application allows (5,000 characters unless changed).
+    const noteLimit = parseNoteLimit(this.deps.credentials.getValue(NOTE_LIMIT_SETTING));
+    for (const note of [parsed.instructions, ...Object.values(parsed.agentInstructions ?? {})])
+      if (note !== undefined && note.length > noteLimit)
+        throw toError(
+          'INVALID_ARGUMENT',
+          'A note is at most ' +
+            noteLimit +
+            ' characters; change the limit in Settings → Application',
+        );
     // A run that does not name its own window gets the default chosen in Settings (3 hours if none).
     const runTimeoutMs =
       parsed.runTimeoutMs ??
@@ -450,7 +465,7 @@ export class DesktopApplicationService {
 
   /**
    * Change one of the two run settings the CLI may set (the same values Settings → Providers and
-   * Settings → Runtime save). "default" removes the setting. A value the agent's tool does not take,
+   * Settings → Application save). "default" removes the setting. A value the agent's tool does not take,
    * or a window outside the allowed range, is refused rather than saved.
    */
   async setRunSetting(input: unknown): Promise<unknown> {

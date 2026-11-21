@@ -29,7 +29,7 @@ interface ProviderRow {
 }
 
 /**
- * The default time window every run gets (Settings → Runtime). Fast and Full runs share it, and a
+ * The default time window every run gets (Settings → Application). Fast and Full runs share it, and a
  * run started with its own window (the CLI's --timeout-ms) keeps that instead. 3 hours is the
  * default and removes the saved value.
  */
