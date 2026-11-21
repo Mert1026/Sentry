@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+- **Settings → Application: the note length limit, and the run time limit moved here.** The counter under the notes
+  for the agents (the "0 / 5000") is now a setting: 5,000 characters (default), 20,000, No limit or a custom length
+  between 500 and 200,000. No limit takes any length up to one million characters. The limit holds for the note
+  to all agents and for each agent's own note, in Desktop and from the command line. The Run time limit card moved
+  from Settings → Runtime to the same new Runs section in Settings → Application.
 - **A better model picker, with an Update list button.** In Settings → Providers the model of each agent is chosen in
   a searchable list instead of a plain drop-down: every row shows the model's name and its exact id, a badge (New or
   Legacy), its context size and release date, current models first and older ones after. **Update list** fetches the

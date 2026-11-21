@@ -569,6 +569,13 @@ textarea:focus {
   border-color: var(--border-strong);
   box-shadow: var(--shadow-glow);
 }
+/* The run limits sit in a column as wide as the application settings above them. */
+.settings-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: 860px;
+}
 .metric-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));

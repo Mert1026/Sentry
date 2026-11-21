@@ -1,7 +1,12 @@
 // Shared desktop command router: single validated dispatch path for Renderer IPC
 // and the external CLI broker. One behavior, one backend per command.
 import { z } from 'zod';
-import { CLI_BROKER_COMMANDS, RUN_TIMEOUT_MS_MAX, RUN_TIMEOUT_MS_MIN } from '@qa/shared';
+import {
+  CLI_BROKER_COMMANDS,
+  NOTE_LIMIT_UNLIMITED,
+  RUN_TIMEOUT_MS_MAX,
+  RUN_TIMEOUT_MS_MIN,
+} from '@qa/shared';
 import type { DesktopApplicationService } from './services/desktop-service.js';
 import type { SaveDialogOptions } from './services/export-save.js';
 import { revealSavedExport, saveExportRun } from './services/export-save.js';
@@ -53,9 +58,9 @@ export const DesktopChannelSchemas: Record<string, z.ZodTypeAny> = {
         .regex(/^rev_[0-9A-HJKMNP-TV-Z]{26}$/)
         .optional(),
       includePaths: z.array(z.string().min(1).max(500)).max(100).optional(),
-      instructions: z.string().min(1).max(5000).optional(),
+      instructions: z.string().min(1).max(NOTE_LIMIT_UNLIMITED).optional(),
       agentInstructions: z
-        .record(z.string().min(1).max(200), z.string().min(1).max(5000))
+        .record(z.string().min(1).max(200), z.string().min(1).max(NOTE_LIMIT_UNLIMITED))
         .optional(),
       agentStackIds: z.array(z.string().min(1).max(200)).min(1).max(10).optional(),
       runTimeoutMs: z.number().int().min(RUN_TIMEOUT_MS_MIN).max(RUN_TIMEOUT_MS_MAX).optional(),
@@ -92,9 +97,9 @@ export const DesktopChannelSchemas: Record<string, z.ZodTypeAny> = {
         .regex(/^rev_[0-9A-HJKMNP-TV-Z]{26}$/)
         .optional(),
       includePaths: z.array(z.string().min(1).max(500)).max(100).optional(),
-      instructions: z.string().min(1).max(5000).optional(),
+      instructions: z.string().min(1).max(NOTE_LIMIT_UNLIMITED).optional(),
       agentInstructions: z
-        .record(z.string().min(1).max(200), z.string().min(1).max(5000))
+        .record(z.string().min(1).max(200), z.string().min(1).max(NOTE_LIMIT_UNLIMITED))
         .optional(),
       agentStackIds: z.array(z.string().min(1).max(200)).min(1).max(10).optional(),
       runTimeoutMs: z.number().int().min(RUN_TIMEOUT_MS_MIN).max(RUN_TIMEOUT_MS_MAX).optional(),

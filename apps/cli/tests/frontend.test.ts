@@ -799,9 +799,13 @@ describe('cli frontend over the desktop broker', () => {
     expect(() =>
       parseCommand([...base, '--agent-note', 'opencode=a', '--agent-note', 'opencode=b']),
     ).toThrow(/twice/);
-    expect(() => parseCommand([...base, '--agent-note', 'opencode=' + 'x'.repeat(5001)])).toThrow(
-      /at most 5000/,
-    );
+    // The saved limit (5,000 by default) is checked by Desktop; the parser only holds the outer bound.
+    expect(() =>
+      parseCommand([...base, '--agent-note', 'opencode=' + 'x'.repeat(5001)]),
+    ).not.toThrow();
+    expect(() =>
+      parseCommand([...base, '--agent-note', 'opencode=' + 'x'.repeat(1_000_001)]),
+    ).toThrow(/at most 1000000/);
     expect(() => parseCommand([...base, '--agent-note'])).toThrow(/requires/);
   });
 

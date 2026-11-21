@@ -1,4 +1,4 @@
-/** Longest note the runtime takes, for the whole run or for one agent. */
+/** The default longest note, for the whole run or for one agent (Settings → Application can change it). */
 export const NOTE_MAX_CHARS = 5000;
 
 /** What the person has typed before starting a run. It starts empty for every new run. */
@@ -20,14 +20,15 @@ export const EMPTY_RUN_NOTES: RunNotesDraft = { shared: '', perAgent: false, age
 export function notesToOptions(
   draft: RunNotesDraft,
   selectedAgentIds: readonly string[],
+  limit: number = NOTE_MAX_CHARS,
 ): { instructions?: string; agentInstructions?: Record<string, string> } {
   if (!draft.perAgent) {
-    const shared = draft.shared.trim().slice(0, NOTE_MAX_CHARS);
+    const shared = draft.shared.trim().slice(0, limit);
     return shared.length === 0 ? {} : { instructions: shared };
   }
   const agentInstructions: Record<string, string> = {};
   for (const id of selectedAgentIds) {
-    const text = (draft.agents[id] ?? '').trim().slice(0, NOTE_MAX_CHARS);
+    const text = (draft.agents[id] ?? '').trim().slice(0, limit);
     if (text.length > 0) agentInstructions[id] = text;
   }
   return Object.keys(agentInstructions).length === 0 ? {} : { agentInstructions };

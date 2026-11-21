@@ -2,6 +2,7 @@ import type { CliCommand } from '@qa/schemas';
 import type { SimulationScenario } from '@qa/run-engine';
 import {
   AGENT_EFFORT_LEVELS,
+  NOTE_LIMIT_UNLIMITED,
   RUN_TIME_LIMIT_CUSTOM_MIN_MS,
   RUN_TIME_LIMIT_DEFAULT_MS,
   RUN_TIME_LIMIT_UNLIMITED_MS,
@@ -446,8 +447,12 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
         fail('--agent-note names ' + name + ', which is not in --agents', '--agent-note');
       if (agentNotes[name] !== undefined)
         fail('--agent-note names ' + name + ' twice', '--agent-note');
-      if (note.length > 5000)
-        fail('--agent-note takes at most 5000 characters per agent', '--agent-note');
+      // The limit Settings → Application sets is checked by Desktop; this is only the outer bound.
+      if (note.length > NOTE_LIMIT_UNLIMITED)
+        fail(
+          '--agent-note takes at most ' + NOTE_LIMIT_UNLIMITED + ' characters per agent',
+          '--agent-note',
+        );
       agentNotes[name] = note;
     });
     const timeoutText = option(tail, '--timeout-ms');

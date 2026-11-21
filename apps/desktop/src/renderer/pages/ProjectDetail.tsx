@@ -49,6 +49,7 @@ import {
 } from '../components/ProjectSections.js';
 import { RunNotes } from '../components/RunNotes.js';
 import { RunOptionToggle } from '../components/RunOptionToggle.js';
+import { useNoteLimit } from '../lib/use-note-limit.js';
 import { EMPTY_RUN_NOTES, notesToOptions, type RunNotesDraft } from '../lib/run-notes.js';
 import { InfoPopover } from '../components/InfoPopover.js';
 import { BlockingOverlay } from '../components/BlockingOverlay.js';
@@ -125,6 +126,7 @@ export function ProjectDetail(): React.JSX.Element {
   const [secretsCheck, setSecretsCheck] = React.useState(true);
   // Notes for the agents. Never remembered: every new run starts with an empty draft.
   const [notes, setNotes] = React.useState<RunNotesDraft>(EMPTY_RUN_NOTES);
+  const noteLimit = useNoteLimit();
   const [selectedRevisionId, setSelectedRevisionId] = React.useState<string | undefined>(undefined);
   const detail = useQuery({
     queryKey: ['project', projectId],
@@ -220,7 +222,7 @@ export function ProjectDetail(): React.JSX.Element {
     ...(secretsCheck ? {} : { secretsCheck: false }),
     ...(useProfile ? { useProfile: true } : {}),
     ...(depth === 'fast' ? { depth: 'fast' } : {}),
-    ...notesToOptions(notes, effectiveStacks),
+    ...notesToOptions(notes, effectiveStacks, noteLimit),
   });
   const onStarted = (operation: unknown): void => {
     const runId = (operation as { runId?: string }).runId;
@@ -566,7 +568,7 @@ export function ProjectDetail(): React.JSX.Element {
                       for hard-coded secrets. A Fast run covers less of the project, so it can find
                       fewer problems.
                     </p>
-                    <p>The time limit is set in Settings → Runtime.</p>
+                    <p>The time limit is set in Settings → Application.</p>
                   </InfoPopover>
                 </div>
                 <div>
@@ -711,6 +713,7 @@ export function ProjectDetail(): React.JSX.Element {
               }))}
               value={notes}
               onChange={setNotes}
+              limit={noteLimit}
             />
             <div className="project-form-section project-options-module">
               <div className="project-info-title">
