@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+- **The sidebar closes from a tab on its edge.** The double-arrow button under the menu is gone. A small tab sits on
+  the sidebar's right edge, like the split handle of a spreadsheet, and closes or opens the sidebar when pressed.
+
 - **A more organised Providers page.** Each agent (OpenCode, DeepSeek, GLM, ChatGPT, Claude) is one wide card with a
   title bar, and its settings (model, keys, endpoint, reasoning effort) sit in equal panels in two columns, one column
   on a narrow window. The two floating info buttons are now one row under the title.

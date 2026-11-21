@@ -429,8 +429,52 @@ textarea:focus {
   background: var(--bg-panel);
   color: var(--text);
 }
-.sidebar .collapse-btn {
-  margin-top: var(--space-1);
+/* The sidebar closes and opens from a small tab on its right edge, like the split handle of a spreadsheet. */
+.sidebar {
+  position: relative;
+  z-index: 6;
+}
+.sidebar-handle {
+  position: absolute;
+  /* Centred without a transform: the global button:active rule moves buttons by a pixel with one. */
+  top: calc(50% - 26px);
+  right: -12px;
+  width: 12px;
+  height: 52px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  background: var(--surface-2);
+  border: 1px solid var(--border-default);
+  border-left: 0;
+  border-radius: 0 8px 8px 0;
+  cursor: pointer;
+  transition:
+    width var(--dur-med) var(--ease-out),
+    right var(--dur-med) var(--ease-out),
+    background var(--dur-med) var(--ease-out),
+    border-color var(--dur-med) var(--ease-out);
+}
+.sidebar-handle:active:not(:disabled) {
+  transform: none;
+}
+.sidebar-handle-grip {
+  width: 2px;
+  height: 18px;
+  border-left: 1px solid var(--text-tertiary);
+  border-right: 1px solid var(--text-tertiary);
+  opacity: 0.8;
+}
+.sidebar-handle:hover,
+.sidebar-handle:focus-visible {
+  right: -16px;
+  width: 16px;
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.sidebar-handle:hover .sidebar-handle-grip,
+.sidebar-handle:focus-visible .sidebar-handle-grip {
+  border-color: var(--accent);
 }
 .sidebar .active-strip {
   margin-top: auto;
