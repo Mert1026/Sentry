@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- **The sidebar closes from a tab on its edge.** The double-arrow button under the menu is gone. A small tab sits on
+  the sidebar's right edge, like the split handle of a spreadsheet, and closes or opens the sidebar when pressed.
 - **A better model picker, with an Update list button.** In Settings → Providers the model of each agent is chosen in
   a searchable list instead of a plain drop-down: every row shows the model's name and its exact id, a badge (New or
   Legacy), its context size and release date, current models first and older ones after. **Update list** fetches the

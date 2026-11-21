@@ -125,11 +125,6 @@ a:hover {
   color: #a4c39a;
   filter: drop-shadow(0 0 6px rgba(212, 192, 11, 0.65));
 }
-.sidebar .collapse-btn {
-  margin-top: 18px;
-  color: var(--text-tertiary);
-  align-self: flex-start;
-}
 .sidebar .active-strip {
   border-color: var(--border-default);
   background: rgba(13, 18, 13, 0.55);
