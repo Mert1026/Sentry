@@ -53,3 +53,47 @@ describe('the Providers page layout', () => {
     expect(css).toMatch(/\.provider-fields-root \{[^}]*display: contents/);
   });
 });
+
+describe('the provider cards', () => {
+  it('carry each agent’s logo and a status chip, and use the custom drop-down instead of a native one', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    Object.defineProperty(window, 'sentry', {
+      configurable: true,
+      value: {
+        providers: {
+          status: vi.fn().mockResolvedValue([
+            {
+              name: 'DEEPSEEK_API_KEY',
+              configured: true,
+              source: 'persisted',
+              persistence: 'persisted',
+              hint: 'Configured',
+            },
+          ]),
+          save: vi.fn(),
+        },
+      },
+    });
+    const { container } = render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <Providers />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(container.querySelectorAll('.provider-chip')).toHaveLength(5));
+    expect(container.querySelectorAll('.provider-logo img')).toHaveLength(5);
+    const chips = [...container.querySelectorAll('.provider-card')].map((card) => [
+      card.querySelector('h2')?.textContent,
+      card.querySelector('.provider-chip')?.textContent,
+    ]);
+    expect(chips).toEqual([
+      ['OpenCode', 'Needs a key'],
+      ['DeepSeek', 'Ready'],
+      ['GLM', 'Needs a key'],
+      ['ChatGPT', 'Needs a key'],
+      ['Claude', 'Needs a key'],
+    ]);
+    expect(container.querySelectorAll('select')).toHaveLength(0);
+  });
+});

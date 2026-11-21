@@ -22,6 +22,12 @@ import {
 } from '../lib/provider-models.js';
 import { buildModelOptions } from '../lib/model-options.js';
 import { useModelCatalog } from '../lib/use-model-catalog.js';
+import { Select } from '../components/Select.js';
+import openCodeLogo from '../assets/providers/opencode.svg';
+import deepSeekLogo from '../assets/providers/deepseek.svg';
+import glmLogo from '../assets/providers/zhipu.svg';
+import chatGptLogo from '../assets/providers/openai.svg';
+import claudeLogo from '../assets/providers/claude.svg';
 import { ModelPicker } from '../components/ModelPicker.js';
 import { ModelListUpdate } from '../components/ModelListUpdate.js';
 import { PageHeader } from '../components/ui/PageHeader.js';
@@ -104,6 +110,31 @@ interface AgentCardSpec {
   readonly subtitle: string;
   readonly fields: ReadonlyArray<AgentFieldSpec>;
 }
+
+/** Each agent's logo, and the settings that show it can run: a key, or a signed-in account. */
+const CARD_BRAND: Readonly<
+  Record<string, { logo: string; tone: string; keys: readonly string[]; account?: string }>
+> = {
+  OpenCode: {
+    logo: openCodeLogo,
+    tone: 'opencode',
+    keys: ['OPENCODE_API_KEY', 'OPENROUTER_API_KEY'],
+  },
+  DeepSeek: { logo: deepSeekLogo, tone: 'deepseek', keys: ['DEEPSEEK_API_KEY'] },
+  GLM: { logo: glmLogo, tone: 'glm', keys: ['ANTHROPIC_AUTH_TOKEN'] },
+  ChatGPT: {
+    logo: chatGptLogo,
+    tone: 'chatgpt',
+    keys: ['OPENAI_API_KEY'],
+    account: 'SENTRY_OPENAI_AUTH',
+  },
+  Claude: {
+    logo: claudeLogo,
+    tone: 'claude',
+    keys: ['ANTHROPIC_API_KEY'],
+    account: 'SENTRY_ANTHROPIC_AUTH',
+  },
+};
 
 const AGENT_CARDS: readonly AgentCardSpec[] = [
   {
@@ -417,8 +448,29 @@ export function Providers(): React.JSX.Element {
             aria-label={card.title + ' provider settings'}
           >
             <div className="provider-card-head">
-              <h2 className="section-title">{card.title}</h2>
-              <InfoPopover title={card.title}>{card.subtitle}</InfoPopover>
+              <span className="provider-logo" aria-hidden="true">
+                <img src={CARD_BRAND[card.title]?.logo} alt="" width={28} height={28} />
+              </span>
+              <div className="provider-card-title">
+                <h2 className="section-title">{card.title}</h2>
+                <p className="metadata">{card.subtitle}</p>
+              </div>
+              {statuses.isSuccess
+                ? (() => {
+                    const brand = CARD_BRAND[card.title];
+                    const ready =
+                      brand !== undefined &&
+                      (brand.keys.some((name) => byName.get(name)?.configured === true) ||
+                        (brand.account !== undefined &&
+                          byName.get(brand.account)?.configured === true &&
+                          byName.get(brand.account)?.hint.trim().toLowerCase() === 'account'));
+                    return (
+                      <span className={'provider-chip ' + (ready ? 'ready' : 'needs')}>
+                        {ready ? 'Ready' : 'Needs a key'}
+                      </span>
+                    );
+                  })()
+                : null}
             </div>
             <div className="provider-card-body">
               {card.title === 'OpenCode' ? <OpenCodeProviderGuidance byName={byName} /> : null}
@@ -1074,30 +1126,29 @@ function OpenCodeCard(props: {
         <div
           style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 4 }}
         >
-          <select
+          <Select
             id="provider-SENTRY_OPENCODE_PROVIDER"
-            aria-label="Value for SENTRY_OPENCODE_PROVIDER"
+            label="Value for SENTRY_OPENCODE_PROVIDER"
             value={selectValue}
-            onChange={(e) =>
+            onChange={(next) =>
               props.setValues((prev) => ({
                 ...prev,
-                SENTRY_OPENCODE_PROVIDER: e.target.value,
+                SENTRY_OPENCODE_PROVIDER: next,
               }))
             }
-            style={{ minWidth: 200, flex: 1 }}
-          >
-            <option value="">Not set (defaults to OpenRouter pay-as-you-go)</option>
-            {OPENCODE_PROVIDER_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-            {!persistedKnown && !hasDraft ? (
-              <option value={persistedProvider}>
-                {`Keep saved “${persistedProvider}” (unrecognized)`}
-              </option>
-            ) : null}
-          </select>
+            options={[
+              { value: '', label: 'Not set (defaults to OpenRouter pay-as-you-go)' },
+              ...OPENCODE_PROVIDER_OPTIONS,
+              ...(!persistedKnown && !hasDraft
+                ? [
+                    {
+                      value: persistedProvider,
+                      label: `Keep saved “${persistedProvider}” (unrecognized)`,
+                    },
+                  ]
+                : []),
+            ]}
+          />
           <button
             className="primary compact"
             disabled={!hasDraft || !draftValid || props.savePending}
@@ -1206,22 +1257,14 @@ function ReasoningEffortField(props: {
         <span className="info-row-spacer" />
         <InfoPopover title="Reasoning effort">{DESCRIPTIONS[name] ?? ''}</InfoPopover>
       </div>
-      <select
+      <Select
         id={'provider-' + name}
-        aria-label={'Value for ' + name}
+        label={'Value for ' + name}
         value={known ? value : ''}
         disabled={props.pending}
-        onChange={(event) =>
-          event.target.value === '' ? props.onClear(name) : props.onSave(name, event.target.value)
-        }
-        style={{ minWidth: 200, width: '100%', marginTop: 4 }}
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
+        options={options}
+        onChange={(next) => (next === '' ? props.onClear(name) : props.onSave(name, next))}
+      />
     </div>
   );
 }

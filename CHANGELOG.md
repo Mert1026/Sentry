@@ -5,6 +5,10 @@
 - **A more organised Providers page.** Each agent (OpenCode, DeepSeek, GLM, ChatGPT, Claude) is one wide card with a
   title bar, and its settings (model, keys, endpoint, reasoning effort) sit in equal panels in two columns, one column
   on a narrow window. The two floating info buttons are now one row under the title.
+  Every card now carries the agent's logo (the marks come from the MIT-licensed `@lobehub/icons-static-svg` set and
+  belong to their owners), a line saying what the agent is for, a Ready / Needs a key chip, a brand-coloured accent,
+  and a gentle entrance and hover. Every drop-down on the page (OpenCode provider, reasoning effort) is now the same
+  custom list as the model picker, with the same keyboard use, instead of the browser's own.
 - **A better model picker, with an Update list button.** In Settings → Providers the model of each agent is chosen in
   a searchable list instead of a plain drop-down: every row shows the model's name and its exact id, a badge (New or
   Legacy), its context size and release date, current models first and older ones after. **Update list** fetches the
