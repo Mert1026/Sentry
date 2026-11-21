@@ -269,6 +269,47 @@ describe('run time limit and depth reach the runtime', () => {
     expect(started()).not.toHaveProperty('runTimeoutMs');
   });
 
+  it('limits the notes to 5,000 characters unless Settings → Application allows more', async () => {
+    const h = await harness();
+    const id = 'proj_01K7777777777777777777A8W1';
+    const long = 'x'.repeat(6000);
+    await expect(h.service.startRun(id, { mode: 'full', instructions: long })).rejects.toThrow(
+      /at most 5000 characters/,
+    );
+    await expect(
+      h.service.startRun(id, { mode: 'full', agentInstructions: { stack_opencode_main: long } }),
+    ).rejects.toThrow(/at most 5000 characters/);
+    await h.service.providerSaveKey('SENTRY_NOTE_LIMIT_CHARS', '20000');
+    await h.service.startRun(id, { mode: 'full', instructions: long });
+    expect(h.seen.filter((c) => c.method === 'runs.start').at(-1)?.params).toMatchObject({
+      instructions: long,
+    });
+    // No limit takes a very long note, up to the outer bound.
+    await h.service.providerSaveKey('SENTRY_NOTE_LIMIT_CHARS', '1000000');
+    await h.service.startRun(id, { mode: 'full', instructions: 'y'.repeat(300_000) });
+    await expect(
+      h.service.startRun(id, { mode: 'full', instructions: 'z'.repeat(1_000_001) }),
+    ).rejects.toThrow();
+    // A saved value out of range is ignored: back to 5,000.
+    await h.service.providerSaveKey('SENTRY_NOTE_LIMIT_CHARS', '10');
+    await expect(h.service.startRun(id, { mode: 'full', instructions: long })).rejects.toThrow(
+      /at most 5000 characters/,
+    );
+  });
+
+  it('sets the note limit through settings, and refuses a value outside the range', async () => {
+    const h = await harness();
+    const note = (value: string) => h.service.setRunSetting({ setting: 'note-limit', value });
+    expect(await note('20000')).toEqual({ chars: 20000, isDefault: false, unlimited: false });
+    expect(h.credentials.getValue('SENTRY_NOTE_LIMIT_CHARS')).toBe('20000');
+    expect(await note('none')).toEqual({ chars: 1_000_000, isDefault: false, unlimited: true });
+    expect(h.credentials.getValue('SENTRY_NOTE_LIMIT_CHARS')).toBe('1000000');
+    expect(await note('default')).toEqual({ chars: 5000, isDefault: true, unlimited: false });
+    expect(h.credentials.getValue('SENTRY_NOTE_LIMIT_CHARS')).toBeUndefined();
+    for (const bad of ['499', '200001', '999999', 'x', '1e5'])
+      await expect(note(bad), bad).rejects.toThrow(/note limit must be/);
+  });
+
   it('forwards the run depth', async () => {
     const h = await harness();
     const id = 'proj_01K7777777777777777777A8W1';

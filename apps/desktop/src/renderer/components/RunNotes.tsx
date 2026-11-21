@@ -1,6 +1,7 @@
 import React from 'react';
 import { InfoPopover } from './InfoPopover.js';
 import { NOTE_MAX_CHARS, type RunNotesDraft } from '../lib/run-notes.js';
+import { isUnlimitedNote } from '../lib/note-limit.js';
 
 /**
  * Notes for the agents, written before a run starts. One note goes to every agent; a switch gives each
@@ -10,11 +11,16 @@ export function RunNotes({
   agents,
   value,
   onChange,
+  limit = NOTE_MAX_CHARS,
 }: {
   agents: ReadonlyArray<{ id: string; displayName: string }>;
   value: RunNotesDraft;
   onChange: (next: RunNotesDraft) => void;
+  /** The longest note allowed (Settings → Application). */
+  limit?: number;
 }): React.JSX.Element {
+  const counter = (length: number): string =>
+    isUnlimitedNote(limit) ? String(length) : length + ' / ' + limit;
   const switchPerAgent = (perAgent: boolean): void => {
     if (!perAgent) {
       onChange({ ...value, perAgent: false });
@@ -68,15 +74,12 @@ export function RunNotes({
                 <label key={agent.id} className="run-notes-field">
                   <span className="run-notes-label">
                     {agent.displayName}
-                    <small className="metadata">
-                      {' '}
-                      {text.length} / {NOTE_MAX_CHARS}
-                    </small>
+                    <small className="metadata"> {counter(text.length)}</small>
                   </span>
                   <textarea
                     aria-label={'Note for ' + agent.displayName}
                     rows={3}
-                    maxLength={NOTE_MAX_CHARS}
+                    maxLength={limit}
                     value={text}
                     placeholder="Leave empty to give this agent no note."
                     onChange={(event) =>
@@ -95,15 +98,12 @@ export function RunNotes({
         <label className="run-notes-field">
           <span className="run-notes-label">
             Note for all agents
-            <small className="metadata">
-              {' '}
-              {value.shared.length} / {NOTE_MAX_CHARS}
-            </small>
+            <small className="metadata"> {counter(value.shared.length)}</small>
           </span>
           <textarea
             aria-label="Note for all agents"
             rows={4}
-            maxLength={NOTE_MAX_CHARS}
+            maxLength={limit}
             value={value.shared}
             placeholder="Optional. For example: focus on the login flow; the payment module is known to be slow."
             onChange={(event) => onChange({ ...value, shared: event.target.value })}

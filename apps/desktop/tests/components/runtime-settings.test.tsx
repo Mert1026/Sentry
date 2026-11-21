@@ -57,6 +57,12 @@ describe('runtime settings host views', () => {
     expect(markup).toContain('Change distribution');
   });
 
+  it('no longer holds the run time limit: it lives in Settings → Application', () => {
+    const markup = renderWith(windowsDistros, windowsStatus);
+    expect(markup).not.toContain('Run time limit');
+    expect(markup).not.toContain('Note length limit');
+  });
+
   it('shows native host facts without WSL guidance on CachyOS', () => {
     const markup = renderWith(linuxDistros, linuxStatus);
     expect(markup).toContain('Execution Runtime');

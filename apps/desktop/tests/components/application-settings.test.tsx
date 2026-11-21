@@ -68,6 +68,12 @@ describe('Application settings & localization', () => {
     expect(toggle.getAttribute('aria-checked')).toBe(before);
   });
 
+  it('holds the run time limit and the note length limit', async () => {
+    mountSettings('/settings/application');
+    expect(await screen.findByRole('group', { name: 'Run time limit' })).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Note length limit' })).toBeTruthy();
+  });
+
   it('defaults to English and translates static and dynamic UI strings to Bulgarian', () => {
     expect(translateText('Dashboard')).toBe('Dashboard');
     expect(translateText('Dashboard', 'bg')).toBe('Табло');

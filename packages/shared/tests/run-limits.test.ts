@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  NOTE_LIMIT_DEFAULT,
+  NOTE_LIMIT_UNLIMITED,
   RUN_DEPTHS,
   RUN_TIMEOUT_MS_MAX,
   RUN_TIMEOUT_MS_MIN,
@@ -7,6 +9,7 @@ import {
   RUN_TIME_LIMIT_CUSTOM_MIN_MS,
   RUN_TIME_LIMIT_DEFAULT_MS,
   RUN_TIME_LIMIT_UNLIMITED_MS,
+  parseNoteLimit,
   parseRunTimeLimit,
 } from '../src/index.js';
 
@@ -41,5 +44,21 @@ describe('run time limit', () => {
 
   it('knows the two run depths', () => {
     expect([...RUN_DEPTHS]).toEqual(['fast', 'full']);
+  });
+});
+
+describe('the note limit', () => {
+  it('is 5,000 unless a valid value is saved', () => {
+    expect(parseNoteLimit(undefined)).toBe(NOTE_LIMIT_DEFAULT);
+    expect(parseNoteLimit('')).toBe(NOTE_LIMIT_DEFAULT);
+    expect(parseNoteLimit('abc')).toBe(NOTE_LIMIT_DEFAULT);
+    expect(parseNoteLimit('499')).toBe(NOTE_LIMIT_DEFAULT);
+    expect(parseNoteLimit('1000001')).toBe(NOTE_LIMIT_DEFAULT);
+  });
+
+  it('takes a saved value inside the range, and no limit is the ceiling', () => {
+    expect(parseNoteLimit('500')).toBe(500);
+    expect(parseNoteLimit(' 20000 ')).toBe(20000);
+    expect(parseNoteLimit(String(NOTE_LIMIT_UNLIMITED))).toBe(NOTE_LIMIT_UNLIMITED);
   });
 });

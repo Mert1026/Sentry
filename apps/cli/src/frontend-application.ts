@@ -18,9 +18,13 @@ import {
   AGENT_EFFORT_SETTING,
   CLI_IPC_PROTOCOL_VERSION,
   EFFORT_AGENTS,
+  NOTE_LIMIT_DEFAULT,
+  NOTE_LIMIT_SETTING,
+  NOTE_LIMIT_UNLIMITED,
   RUN_TIME_LIMIT_DEFAULT_MS,
   RUN_TIME_LIMIT_SETTING,
   parseAgentEffort,
+  parseNoteLimit,
   parseRunTimeLimit,
 } from '@qa/shared';
 import type { ParsedCliCommand } from './arguments.js';
@@ -35,6 +39,37 @@ import {
 export interface FrontendOptions {
   readonly onDiagnostic?: (message: string) => void;
   readonly createClient?: () => SentryDesktopClient;
+}
+
+/** The models each agent's provider offers, as the catalog names them. */
+const AGENT_CATALOG_PROVIDERS: Readonly<Record<string, readonly string[]>> = {
+  opencode: ['opencode-go', 'opencode'],
+  deepseek: ['deepseek'],
+  glm: ['zai', 'zai-coding-plan'],
+  chatgpt: ['openai'],
+  claude: ['anthropic'],
+};
+interface ModelCatalogData {
+  readonly fetchedAt: string;
+  readonly source: string;
+  readonly providers: Record<string, ReadonlyArray<Record<string, unknown>>>;
+}
+function filterCatalog(catalog: ModelCatalogData, agent: string | undefined): ModelCatalogData {
+  if (agent === undefined) return catalog;
+  const wanted = new Set(AGENT_CATALOG_PROVIDERS[agent] ?? []);
+  return {
+    ...catalog,
+    providers: Object.fromEntries(
+      Object.entries(catalog.providers).filter(([key]) => wanted.has(key)),
+    ),
+  };
+}
+function noteLimitResult(chars: number): { chars: number; isDefault: boolean; unlimited: boolean } {
+  return {
+    chars,
+    isDefault: chars === NOTE_LIMIT_DEFAULT,
+    unlimited: chars === NOTE_LIMIT_UNLIMITED,
+  };
 }
 
 const TERMINAL_RUN = new Set(['completed', 'partial', 'failed', 'cancelled']);
@@ -310,6 +345,7 @@ export async function executeFrontendCommand(
           retest: true,
           runDepth: true,
           settings: true,
+          models: true,
           findingsByRevision: true,
           findingsExport: true,
           projectProfile: true,
@@ -546,6 +582,7 @@ export async function executeFrontendCommand(
           ms: ms ?? RUN_TIME_LIMIT_DEFAULT_MS,
           isDefault: ms === undefined || ms === RUN_TIME_LIMIT_DEFAULT_MS,
         },
+        noteLimit: noteLimitResult(parseNoteLimit(saved(NOTE_LIMIT_SETTING))),
       });
     }
     if (input.command === 'settings.set-effort') {
@@ -568,6 +605,29 @@ export async function executeFrontendCommand(
         ms: result.ms ?? RUN_TIME_LIMIT_DEFAULT_MS,
         isDefault: result.isDefault === true,
       });
+    }
+    if (input.command === 'settings.set-note-limit') {
+      const result = (await broker.request('settings:set', {
+        setting: 'note-limit',
+        value: input.value,
+      })) as { chars?: number };
+      return success(
+        input.command,
+        noteLimitResult(
+          typeof result.chars === 'number' ? result.chars : parseNoteLimit(input.value),
+        ),
+      );
+    }
+    if (input.command === 'models.list') {
+      const catalog = (await broker.request('models:catalog', {})) as ModelCatalogData;
+      return success(input.command, filterCatalog(catalog, input.agent));
+    }
+    if (input.command === 'models.update') {
+      const result = (await broker.request('models:refresh', {})) as {
+        catalog: ModelCatalogData;
+        added?: Record<string, string[]>;
+      };
+      return success(input.command, { catalog: result.catalog, added: result.added ?? {} });
     }
     if (input.command === 'toolchain.status') {
       return success(input.command, { toolchains: await broker.request('toolchains:status', {}) });
