@@ -3,6 +3,7 @@ import { mkdtempSync } from 'node:fs';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir as systemTmpdir } from 'node:os';
+import { setImmediate as realTick } from 'node:timers/promises';
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest';
 
 import { HarnessRunRequestSchema } from '@qa/schemas';
@@ -204,9 +205,17 @@ describe('Claude ordered stage prompt behavior', () => {
           for await (const event of adapter.run(input)) events.push(event);
         })();
         await blocked;
-        await vi.advanceTimersByTimeAsync(
-          mode === 'exhausted' ? 9000 : mode === 'report' ? 4050 : 6000,
+        // Move the fake clock in small steps and let real file I/O finish between them. A single jump can land
+        // before the adapter registers its deadline timer, and then nothing ever fires and the test hangs.
+        let settled = false;
+        void running.then(
+          () => (settled = true),
+          () => (settled = true),
         );
+        while (!settled) {
+          await realTick();
+          await vi.advanceTimersByTimeAsync(50);
+        }
         await running;
         if (mode === 'exhausted') {
           expect(events.at(-1)).toMatchObject({
