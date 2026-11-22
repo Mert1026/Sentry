@@ -67,6 +67,28 @@ export const CLI_COMMANDS = [
   'settings.set-note-limit',
   'models.list',
   'models.update',
+  'provider.status',
+  'provider.set',
+  'provider.clear',
+  'provider.forget-all',
+  'provider.forget-file',
+  'provider.persist',
+  'provider.detect-binaries',
+  'account.status',
+  'account.login',
+  'account.logout',
+  'account.cancel',
+  'account.code',
+  'runtime.status',
+  'runtime.distros',
+  'runtime.select',
+  'runtime.reclaim-space',
+  'system.info',
+  'system.runs',
+  'system.environment',
+  'system.broker',
+  'app.language',
+  'toolchain.custom-install',
 ] as const;
 export const CliCommandSchema = z.enum(CLI_COMMANDS);
 export type CliCommand = z.infer<typeof CliCommandSchema>;
@@ -574,6 +596,7 @@ export const CapabilitiesResultSchema = z
         runDepth: z.literal(true).optional(),
         settings: z.literal(true).optional(),
         models: z.literal(true).optional(),
+        fullAccess: z.literal(true).optional(),
         projectProfile: z.literal(true).optional(),
         toolchains: z.literal(true).optional(),
         suggestTargets: z.literal(true).optional(),
@@ -726,6 +749,23 @@ export const ModelsUpdateResultSchema = z
   })
   .strict();
 
+/**
+ * What the CLI reports for the commands that mirror Desktop's own screens (providers, accounts, runtime, system).
+ * The result is whatever Desktop answered. It never holds a stored secret: Desktop reports only whether a key is
+ * set (and, for plain preferences such as a model id, the value).
+ */
+export const ProviderStatusResultSchema = z.object({ providers: z.unknown() }).strict();
+export const ProviderChangeResultSchema = z
+  .object({ name: z.string().min(1).max(200), result: z.unknown() })
+  .strict();
+export const GenericDesktopResultSchema = z.object({ result: z.unknown() }).strict();
+export const AccountResultSchema = z
+  .object({ provider: z.enum(['openai', 'claude']), result: z.unknown() })
+  .strict();
+export const AppLanguageResultSchema = z
+  .object({ language: z.enum(['en', 'bg']), result: z.unknown() })
+  .strict();
+
 export const CliResultSchemas = {
   capabilities: CapabilitiesResultSchema,
   'agent.list': AgentListResultSchema,
@@ -767,6 +807,28 @@ export const CliResultSchemas = {
   'settings.set-note-limit': SettingsSetNoteLimitResultSchema,
   'models.list': ModelsListResultSchema,
   'models.update': ModelsUpdateResultSchema,
+  'provider.status': ProviderStatusResultSchema,
+  'provider.set': ProviderChangeResultSchema,
+  'provider.clear': ProviderChangeResultSchema,
+  'provider.forget-all': GenericDesktopResultSchema,
+  'provider.forget-file': GenericDesktopResultSchema,
+  'provider.persist': GenericDesktopResultSchema,
+  'provider.detect-binaries': GenericDesktopResultSchema,
+  'account.status': AccountResultSchema,
+  'account.login': AccountResultSchema,
+  'account.logout': AccountResultSchema,
+  'account.cancel': AccountResultSchema,
+  'account.code': AccountResultSchema,
+  'runtime.status': GenericDesktopResultSchema,
+  'runtime.distros': GenericDesktopResultSchema,
+  'runtime.select': GenericDesktopResultSchema,
+  'runtime.reclaim-space': GenericDesktopResultSchema,
+  'system.info': GenericDesktopResultSchema,
+  'system.runs': GenericDesktopResultSchema,
+  'system.environment': GenericDesktopResultSchema,
+  'system.broker': GenericDesktopResultSchema,
+  'app.language': AppLanguageResultSchema,
+  'toolchain.custom-install': ProviderChangeResultSchema,
 } as const;
 
 function successEnvelope<C extends CliCommand>(

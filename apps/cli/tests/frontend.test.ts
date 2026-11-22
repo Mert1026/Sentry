@@ -1315,8 +1315,8 @@ describe('toolchain needs, target suggestions and custom add-ons through the CLI
       name: 'mytool',
     });
     expect(() => parseCommand(['toolchain', 'custom', 'remove', 'mytool'])).toThrow(/--yes/);
-    // Installing a custom add-on runs the caller's shell command, so it is not a CLI command.
-    expect(() => parseCommand(['toolchain', 'custom', 'install', 'mytool'])).toThrow(/Usage/);
+    // Installing a custom add-on takes the shell command to run, and has no usage without it.
+    expect(() => parseCommand(['toolchain', 'custom', 'install', 'mytool'])).toThrow(/--command/);
   });
 
   it('calls the matching Desktop channel for each command', async () => {
@@ -1473,6 +1473,298 @@ describe('exporting findings through the CLI', () => {
     } finally {
       await broker.close();
       await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('full access: providers, accounts, runtime and system through the CLI', () => {
+  const SECRET = 'sk-cli-secret-value-0123456789';
+
+  it('parses provider commands, and keeps secrets off the command line', () => {
+    expect(parseCommand(['provider', 'status'])).toEqual({ command: 'provider.status' });
+    expect(parseCommand(['provider', 'clear', 'SENTRY_GLM_MODEL'])).toEqual({
+      command: 'provider.clear',
+      name: 'SENTRY_GLM_MODEL',
+    });
+    // A plain preference may be given inline.
+    expect(parseCommand(['provider', 'set', 'SENTRY_GLM_MODEL', '--value', 'glm-5.3'])).toEqual({
+      command: 'provider.set',
+      name: 'SENTRY_GLM_MODEL',
+      value: { kind: 'inline', text: 'glm-5.3' },
+    });
+    expect(
+      parseCommand(['provider', 'set', 'ANTHROPIC_BASE_URL', '--value', 'https://x.test']),
+    ).toMatchObject({
+      value: { kind: 'inline' },
+    });
+    // A secret comes from standard input or an environment variable, never from an argument.
+    expect(parseCommand(['provider', 'set', 'DEEPSEEK_API_KEY', '--stdin'])).toEqual({
+      command: 'provider.set',
+      name: 'DEEPSEEK_API_KEY',
+      value: { kind: 'stdin' },
+    });
+    expect(parseCommand(['provider', 'set', 'OPENAI_API_KEY', '--env', 'MY_KEY'])).toEqual({
+      command: 'provider.set',
+      name: 'OPENAI_API_KEY',
+      value: { kind: 'env', name: 'MY_KEY' },
+    });
+    for (const secret of [
+      'OPENAI_API_KEY',
+      'DEEPSEEK_API_KEY',
+      'ANTHROPIC_AUTH_TOKEN',
+      'ANTHROPIC_API_KEY',
+      'OPENROUTER_API_KEY',
+      'OPENCODE_API_KEY',
+    ])
+      expect(() => parseCommand(['provider', 'set', secret, '--value', SECRET]), secret).toThrow(
+        /never on the command line/,
+      );
+    // Exactly one source, and a sensible name.
+    expect(() => parseCommand(['provider', 'set', 'SENTRY_GLM_MODEL'])).toThrow(/exactly one/);
+    expect(() =>
+      parseCommand(['provider', 'set', 'SENTRY_GLM_MODEL', '--stdin', '--value', 'x']),
+    ).toThrow(/exactly one/);
+    expect(() => parseCommand(['provider', 'set', 'lowercase', '--stdin'])).toThrow(
+      /name looks like/,
+    );
+    expect(() => parseCommand(['provider', 'set', 'X_KEY', '--env', 'bad name'])).toThrow(
+      /environment variable/,
+    );
+    for (const action of ['forget-all', 'forget-file', 'persist', 'detect-binaries'])
+      expect(parseCommand(['provider', action])).toEqual({ command: 'provider.' + action });
+    expect(() => parseCommand(['provider'])).toThrow(/Usage/);
+  });
+
+  it('parses account, runtime, system, language and custom add-on commands', () => {
+    for (const action of ['status', 'login', 'logout', 'cancel'])
+      expect(parseCommand(['account', action, 'openai'])).toEqual({
+        command: 'account.' + action,
+        provider: 'openai',
+      });
+    expect(parseCommand(['account', 'code', 'claude', 'abc123'])).toEqual({
+      command: 'account.code',
+      provider: 'claude',
+      code: 'abc123',
+    });
+    expect(() => parseCommand(['account', 'status', 'gemini'])).toThrow(/openai or claude/);
+    expect(() => parseCommand(['account', 'code', 'openai', 'abc'])).toThrow(/Claude/);
+    expect(parseCommand(['runtime', 'select', 'Ubuntu-24.04'])).toEqual({
+      command: 'runtime.select',
+      distro: 'Ubuntu-24.04',
+    });
+    for (const action of ['status', 'distros', 'reclaim-space'])
+      expect(parseCommand(['runtime', action])).toEqual({ command: 'runtime.' + action });
+    for (const action of ['info', 'runs', 'environment', 'broker'])
+      expect(parseCommand(['system', action])).toEqual({ command: 'system.' + action });
+    expect(parseCommand(['app', 'language', 'bg'])).toEqual({
+      command: 'app.language',
+      language: 'bg',
+    });
+    expect(() => parseCommand(['app', 'language', 'fr'])).toThrow(/en or bg/);
+    expect(
+      parseCommand([
+        'toolchain',
+        'custom',
+        'install',
+        'mytool',
+        '--command',
+        'echo hi',
+        '--path-entries',
+        'bin,tools',
+      ]),
+    ).toEqual({
+      command: 'toolchain.custom-install',
+      name: 'mytool',
+      shellCommand: 'echo hi',
+      pathEntries: ['bin', 'tools'],
+    });
+  });
+
+  async function lines(text: string): Promise<AsyncIterable<string>> {
+    return (async function* () {
+      yield text;
+    })();
+  }
+
+  it('sets a key from standard input or the environment and never echoes it', async () => {
+    const broker = await startFakeBroker((command, payload) => {
+      if (command !== 'providers:save') throw new Error('unexpected ' + command);
+      // Desktop answers with whether the key is set, never the value.
+      return {
+        name: payload['name'],
+        configured: true,
+        persistence: 'secure',
+        runtimeSynced: true,
+      };
+    });
+    try {
+      const fromStdin = await executeFrontendCommand(
+        parseCommand(['provider', 'set', 'DEEPSEEK_API_KEY', '--stdin']),
+        {
+          createClient: () => clientFor(broker),
+          stdin: await lines(SECRET + '\n'),
+        },
+      );
+      const fromEnvironment = await executeFrontendCommand(
+        parseCommand(['provider', 'set', 'OPENAI_API_KEY', '--env', 'SENTRY_TEST_KEY']),
+        { createClient: () => clientFor(broker), environment: { SENTRY_TEST_KEY: SECRET + '\n' } },
+      );
+      const inline = await executeFrontendCommand(
+        parseCommand(['provider', 'set', 'SENTRY_GLM_MODEL', '--value', 'glm-5.3']),
+        { createClient: () => clientFor(broker) },
+      );
+      expect(broker.seen.map((call) => call.payload)).toEqual([
+        { name: 'DEEPSEEK_API_KEY', value: SECRET },
+        { name: 'OPENAI_API_KEY', value: SECRET },
+        { name: 'SENTRY_GLM_MODEL', value: 'glm-5.3' },
+      ]);
+      // The answer the CLI prints holds the name and the status, never the value.
+      expect(JSON.stringify([fromStdin, fromEnvironment])).not.toContain(SECRET);
+      expect(fromStdin).toMatchObject({
+        command: 'provider.set',
+        data: { name: 'DEEPSEEK_API_KEY', result: { configured: true } },
+      });
+      expect(inline).toMatchObject({ data: { name: 'SENTRY_GLM_MODEL' } });
+    } finally {
+      await broker.close();
+    }
+  });
+
+  it('refuses an empty, missing, interactive or oversized value before contacting Desktop', async () => {
+    const broker = await startFakeBroker(() => ({ configured: true }));
+    try {
+      const run = (args: string[], extra: Record<string, unknown>) =>
+        executeFrontendCommand(parseCommand(args), {
+          createClient: () => clientFor(broker),
+          ...extra,
+        });
+      await expect(
+        run(['provider', 'set', 'OPENAI_API_KEY', '--stdin'], { stdin: await lines('  \n') }),
+      ).rejects.toThrow(/empty/);
+      await expect(
+        run(['provider', 'set', 'OPENAI_API_KEY', '--env', 'NOPE'], { environment: {} }),
+      ).rejects.toThrow(/not set or is empty/);
+      await expect(
+        run(['provider', 'set', 'OPENAI_API_KEY', '--stdin'], {
+          stdin: Object.assign(await lines('x'), { isTTY: true }),
+        }),
+      ).rejects.toThrow(/Nothing is piped in/);
+      await expect(
+        run(['provider', 'set', 'OPENAI_API_KEY', '--stdin'], {
+          stdin: await lines('k'.repeat(5001)),
+        }),
+      ).rejects.toThrow(/longer than 5000/);
+      expect(broker.seen).toHaveLength(0);
+    } finally {
+      await broker.close();
+    }
+  });
+
+  it('reaches every other Desktop screen through the broker', async () => {
+    const broker = await startFakeBroker((command) => ({ answered: command }));
+    try {
+      const run = (args: string[]) =>
+        executeFrontendCommand(parseCommand(args), { createClient: () => clientFor(broker) });
+      await run(['provider', 'status']);
+      await run(['provider', 'clear', 'SENTRY_GLM_MODEL']);
+      await run(['provider', 'forget-all']);
+      await run(['provider', 'forget-file']);
+      await run(['provider', 'persist']);
+      await run(['provider', 'detect-binaries']);
+      await run(['account', 'status', 'openai']);
+      await run(['account', 'login', 'claude']);
+      await run(['account', 'cancel', 'claude']);
+      await run(['account', 'logout', 'openai']);
+      await run(['account', 'code', 'claude', 'the-code']);
+      await run(['runtime', 'status']);
+      await run(['runtime', 'distros']);
+      await run(['runtime', 'select', 'Ubuntu']);
+      await run(['runtime', 'reclaim-space']);
+      await run(['system', 'info']);
+      await run(['system', 'runs']);
+      await run(['system', 'environment']);
+      await run(['system', 'broker']);
+      await run(['app', 'language', 'bg']);
+      await run(['toolchain', 'custom', 'install', 'tool', '--command', 'echo hi']);
+      expect(broker.seen.map((call) => call.command)).toEqual([
+        'providers:status',
+        'providers:clear',
+        'providers:forget-all',
+        'providers:forget-file',
+        'providers:persist',
+        'providers:detect-binaries',
+        'openai:account-status',
+        'claude:account-login',
+        'claude:account-cancel-login',
+        'openai:account-logout',
+        'claude:account-submit-code',
+        'runtime:status',
+        'runtime:distros',
+        'runtime:select-distro',
+        'runtime:reclaim-space',
+        'system:info',
+        'system:active-runs',
+        'doctors:environment',
+        'cli:status',
+        'app:set-language',
+        'toolchains:custom-install',
+      ]);
+      expect(
+        broker.seen.find((call) => call.command === 'claude:account-submit-code')?.payload,
+      ).toEqual({
+        code: 'the-code',
+      });
+      expect(
+        broker.seen.find((call) => call.command === 'toolchains:custom-install')?.payload,
+      ).toEqual({
+        name: 'tool',
+        command: 'echo hi',
+      });
+    } finally {
+      await broker.close();
+    }
+  });
+
+  it('prints provider status without values for keys, and says it has full access', async () => {
+    const out: string[] = [];
+    const io = { stdout: (text: string) => out.push(text), stderr: () => undefined };
+    emitHumanSuccess(
+      {
+        schemaVersion: 1,
+        command: 'provider.status',
+        ok: true,
+        data: {
+          providers: [
+            { name: 'DEEPSEEK_API_KEY', configured: true, hint: 'Configured · Stored securely' },
+            { name: 'SENTRY_GLM_MODEL', configured: true, hint: 'glm-5.3' },
+            { name: 'OPENAI_API_KEY', configured: false, hint: '' },
+          ],
+        },
+      } as never,
+      io,
+    );
+    emitHumanSuccess(
+      {
+        schemaVersion: 1,
+        command: 'provider.set',
+        ok: true,
+        data: { name: 'DEEPSEEK_API_KEY', result: {} },
+      } as never,
+      io,
+    );
+    expect(out[0]).toContain('set    DEEPSEEK_API_KEY  Configured · Stored securely');
+    expect(out[0]).toContain('set    SENTRY_GLM_MODEL  glm-5.3');
+    expect(out[0]).toContain('unset  OPENAI_API_KEY');
+    expect(out[1]).toBe('Saved DEEPSEEK_API_KEY. The value is not shown again.');
+    const broker = await startFakeBroker(() => ({}));
+    try {
+      expect(
+        await executeFrontendCommand(parseCommand(['capabilities']), {
+          createClient: () => clientFor(broker),
+        }),
+      ).toMatchObject({ data: { features: { fullAccess: true } } });
+    } finally {
+      await broker.close();
     }
   });
 });

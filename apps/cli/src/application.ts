@@ -495,6 +495,28 @@ export async function executeCommand(
     input.command === 'settings.set-note-limit' ||
     input.command === 'models.list' ||
     input.command === 'models.update' ||
+    input.command === 'provider.status' ||
+    input.command === 'provider.set' ||
+    input.command === 'provider.clear' ||
+    input.command === 'provider.forget-all' ||
+    input.command === 'provider.forget-file' ||
+    input.command === 'provider.persist' ||
+    input.command === 'provider.detect-binaries' ||
+    input.command === 'account.status' ||
+    input.command === 'account.login' ||
+    input.command === 'account.logout' ||
+    input.command === 'account.cancel' ||
+    input.command === 'account.code' ||
+    input.command === 'runtime.status' ||
+    input.command === 'runtime.distros' ||
+    input.command === 'runtime.select' ||
+    input.command === 'runtime.reclaim-space' ||
+    input.command === 'system.info' ||
+    input.command === 'system.runs' ||
+    input.command === 'system.environment' ||
+    input.command === 'system.broker' ||
+    input.command === 'app.language' ||
+    input.command === 'toolchain.custom-install' ||
     input.command === 'toolchain.status' ||
     input.command === 'toolchain.install' ||
     input.command === 'toolchain.remove' ||
