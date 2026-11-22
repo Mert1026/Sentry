@@ -2008,3 +2008,99 @@ on chore/ui-improvements; protocol records follow as a separate commit. Full des
 suite passed 574 tests with 3 skipped after an SSR portal fix; desktop typechecks,
 renderer build, lint and focused browser checks passed. No native Electron or live
 provider run, and no push. shux contract unavailable on PATH.
+
+## 2026-11-11 - Silent promotional video completed (owner-revised v2)
+
+Implemented: sentry-video/src/FilmV2.tsx and active Root registration. Owner requested
+more actual footage, fewer authored graphics, corrected agent visibility, faster
+pacing and varied motion. Final is 180s with 24 scenes; 169s are unobstructed screen
+recording, with 5s opening and 6s closing over actual footage. Full application view
+removes only the 40px OS bar. Graph camera includes both agent cards; selection
+stays wide to preserve all four agents while scrolling. Earlier 300s draft remains
+in src/Film.tsx but is not registered. Original logo used. Final failed-agent ending
+excluded; max used source timestamp 243.64s, before the failed ending. Original
+recording unchanged. Safe source is video-only and ends at 244.066667s.
+
+Verified: npm run lint passed (ESLint + TypeScript, no warnings); 20 review frames
+rendered/inspected and agent-selection, provider and application shots corrected;
+timeline validation: 24 contiguous scenes, 180s, source bounds valid. Final export
+out/Sentry-Presentation-BG.mp4: H.264, 1920x1080, 30fps, 5400 frames, 180.000s,
+48,373,725 bytes, video stream only (no audio). ffmpeg -v error -xerror decoded the
+complete output successfully (exit 0). Actual output frame at 97s confirms both
+agent cards fully visible. Cover: out/Sentry-cover.jpg. Studio stays available at
+http://localhost:3000. Browser UI automation was blocked by environment URL
+verification; visual checks used exported frames instead. Official Remotion bundled
+browser installed and archive CRC checked after initial download stalled.
+
+shux contract was attempted and unavailable on PATH. No application behavior changed,
+no commit/push, branch dev. Media project was already an untracked blank scaffold;
+remains uncommitted. Only protocol records and sentry-video were changed by this task.
+Existing untracked .agents and skills-lock.json were preserved. Generated footage,
+review and output are ignored within the media project. Next edits should target
+FilmV2.tsx, not the inactive first draft.
+
+## 2026-11-11 - Promotional video v3 completed (all owner revisions)
+
+Implemented in sentry-video/src/FilmV2.tsx and README.md. OBS removed from intro
+(background begins at source 3.2s); project shot now shows dashboard entry (6.5-12.5s).
+Scope is wide with both sides visible. Removed redundant finding-detail caption/scene;
+its 7s extend the Details report shot to 14s (65-79s), with a right-panel zoom.
+Start begins just before the click (136.4s, 1.6x). Environment uses final visit only
+(166-173s). Evidence caption uses actual Evidence interaction (99.5-103.1s).
+
+Latest owner steering included: replace scope title with Конфигуриране на QA проверката.;
+merge agent choice and permissions with it. All three are now one continuous 22s
+scene (20-42s output, source 13-30.6s at 0.8x), full wide view, one persistent heading
+and note Обхват, дълбочина, агенти и разрешения. Both separate captions removed.
+
+Verified: npm run lint passed; timeline validates 21 contiguous scenes / 180s, all
+source bounds valid, removed captions absent. 21 revised review frames inspected,
+plus three frames across merged configuration and eight frames from actual final MP4.
+Title/merge arrived during export; exact 660-frame Remotion insert replaced frames
+600-1259 in the original v3 render, followed by H.264 CRF16 encoding. Original base
+is review/v3-before-title.mp4; current code produces the same edit with a full render.
+Final out/Sentry-Presentation-BG-v3.mp4 is 49,249,687 bytes, 1920x1080 H.264,
+30 fps, 5400 frames, 180.000s, one video stream and no audio. ffmpeg -xerror fully
+decoded the output with exit 0. Actual final frames confirm no OBS, project entry,
+continuous configuration caption at 23/30/38s, Details, Environment and Evidence.
+The failed-agent ending remains excluded (latest source timestamp 243.64s).
+
+No commit/push or app behavior changes. Prior v2 output preserved. Changes remain
+in the already untracked media project and protocol records; pre-existing .agents/
+and skills-lock.json are untouched. shux contract was attempted and unavailable.
+Studio remains running at localhost:3000; active video code is src/FilmV2.tsx.
+
+## 2026-11-11 - Promotional video v4: merge agent stages
+
+Owner requested merging Следиш етапите на всеки агент into Един проект.
+Независими проучвания. Implemented one continuous 15s scene at 93-108s in
+sentry-video/src/FilmV2.tsx, source 144-155.25s at 0.75x, shared heading and camera.
+Removed separate stage scene/title, preserved total duration 180s and prior edits.
+README updated; current output out/Sentry-Presentation-BG-v4.mp4. v3 preserved.
+
+Verified npm run lint (ESLint + TS); timeline checks 20 contiguous scenes / 180s,
+per-scene fade duration, source bounds, removed caption absent. 450-frame Remotion
+insert rendered; three frames inspected in insert and three from actual final output:
+both agents visible and common title persists across the former boundary. Final
+assembled from original v3 base plus approved config and agent inserts, avoiding
+additional encoding generations from v3 final. H.264 1920x1080 30fps, 5400 frames,
+180.000s, 47,087,605 bytes, video only. Full ffmpeg -xerror decode passed exit 0.
+No app code changes, commits or pushes. Existing untracked files preserved.
+shux contract attempted and unavailable on PATH. Active code remains FilmV2.tsx.
+
+## 2026-11-11 - Promotional video v5: remove independent-research scene
+
+Owner requested removing the entire Един проект. Независими проучвания. segment
+and explicitly released the three-minute duration constraint. Removed the full 15s
+scene (v4 93-108s) from FilmV2.tsx; shifted every later start 15s earlier. Root now
+4950 frames / 165s. Progress uses actual composition duration. No filler or retiming
+of other scenes. Start now cuts directly to Environment at 93s. README updated.
+
+Verified npm run lint (ESLint + TS), 19 contiguous scenes / 165s with matching fade
+durations, safe source bounds, removed title absent and Root duration 4950. Export
+out/Sentry-Presentation-BG-v5.mp4 rebuilt from original base and approved config
+insert, omitting 93-108s and redrawing progress for 165s. Previous versions retained.
+ffprobe: H.264 1920x1080 30fps, 4950 frames, 165.000s, 43,570,768 bytes, video only
+(no audio). Full ffmpeg -xerror decode passed. Four actual output frames inspected:
+start-to-Environment join is closed, no removed segment, ending and progress intact.
+No app changes, commits or pushes. shux contract attempted and unavailable on PATH.
