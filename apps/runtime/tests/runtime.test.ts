@@ -155,6 +155,51 @@ describe('runtime host identity', () => {
     }
   });
 
+  it('reports the model each agent really uses, and follows a change, instead of the registered placeholder', async () => {
+    const dataRoot = await tempDataRoot();
+    const host = new SentryRuntimeHost(dataRoot, () => undefined);
+    const names = [
+      'SENTRY_DEEPSEEK_MODEL',
+      'SENTRY_GLM_MODEL',
+      'SENTRY_ANTHROPIC_MODEL',
+      'SENTRY_OPENCODE_MODEL',
+      'SENTRY_CHATGPT_MODEL',
+    ];
+    const saved = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+    try {
+      await host.recover();
+      const models = async () =>
+        Object.fromEntries(
+          (
+            (await host.dispatch('runtime.environment', {})) as {
+              agentStacks: Array<{ id: string; modelId?: string }>;
+            }
+          ).agentStacks.map((stack) => [stack.id, stack.modelId]),
+        );
+      for (const name of names) delete process.env[name];
+      // Nothing chosen yet: the placeholder stays.
+      expect((await models())['stack_claude_main']).toBe('unconfigured');
+      process.env['SENTRY_DEEPSEEK_MODEL'] = 'deepseek-v4-pro';
+      process.env['SENTRY_GLM_MODEL'] = 'glm-5.3';
+      process.env['SENTRY_ANTHROPIC_MODEL'] = 'claude-opus-5-5';
+      let shown = await models();
+      expect(shown['stack_deepseek_main']).toBe('deepseek-v4-pro');
+      expect(shown['stack_glm_main']).toBe('glm-5.3');
+      expect(shown['stack_claude_main']).toBe('claude-opus-5-5');
+      // A later change shows at once.
+      process.env['SENTRY_ANTHROPIC_MODEL'] = 'claude-sonnet-5-5';
+      shown = await models();
+      expect(shown['stack_claude_main']).toBe('claude-sonnet-5-5');
+    } finally {
+      for (const name of names) {
+        const value = saved[name];
+        if (value === undefined) delete process.env[name];
+        else process.env[name] = value;
+      }
+      host.close();
+    }
+  });
+
   it('reports the real execution path of EVERY agent, not a value baked in per agent', async () => {
     const dataRoot = await tempDataRoot();
     const host = new SentryRuntimeHost(dataRoot, () => undefined);
