@@ -69,6 +69,7 @@ export const IPC_CHANNELS = [
   'cli:status',
   'cli:set-enabled',
   'app:set-language',
+  'app:save-cli-reference',
 ] as const;
 
 export type IpcChannel = (typeof IPC_CHANNELS)[number];
@@ -523,5 +524,11 @@ export interface SentryDesktopApi {
      * Best-effort: the renderer selection applies regardless of the write.
      */
     setLanguage(language: 'en' | 'bg'): Promise<{ saved: boolean; language: 'en' | 'bg' }>;
+    /**
+     * Native Save As for the CLI command reference (a Markdown file with every `sentry cli` command and what it
+     * does). The text is compiled into the app and the destination comes from the dialog; a cancelled dialog
+     * resolves { status: 'cancelled' }, never an error.
+     */
+    saveCliReference(): Promise<{ status: 'saved'; path: string } | { status: 'cancelled' }>;
   };
 }

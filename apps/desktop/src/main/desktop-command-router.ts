@@ -11,6 +11,7 @@ import type { DesktopApplicationService } from './services/desktop-service.js';
 import type { SaveDialogOptions } from './services/export-save.js';
 import { revealSavedExport, saveExportRun } from './services/export-save.js';
 import { saveFindingsExport } from './services/findings-export-save.js';
+import { saveCliReference } from './services/cli-reference-save.js';
 import { FindingExportRequestSchema } from '@qa/schemas';
 
 export const DesktopChannelSchemas: Record<string, z.ZodTypeAny> = {
@@ -19,6 +20,7 @@ export const DesktopChannelSchemas: Record<string, z.ZodTypeAny> = {
   'projects:cancel-add': z.object({}).strict(),
   'projects:cancel-update': z.object({}).strict(),
   'app:set-language': z.object({ language: z.enum(['en', 'bg']) }).strict(),
+  'app:save-cli-reference': z.object({}).strict(),
   'projects:get': z.object({ projectId: z.string().min(1).max(200) }).strict(),
   'projects:revisions': z.object({ projectId: z.string().min(1).max(200) }).strict(),
   'projects:delete': z.object({ projectId: z.string().min(1).max(200) }).strict(),
@@ -520,6 +522,12 @@ export async function dispatchDesktopCommand(
       if (hooks.cliStatus === undefined)
         throw Object.assign(new Error('CLI broker unavailable'), { code: 'CLI_UNAVAILABLE' });
       return hooks.cliStatus();
+    }
+    case 'app:save-cli-reference': {
+      const requestSavePath = hooks.requestSavePath;
+      if (requestSavePath === undefined)
+        throw Object.assign(new Error('Save dialog unavailable'), { code: 'DIALOG_UNAVAILABLE' });
+      return saveCliReference({ requestSavePath });
     }
     case 'app:set-language': {
       // Renderer owns the selection; main only mirrors it for native UI.

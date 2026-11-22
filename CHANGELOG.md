@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- **Download the CLI commands from Settings → Application.** A new "CLI command reference" row has a button that
+  saves a Markdown file, `sentry-cli-commands.md`, with every `sentry cli` command, its options and what it does
+  (the same guide that ships as CLI.md). The text is built into the app, so it works offline and always matches
+  the version you run; the save location comes from the normal Save As dialog.
 - **The sidebar closes from a tab on its edge.** The double-arrow button under the menu is gone. A small tab sits on
   the sidebar's right edge, like the split handle of a spreadsheet, and closes or opens the sidebar when pressed.
 
