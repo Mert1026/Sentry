@@ -220,16 +220,15 @@ describe('cli broker to runtime loop', () => {
     }
   });
 
-  it('rejects provider-secret commands over the wire', async () => {
+  it('refuses the commands that only make sense in a window over the wire', async () => {
     const { server } = await harness(() => undefined);
     const client = await connectPipe(server.status.pipePath, 'Nexus');
     try {
-      await expect(
-        client.request('providers:save', { name: 'X', value: 'Y' }),
-      ).rejects.toMatchObject({ code: 'CLI_COMMAND_FORBIDDEN' });
-      await expect(
-        client.request('runtime:select-distro', { distro: 'Ubuntu' }),
-      ).rejects.toMatchObject({ code: 'CLI_COMMAND_FORBIDDEN' });
+      // Native dialogs, and switching the broker itself off (it would cut the connection that asked).
+      for (const channel of ['runs:export-save', 'app:save-cli-reference', 'cli:set-enabled'])
+        await expect(client.request(channel, {})).rejects.toMatchObject({
+          code: 'CLI_COMMAND_FORBIDDEN',
+        });
     } finally {
       client.close();
     }

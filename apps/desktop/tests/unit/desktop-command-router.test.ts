@@ -159,18 +159,15 @@ describe('shared desktop command router', () => {
     expect(onRunCreated).toHaveBeenCalledWith('run_01K7777777777777777777A8W1', 'dop_test');
   });
 
-  it('rejects provider-secret and admin commands for external clients', async () => {
+  it('refuses the window-only commands for external clients', async () => {
     const h = await harness(true);
     for (const channel of [
-      'providers:save',
-      'providers:clear',
-      'providers:persist',
-      'providers:forget-file',
-      'providers:forget-all',
-      'runtime:select-distro',
       'runs:export-save',
       'runs:export-reveal',
       'app:save-cli-reference',
+      'projects:save-findings-export',
+      'projects:cancel-add',
+      'projects:cancel-update',
       'cli:set-enabled',
     ]) {
       expect(isCliAllowed(channel)).toBe(false);
@@ -224,16 +221,19 @@ describe('shared desktop command router', () => {
     await expect(
       dispatchDesktopCommand(h.service, 'app:set-language', { language: 'fr' }, {}),
     ).rejects.toThrow();
-    expect(isCliAllowed('app:set-language')).toBe(false);
+    // The CLI may set the interface language too.
+    expect(isCliAllowed('app:set-language')).toBe(true);
+    const persisted: string[] = [];
     await expect(
       dispatchDesktopCommand(
         h.service,
         'app:set-language',
         { language: 'bg' },
-        {},
+        { persistAppLanguage: (language) => persisted.push(language) },
         { external: true },
       ),
-    ).rejects.toMatchObject({ code: 'CLI_COMMAND_FORBIDDEN' });
+    ).resolves.toEqual({ saved: true, language: 'bg' });
+    expect(persisted).toEqual(['bg']);
   });
 
   it('lets the language persist during runtime maintenance', async () => {
@@ -302,11 +302,68 @@ describe('shared desktop command router', () => {
     ).rejects.toMatchObject({ code: 'IPC_UNKNOWN_CHANNEL' });
   });
 
-  it('exposes cli:status to external clients but keeps provider writes out of the allowlist', () => {
+  it('lets external clients read cli:status and change provider settings, but not switch the broker off', () => {
     expect(isCliAllowed('projects:delete')).toBe(true);
     expect(isCliAllowed('cli:status')).toBe(true);
-    expect(isCliAllowed('providers:save')).toBe(false);
+    expect(isCliAllowed('providers:save')).toBe(true);
+    expect(isCliAllowed('providers:clear')).toBe(true);
+    expect(isCliAllowed('providers:forget-all')).toBe(true);
+    expect(isCliAllowed('cli:set-enabled')).toBe(false);
     expect(CLI_ALLOWED_CHANNELS.has('runs:export-content')).toBe(true);
+  });
+
+  it('keeps provider secrets write-only for external clients: a key can be set and cleared, never read back', async () => {
+    const h = await harness(true);
+    const SECRET = 'sk-router-write-only-value-0123456789';
+    const external = { external: true };
+    const saved = await dispatchDesktopCommand(
+      h.service,
+      'providers:save',
+      { name: 'OPENAI_API_KEY', value: SECRET },
+      {},
+      external,
+    );
+    expect(JSON.stringify(saved)).not.toContain(SECRET);
+    // Every read the CLI has (status, environment, system, runtime) is free of the value.
+    const reads = [
+      await dispatchDesktopCommand(h.service, 'providers:status', {}, {}, external),
+      await dispatchDesktopCommand(h.service, 'providers:detect-binaries', {}, {}, external).catch(
+        () => null,
+      ),
+      await dispatchDesktopCommand(h.service, 'models:catalog', {}, {}, external).catch(() => null),
+    ];
+    expect(JSON.stringify(reads)).not.toContain(SECRET);
+    const status = (reads[0] as Array<{ name: string; configured: boolean }>).find(
+      (row) => row.name === 'OPENAI_API_KEY',
+    );
+    expect(status?.configured).toBe(true);
+    // A bad name is refused, and the refusal does not repeat the value.
+    const refusal = await dispatchDesktopCommand(
+      h.service,
+      'providers:save',
+      { name: 'NOT_A_MANAGED_NAME', value: SECRET },
+      {},
+      external,
+    ).catch((error: unknown) => error);
+    expect(String((refusal as Error).message)).not.toContain(SECRET);
+    await dispatchDesktopCommand(
+      h.service,
+      'providers:clear',
+      { name: 'OPENAI_API_KEY' },
+      {},
+      external,
+    );
+    const after = (await dispatchDesktopCommand(
+      h.service,
+      'providers:status',
+      {},
+      {},
+      external,
+    )) as Array<{
+      name: string;
+      configured: boolean;
+    }>;
+    expect(after.find((row) => row.name === 'OPENAI_API_KEY')?.configured).toBe(false);
   });
 
   it('every registered channel is known to the router', () => {
@@ -487,7 +544,7 @@ describe('findings export channels', () => {
     expect(call?.params).toEqual({ projectId, format: 'json', selection });
   });
 
-  it('lets external clients read toolchain needs and manage add-ons, but never install a custom one', async () => {
+  it('lets external clients read toolchain needs and manage add-ons, including installing a custom one', async () => {
     const h = await harness(true);
     for (const channel of [
       'projects:suggest-targets',
@@ -498,7 +555,7 @@ describe('findings export channels', () => {
       'toolchains:custom-remove',
     ])
       expect(isCliAllowed(channel), channel).toBe(true);
-    // A custom add-on is a shell command the caller supplies: only the app's own window may start one.
+    // The CLI has full access: installing a custom add-on, provider settings and the account sign-ins too.
     for (const channel of [
       'toolchains:custom-install',
       'providers:save',
@@ -506,16 +563,7 @@ describe('findings export channels', () => {
       'claude:account-login',
       'claude:account-submit-code',
     ])
-      expect(isCliAllowed(channel), channel).toBe(false);
-    await expect(
-      dispatchDesktopCommand(
-        h.service,
-        'toolchains:custom-install',
-        { name: 'tool', command: 'curl https://example.com | sh' },
-        {},
-        { external: true },
-      ),
-    ).rejects.toMatchObject({ code: 'CLI_COMMAND_FORBIDDEN' });
+      expect(isCliAllowed(channel), channel).toBe(true);
     await dispatchDesktopCommand(h.service, 'toolchains:custom-status', {}, {}, { external: true });
     await dispatchDesktopCommand(
       h.service,

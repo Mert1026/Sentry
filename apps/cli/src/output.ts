@@ -204,6 +204,66 @@ export function emitHumanSuccess(response: CliSuccessEnvelope, io: CliIo): void 
     case 'settings.set-note-limit':
       io.stdout('Note limit: ' + describeNoteLimit(response.data));
       return;
+    case 'provider.status': {
+      const rows = (
+        Array.isArray(response.data.providers) ? response.data.providers : []
+      ) as ReadonlyArray<{
+        name?: string;
+        configured?: boolean;
+        hint?: string;
+        source?: string;
+      }>;
+      io.stdout(
+        rows
+          .map(
+            (row) =>
+              (row.configured === true ? 'set    ' : 'unset  ') +
+              String(row.name) +
+              (row.configured === true && row.hint !== undefined && row.hint !== ''
+                ? '  ' + row.hint
+                : ''),
+          )
+          .join('\n'),
+      );
+      return;
+    }
+    case 'provider.set':
+      io.stdout('Saved ' + response.data.name + '. The value is not shown again.');
+      return;
+    case 'provider.clear':
+      io.stdout('Cleared ' + response.data.name);
+      return;
+    case 'toolchain.custom-install':
+      io.stdout('Installed the custom add-on ' + response.data.name);
+      return;
+    case 'provider.forget-all':
+      io.stdout('Forgot every provider credential.');
+      return;
+    case 'provider.forget-file':
+    case 'provider.persist':
+    case 'provider.detect-binaries':
+    case 'runtime.status':
+    case 'runtime.distros':
+    case 'runtime.select':
+    case 'runtime.reclaim-space':
+    case 'system.info':
+    case 'system.runs':
+    case 'system.environment':
+    case 'system.broker':
+      io.stdout(JSON.stringify(response.data.result, null, 2));
+      return;
+    case 'account.status':
+    case 'account.login':
+    case 'account.logout':
+    case 'account.cancel':
+    case 'account.code':
+      io.stdout(
+        response.data.provider + ' account\n' + JSON.stringify(response.data.result, null, 2),
+      );
+      return;
+    case 'app.language':
+      io.stdout('Language: ' + response.data.language);
+      return;
     case 'models.list':
       io.stdout(formatCatalog(response.data));
       return;

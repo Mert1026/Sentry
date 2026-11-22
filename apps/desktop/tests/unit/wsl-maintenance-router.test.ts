@@ -10,18 +10,20 @@ describe('Windows maintenance router boundary', () => {
       dispatchDesktopCommand(service, 'runtime:reclaim-space', {}, { reclaimSpace } as never),
     ).resolves.toEqual({ reconnected: true });
     expect(reclaimSpace).toHaveBeenCalledTimes(1);
-    expect(isCliAllowed('runtime:reclaim-space')).toBe(false);
+    // The CLI can start it too (it has full access); the same hook answers it.
+    expect(isCliAllowed('runtime:reclaim-space')).toBe(true);
     await expect(
       dispatchDesktopCommand(service, 'runtime:reclaim-space', {}, { reclaimSpace } as never, {
         external: true,
       }),
-    ).rejects.toMatchObject({ code: 'CLI_COMMAND_FORBIDDEN' });
+    ).resolves.toEqual({ reconnected: true });
+    expect(reclaimSpace).toHaveBeenCalledTimes(2);
     await expect(
       dispatchDesktopCommand(service, 'runtime:reclaim-space', { path: 'C:/another.vhdx' }, {
         reclaimSpace,
       } as never),
     ).rejects.toThrow();
-    expect(reclaimSpace).toHaveBeenCalledTimes(1);
+    expect(reclaimSpace).toHaveBeenCalledTimes(2);
   });
 
   it('blocks both transports during maintenance but keeps status readable', async () => {

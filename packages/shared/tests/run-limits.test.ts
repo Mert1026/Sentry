@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   NOTE_LIMIT_DEFAULT,
+  PROVIDER_SECRET_NAMES,
+  isSecretProviderName,
   NOTE_LIMIT_UNLIMITED,
   RUN_DEPTHS,
   RUN_TIMEOUT_MS_MAX,
@@ -60,5 +62,25 @@ describe('the note limit', () => {
     expect(parseNoteLimit('500')).toBe(500);
     expect(parseNoteLimit(' 20000 ')).toBe(20000);
     expect(parseNoteLimit(String(NOTE_LIMIT_UNLIMITED))).toBe(NOTE_LIMIT_UNLIMITED);
+  });
+});
+
+describe('which provider settings are secrets', () => {
+  it('treats the six keys and tokens as secrets and every plain preference as not', () => {
+    for (const name of PROVIDER_SECRET_NAMES) expect(isSecretProviderName(name), name).toBe(true);
+    for (const name of [
+      'SENTRY_OPENCODE_MODEL',
+      'SENTRY_GLM_REASONING',
+      'SENTRY_DEEPSEEK_BINARY',
+      'SENTRY_RUN_TIME_LIMIT_MS',
+      'SENTRY_NOTE_LIMIT_CHARS',
+      'ANTHROPIC_BASE_URL',
+    ])
+      expect(isSecretProviderName(name), name).toBe(false);
+  });
+
+  it('fails safe: a name it does not know is a secret', () => {
+    expect(isSecretProviderName('SOMETHING_NEW_TOKEN')).toBe(true);
+    expect(isSecretProviderName('ANTHROPIC_BASE_URL_EXTRA')).toBe(true);
   });
 });

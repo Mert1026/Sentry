@@ -27,7 +27,7 @@ import {
   parseNoteLimit,
   parseRunTimeLimit,
 } from '@qa/shared';
-import type { ParsedCliCommand } from './arguments.js';
+import type { ParsedCliCommand, ProviderValueSource } from './arguments.js';
 import { CliUsageError } from './arguments.js';
 import { summarizeRunStartAgents } from './run-summary.js';
 import {
@@ -39,7 +39,79 @@ import {
 export interface FrontendOptions {
   readonly onDiagnostic?: (message: string) => void;
   readonly createClient?: () => SentryDesktopClient;
+  /** Where `--stdin` values are read from (the process's standard input unless a test supplies one). */
+  readonly stdin?: AsyncIterable<Uint8Array | string> & { readonly isTTY?: boolean };
+  /** Where `--env` values are read from (the process environment unless a test supplies one). */
+  readonly environment?: Readonly<Record<string, string | undefined>>;
 }
+
+/** The longest provider value Desktop takes. */
+const PROVIDER_VALUE_MAX_CHARS = 5000;
+
+/**
+ * The value for `provider set`, from the command line, standard input or an environment variable. Secrets never
+ * come from the command line (the parser refuses that), and this never prints or returns the value anywhere but to
+ * Desktop.
+ */
+async function resolveProviderValue(
+  source: ProviderValueSource,
+  options: FrontendOptions,
+): Promise<string> {
+  if (source.kind === 'inline') return source.text;
+  if (source.kind === 'env') {
+    const value = (options.environment ?? process.env)[source.name];
+    if (value === undefined || value.trim().length === 0)
+      throw new CliUsageError(
+        'The environment variable ' + source.name + ' is not set or is empty',
+        {
+          argument: '--env',
+        },
+      );
+    return value.trim();
+  }
+  const input = options.stdin ?? process.stdin;
+  if (input.isTTY === true)
+    throw new CliUsageError(
+      'Nothing is piped in: give the value on standard input, for example  echo "<value>" | sentry cli provider set <NAME> --stdin',
+      { argument: '--stdin' },
+    );
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of input) {
+    const bytes = typeof chunk === 'string' ? Buffer.from(chunk, 'utf8') : Buffer.from(chunk);
+    size += bytes.length;
+    if (size > PROVIDER_VALUE_MAX_CHARS * 4)
+      throw new CliUsageError('The value on standard input is too long', { argument: '--stdin' });
+    chunks.push(bytes);
+  }
+  const text = Buffer.concat(chunks).toString('utf8').trim();
+  if (text.length === 0)
+    throw new CliUsageError('Standard input was empty', { argument: '--stdin' });
+  if (text.length > PROVIDER_VALUE_MAX_CHARS)
+    throw new CliUsageError(
+      'The value is longer than ' + PROVIDER_VALUE_MAX_CHARS + ' characters',
+      {
+        argument: '--stdin',
+      },
+    );
+  return text;
+}
+
+/** The Desktop channel each account command uses. */
+const ACCOUNT_CHANNELS = {
+  openai: {
+    status: 'openai:account-status',
+    login: 'openai:account-login',
+    logout: 'openai:account-logout',
+    cancel: 'openai:account-cancel-login',
+  },
+  claude: {
+    status: 'claude:account-status',
+    login: 'claude:account-login',
+    logout: 'claude:account-logout',
+    cancel: 'claude:account-cancel-login',
+  },
+} as const;
 
 /** The models each agent's provider offers, as the catalog names them. */
 const AGENT_CATALOG_PROVIDERS: Readonly<Record<string, readonly string[]>> = {
@@ -346,6 +418,7 @@ export async function executeFrontendCommand(
           runDepth: true,
           settings: true,
           models: true,
+          fullAccess: true,
           findingsByRevision: true,
           findingsExport: true,
           projectProfile: true,
@@ -628,6 +701,95 @@ export async function executeFrontendCommand(
         added?: Record<string, string[]>;
       };
       return success(input.command, { catalog: result.catalog, added: result.added ?? {} });
+    }
+    if (input.command === 'provider.status') {
+      return success(input.command, { providers: await broker.request('providers:status', {}) });
+    }
+    if (input.command === 'provider.set') {
+      const value = await resolveProviderValue(input.value, options);
+      // Desktop answers with whether the setting is set, never with a secret.
+      const result = await broker.request('providers:save', { name: input.name, value });
+      return success(input.command, { name: input.name, result });
+    }
+    if (input.command === 'provider.clear') {
+      return success(input.command, {
+        name: input.name,
+        result: await broker.request('providers:clear', { name: input.name }),
+      });
+    }
+    if (
+      input.command === 'provider.forget-all' ||
+      input.command === 'provider.forget-file' ||
+      input.command === 'provider.persist' ||
+      input.command === 'provider.detect-binaries'
+    ) {
+      const channel = {
+        'provider.forget-all': 'providers:forget-all',
+        'provider.forget-file': 'providers:forget-file',
+        'provider.persist': 'providers:persist',
+        'provider.detect-binaries': 'providers:detect-binaries',
+      }[input.command];
+      return success(input.command, { result: await broker.request(channel, {}) });
+    }
+    if (
+      input.command === 'account.status' ||
+      input.command === 'account.login' ||
+      input.command === 'account.logout' ||
+      input.command === 'account.cancel'
+    ) {
+      const action = input.command.slice('account.'.length) as
+        'status' | 'login' | 'logout' | 'cancel';
+      return success(input.command, {
+        provider: input.provider,
+        result: await broker.request(ACCOUNT_CHANNELS[input.provider][action], {}),
+      });
+    }
+    if (input.command === 'account.code') {
+      return success(input.command, {
+        provider: input.provider,
+        result: await broker.request('claude:account-submit-code', { code: input.code }),
+      });
+    }
+    if (
+      input.command === 'runtime.status' ||
+      input.command === 'runtime.distros' ||
+      input.command === 'runtime.reclaim-space' ||
+      input.command === 'system.info' ||
+      input.command === 'system.runs' ||
+      input.command === 'system.environment' ||
+      input.command === 'system.broker'
+    ) {
+      const channel = {
+        'runtime.status': 'runtime:status',
+        'runtime.distros': 'runtime:distros',
+        'runtime.reclaim-space': 'runtime:reclaim-space',
+        'system.info': 'system:info',
+        'system.runs': 'system:active-runs',
+        'system.environment': 'doctors:environment',
+        'system.broker': 'cli:status',
+      }[input.command];
+      return success(input.command, { result: await broker.request(channel, {}) });
+    }
+    if (input.command === 'runtime.select') {
+      return success(input.command, {
+        result: await broker.request('runtime:select-distro', { distro: input.distro }),
+      });
+    }
+    if (input.command === 'app.language') {
+      return success(input.command, {
+        language: input.language,
+        result: await broker.request('app:set-language', { language: input.language }),
+      });
+    }
+    if (input.command === 'toolchain.custom-install') {
+      return success(input.command, {
+        name: input.name,
+        result: await broker.request('toolchains:custom-install', {
+          name: input.name,
+          command: input.shellCommand,
+          ...(input.pathEntries === undefined ? {} : { pathEntries: [...input.pathEntries] }),
+        }),
+      });
     }
     if (input.command === 'toolchain.status') {
       return success(input.command, { toolchains: await broker.request('toolchains:status', {}) });

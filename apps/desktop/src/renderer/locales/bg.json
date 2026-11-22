@@ -212,7 +212,7 @@
   "English": "Английски (English)",
   "Bulgarian (Български)": "Български",
   "Local CLI Broker": "Локален CLI брокер",
-  "Allow external terminals and scripts to run `sentry cli ...` commands through this desktop session.": "Позволява на външни терминали и скриптове да изпълняват `sentry cli ...` команди през тази десктоп сесия.",
+  "Allow external terminals and scripts to run `sentry cli ...` commands through this desktop session. They have full access, including setting and clearing provider keys, so leave this off when you are not scripting.": "Позволява на външни терминали и скриптове да изпълняват `sentry cli ...` команди през тази десктоп сесия. Те имат пълен достъп, включително задаване и изчистване на ключовете на доставчиците, затова го оставете изключено, когато не пишете скриптове.",
   "Workspace Motion & Animations": "Анимации и движение в интерфейса",
   "Reduce pulsing indicators, animated graph edges, and smooth camera transitions.": "Намалява пулсиращите индикатори, анимираните връзки в графа и плавните преходи на камерата.",
   "Reduce section entrance animations, pulsing indicators, animated graph edges, and smooth camera transitions.": "Намалява анимациите при появата на секции, пулсиращите индикатори, анимираните връзки в графа и плавните преходи на камерата.",

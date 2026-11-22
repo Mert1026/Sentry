@@ -212,11 +212,14 @@ export const DesktopChannelSchemas: Record<string, z.ZodTypeAny> = {
 };
 export type DesktopChannel = keyof typeof DesktopChannelSchemas;
 
-// External CLI allowlist: operational commands only. Derived from the
-// shared CLI_BROKER_COMMANDS vocabulary so broker and frontend agree by
-// construction. Provider-secret mutation and admin/distro selection stay
-// renderer-only. Native-dialog flows are meaningless over a pipe; CLI file
-// output uses export-content.
+// External CLI allowlist, derived from the shared CLI_BROKER_COMMANDS
+// vocabulary so broker and frontend agree by construction. The CLI can read
+// and change everything the app can, including provider settings and keys,
+// accounts, the runtime distro and disk reclamation. Secret values are
+// write-only: no channel returns a stored key. What stays renderer-only is
+// what only makes sense in a window: native Save As dialogs, cancelling an
+// open folder picker, and switching the broker itself off (it would cut the
+// connection that asked). CLI file output uses export-content.
 export const CLI_ALLOWED_CHANNELS: ReadonlySet<string> = new Set(CLI_BROKER_COMMANDS);
 
 export function isCliAllowed(channel: string): boolean {

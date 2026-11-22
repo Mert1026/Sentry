@@ -190,7 +190,7 @@ export function ApplicationSettingsContent(): React.JSX.Element {
           />
           <InfoPopover title={t('Local CLI Broker')}>
             {t(
-              'Allow external terminals and scripts to run `sentry cli ...` commands through this desktop session.',
+              'Allow external terminals and scripts to run `sentry cli ...` commands through this desktop session. They have full access, including setting and clearing provider keys, so leave this off when you are not scripting.',
             )}
           </InfoPopover>
         </div>
