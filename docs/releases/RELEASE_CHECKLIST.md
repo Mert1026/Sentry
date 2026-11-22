@@ -14,6 +14,11 @@ immutable sources and assets. See [history](../history.md) for original gate res
 3. On Windowsx64 run pnpm distribution:build windows-x64. The archive must identify
    the actual approved source; never rename another commit's archive. Record ZIP,
    sidecar, manifest, inventory and source hashes privately.
+   Publish the ZIP that the distribution workflow built and attested on the release
+   commit (download its workflow artifact and check it with
+   `gh attestation verify <zip> --repo Mert1026/Sentry`), so `sentry update <archive.zip>`
+   can verify who built it. A ZIP built only on a workstation has no attestation: the
+   notes must then tell people to pass `-SkipAttestation` and accept a checksum-only check.
 4. Externally extract and validate complete inventory/component identities. Exercise
    prepared-host packaged setup, visible launch, matching Linux runtime, shutdown,
    restart and essential disposable workflows. Keep limitations explicit.
@@ -46,3 +51,11 @@ Every future Release page must contain separate PowerShell sections for fresh
 installation and updating an existing installation, with exact asset/checksum
 identity, retained user data and post-update verification. Validate the upgrade
 from the preceding stable version before claiming it works.
+
+Since v2.0.2 the packaged launcher has `sentry update <archive.zip>`: it verifies the ZIP against its
+`.sha256` file (and the GitHub attestation when `gh` is installed), extracts beside the current install,
+refuses the same or an older version, backs up the data and runs the new archive's own setup. Before a
+release, run it from the previous stable archive's successor on a disposable host and confirm the refusal
+of an older ZIP, the backup folder, and that a failed setup leaves the previous install untouched. The
+Release page and the notes must also say that a release older than v2.0.2 has no `sentry update <zip>` and
+is updated with the Release page's update block.
