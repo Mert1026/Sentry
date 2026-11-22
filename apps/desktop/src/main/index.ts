@@ -248,6 +248,13 @@ async function boot(): Promise<void> {
           // Self-status: external clients may inspect broker liveness and
           // (non-secret) client names; the payload carries no credentials.
           cliStatus: () => cliServer?.status ?? { started: false },
+          persistAppLanguage: (language) => {
+            writeAppLanguage(app.getPath('userData'), language);
+          },
+          reclaimSpace: () => {
+            if (quitting || maintenance === undefined) throw new Error('Sentry is shutting down.');
+            return maintenance.reclaimSpace();
+          },
         },
         { external: true },
       ),

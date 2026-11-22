@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+- **The CLI has full access to the app.** New commands read and change everything Desktop can: `provider status|set|clear|
+forget-all|forget-file|persist|detect-binaries` (provider modes, models, endpoints and keys), `account
+status|login|logout|cancel <openai|claude>` and `account code claude <code>`, `runtime status|distros|select|
+reclaim-space`, `system info|runs|environment|broker`, `app language`, and `toolchain custom install`. Keys are
+  write-only: they are set from standard input (`--stdin`) or an environment variable (`--env`), never from an
+  argument, and no command ever returns a stored key. The broker's allowlist is opened to match; only native
+  dialogs and switching the broker off stay in Desktop. The broker has no password, so a process running as your
+  user can now change your keys: the Local CLI Broker switch stays the control. See the
+  [CLI reference](docs/beta/cli.md).
+
+- **CI no longer fails on slow runners.** The release-prompt tests of the GLM and Claude harnesses run the real adapter
+  against scripted turns and could pass the default 5 second limit on a busy runner, which failed a healthy run
+  and the tests after it. Those two packages now allow 30 seconds per test. No product code changed.
+
 ## [2.0.2] - 2026-11-22
 
 Update from 2.0.1. It adds a fifth agent (Claude), notes for the agents with a note length limit, a secrets check,

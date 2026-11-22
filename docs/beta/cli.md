@@ -11,7 +11,9 @@ It is a frontend only: every command travels a local named pipe to the Desktop
 broker (named pipe on Windows, Unix socket on CachyOS), which dispatches through
 the shared router to the canonical WSL2 or native CachyOS runtime
 (`~/.local/share/sentry`). The CLI never opens the database, never
-owns leases, never instantiates harnesses, and never carries provider secrets.
+owns leases and never instantiates harnesses. It can read and change everything the app can (see
+[Full access](#full-access-providers-keys-accounts-runtime-and-system)); a stored provider key can be set and
+cleared but never read back.
 
 ```text
 Automation clients / humans
@@ -30,8 +32,8 @@ Desktop must be running first. While it runs, the Environment page shows
 `sentry cli` fails deterministically with `SENTRY_DESKTOP_NOT_RUNNING`
 (human text points at `sentry open`; `--json` mode returns the code).
 
-Provider credentials stay in Desktop Settings. Never export provider keys
-for the CLI; the CLI environment is ignored for secrets.
+Provider keys can be set from the CLI (`provider set`), but only from standard input or a named
+environment variable, never from a command argument. The CLI never prints a stored key.
 
 ## Machine contract
 
@@ -105,9 +107,14 @@ project list/add/show/update/delete/revisions/doctor
 project findings | export-findings | profile | profile-build
 settings show | effort | run-limit | note-limit
 models list | update
+provider status | set | clear | forget-all | forget-file | persist | detect-binaries
+account status | login | logout | cancel | code
+runtime status | distros | select | reclaim-space
+system info | runs | environment | broker
+app language
 agent list | agent doctor opencode|deepseek|glm|chatgpt|claude
 run start/list/show/status/cancel/result/export
-toolchain status | install | remove
+toolchain status | install | remove | custom status|install|remove
 ```
 
 ### Settings: reasoning effort, the run time limit and the note limit
@@ -133,11 +140,56 @@ default run time limit with `isDefault`, and the note limit (`noteLimit`: `chars
   `--agent-note`, and the notes fields in Desktop): `default` or `5k` (5,000 characters, the default), `20k`,
   `none` (no limit, up to one million characters) or a number from 500 to 200,000 such as `12000` or `12k`. A
   note longer than the saved limit is refused when the run starts, with `INVALID_ARGUMENT`.
-- Only these three settings can be changed this way. Credentials, models and every other setting stay
-  in Desktop; the broker refuses them (`settings:set` accepts nothing else).
+- `settings` changes only these three settings. Models, provider modes, endpoints and keys are changed with
+  `provider set` (below).
 - `run list` and `run status` report each run's `depth` (`fast` or `full`) and `timeLimitMs`, and
   `run list` and `project findings` mark fast runs with `FAST`.
 - `capabilities` reports `features.settings: true`, `features.models: true` and `features.runDepth: true`.
+
+### Full access: providers, keys, accounts, runtime and system
+
+The CLI can read and change everything Desktop can. These commands mirror Settings → Providers, the account
+sign-ins, Settings → Environment and the runtime.
+
+```text
+sentry cli provider status
+sentry cli provider set <NAME> (--value <text> | --stdin | --env <VARIABLE>)
+sentry cli provider clear <NAME>
+sentry cli provider forget-all | forget-file | persist | detect-binaries
+sentry cli account status|login|logout|cancel <openai|claude>
+sentry cli account code claude <code>
+sentry cli runtime status | distros | select <distro> | reclaim-space
+sentry cli system info | runs | environment | broker
+sentry cli app language <en|bg>
+sentry cli toolchain custom install <name> --command "<command>" [--path-entries a,b]
+```
+
+- **`provider status`** lists every setting Desktop manages and whether it is set. A plain preference (a model id,
+  a provider mode, an endpoint) shows its value; a key or token shows only that it is set.
+- **`provider set <NAME>`** saves a setting. `<NAME>` is a managed setting such as `SENTRY_GLM_MODEL`,
+  `SENTRY_OPENCODE_PROVIDER`, `SENTRY_ANTHROPIC_AUTH`, `ANTHROPIC_BASE_URL` or `DEEPSEEK_API_KEY`; Desktop refuses
+  any other name. A plain preference may be given with `--value`. **A key or token never goes on the command line**
+  (it would stay in shell history and process lists): pass it with `--stdin`
+  (`echo "<key>" | sentry cli provider set DEEPSEEK_API_KEY --stdin`) or `--env <VARIABLE>`
+  (`sentry cli provider set OPENAI_API_KEY --env MY_OPENAI_KEY`). The parser refuses `--value` for a secret.
+- **Write-only keys.** A key can be set, replaced and cleared, and `provider status` says only whether one is set.
+  No command returns a stored key, and Desktop never shows one either.
+- **`provider clear <NAME>`** removes one setting. `forget-all` removes every stored credential, `forget-file`
+  removes the credential file, `persist` saves the current session's credentials, and `detect-binaries` finds the
+  agent programs.
+- **`account`** drives the ChatGPT and Claude account sign-ins: `login` prints the sign-in link, and
+  `account code claude <code>` finishes the Claude sign-in with the code the page shows.
+- **`runtime`** shows the runtime, lists and selects the WSL distro, and starts disk reclamation (it asks Windows
+  for permission and refuses while runs are active). **`system`** shows application info, active runs, the
+  environment check and the CLI broker status. **`app language`** sets the interface language.
+- There is no extra confirmation: the commands run as typed, including `provider forget-all`. `project delete` and
+  `toolchain custom remove` keep their `--yes`.
+- Not available over the CLI: native Save As dialogs and folder pickers (use `--out` and `export-content`), and
+  switching the CLI broker itself off (it would cut the connection that asked).
+
+**Trust.** The named pipe has no password: any process running as your Windows user can connect. With full
+access, such a process can set, replace or clear your provider keys, install custom add-ons and start runs. The
+**Local CLI Broker** switch in Settings → Application is the control: leave it off when you are not scripting.
 
 ### Models: the list the model picker uses
 
@@ -227,8 +279,8 @@ NOT COMPLETE`, with the agent's reason (`--json` carries `verdict`:
   `--agents` still means OpenCode, DeepSeek and GLM.
 - `--profile` hands each agent its own project notes, `--tools` allows
   toolchain downloads, `--revision <rev-id>` runs on a chosen revision.
-- Custom add-ons are not exposed through the CLI: they run arbitrary install
-  commands, so they stay in the Desktop UI.
+- A custom add-on is installed with `toolchain custom install <name> --command "<command>"`. It runs that
+  command in the Linux runtime, so treat it like running the command yourself.
 
 `project add` accepts normal Windows paths (`C:\Projects\SampleApp`); the
 Desktop service translates them to WSL paths. `project delete` keeps the
@@ -427,9 +479,12 @@ custom DACL that explicitly denies remote identities.
 
 The current trust boundary assumes the client and Sentry run under the
 same Windows user. Security additionally relies on the explicit command
-allowlist, strict payload validation, absence of credential-management
-commands from the external surface, and the fact that provider secrets
-are never transmitted through the CLI protocol.
+allowlist, strict payload validation, the Local CLI Broker switch, and the fact
+that no command returns a stored provider secret (keys are write-only through
+the CLI and are read from standard input or an environment variable, never from
+an argument). Because the CLI has full access, a same-user process that can reach
+the pipe can set, replace or clear provider keys; keep the broker off when you
+do not need it.
 
 Preserved facts: client names are informational identity, never
 authentication; the pipe scope hash is not authentication; same-user

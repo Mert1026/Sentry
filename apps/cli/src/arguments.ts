@@ -2,6 +2,7 @@ import type { CliCommand } from '@qa/schemas';
 import type { SimulationScenario } from '@qa/run-engine';
 import {
   AGENT_EFFORT_LEVELS,
+  isSecretProviderName,
   NOTE_LIMIT_CUSTOM_MAX,
   NOTE_LIMIT_CUSTOM_MIN,
   NOTE_LIMIT_DEFAULT,
@@ -44,6 +45,17 @@ export const DEFAULT_AGENT_NAMES: readonly AgentName[] = ['opencode', 'deepseek'
 function isAgentName(value: string): value is AgentName {
   return (AGENT_NAMES as readonly string[]).includes(value);
 }
+
+export type AccountProvider = 'openai' | 'claude';
+
+/**
+ * Where a provider value comes from. A secret (an API key or token) is never taken from the command line, where it
+ * would stay in shell history and process lists: it is read from standard input or from an environment variable.
+ */
+export type ProviderValueSource =
+  | { readonly kind: 'inline'; readonly text: string }
+  | { readonly kind: 'stdin' }
+  | { readonly kind: 'env'; readonly name: string };
 
 export type ParsedCliCommand =
   | BaseCommand<'capabilities'>
@@ -124,6 +136,35 @@ export type ParsedCliCommand =
   | (BaseCommand<'settings.set-note-limit'> & { readonly value: string })
   | (BaseCommand<'models.list'> & { readonly agent?: AgentName })
   | BaseCommand<'models.update'>
+  | BaseCommand<'provider.status'>
+  | (BaseCommand<'provider.set'> & {
+      readonly name: string;
+      readonly value: ProviderValueSource;
+    })
+  | (BaseCommand<'provider.clear'> & { readonly name: string })
+  | BaseCommand<'provider.forget-all'>
+  | BaseCommand<'provider.forget-file'>
+  | BaseCommand<'provider.persist'>
+  | BaseCommand<'provider.detect-binaries'>
+  | (BaseCommand<'account.status'> & { readonly provider: AccountProvider })
+  | (BaseCommand<'account.login'> & { readonly provider: AccountProvider })
+  | (BaseCommand<'account.logout'> & { readonly provider: AccountProvider })
+  | (BaseCommand<'account.cancel'> & { readonly provider: AccountProvider })
+  | (BaseCommand<'account.code'> & { readonly provider: 'claude'; readonly code: string })
+  | BaseCommand<'runtime.status'>
+  | BaseCommand<'runtime.distros'>
+  | (BaseCommand<'runtime.select'> & { readonly distro: string })
+  | BaseCommand<'runtime.reclaim-space'>
+  | BaseCommand<'system.info'>
+  | BaseCommand<'system.runs'>
+  | BaseCommand<'system.environment'>
+  | BaseCommand<'system.broker'>
+  | (BaseCommand<'app.language'> & { readonly language: 'en' | 'bg' })
+  | (BaseCommand<'toolchain.custom-install'> & {
+      readonly name: string;
+      readonly shellCommand: string;
+      readonly pathEntries?: readonly string[];
+    })
   | (BaseCommand<'project.suggest-targets'> & { readonly projectId: string })
   | (BaseCommand<'project.toolchain-needs'> & { readonly projectId: string })
   | (BaseCommand<'project.toolchain-selection'> & { readonly projectId: string })
@@ -254,6 +295,27 @@ export function commandHint(args: readonly string[]): CliCommand | 'unknown' {
     'settings.set-note-limit',
     'models.list',
     'models.update',
+    'provider.status',
+    'provider.set',
+    'provider.clear',
+    'provider.forget-all',
+    'provider.forget-file',
+    'provider.persist',
+    'provider.detect-binaries',
+    'account.status',
+    'account.login',
+    'account.logout',
+    'account.cancel',
+    'runtime.status',
+    'runtime.distros',
+    'runtime.select',
+    'runtime.reclaim-space',
+    'system.info',
+    'system.runs',
+    'system.environment',
+    'system.broker',
+    'app.language',
+    'toolchain.custom-install',
     'agent.list',
     'agent.doctor',
     'run.simulate',
@@ -700,7 +762,28 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
       if (!rest.includes('--yes')) fail('Removing a custom add-on requires --yes', '--yes');
       return { command: 'toolchain.custom-remove', name: name as string };
     }
-    fail('Usage: qa toolchain custom status | qa toolchain custom remove <name> --yes');
+    if (what === 'install') {
+      assertFlags(rest, ['--command', '--path-entries']);
+      const [name] = assertPositionals(
+        rest,
+        1,
+        'qa toolchain custom install <name> --command "<command>" [--path-entries a,b]',
+      );
+      const shellCommand = option(rest, '--command');
+      if (shellCommand === undefined) fail('--command is required', '--command');
+      const entries = option(rest, '--path-entries');
+      return {
+        command: 'toolchain.custom-install',
+        name: name as string,
+        shellCommand,
+        ...(entries === undefined
+          ? {}
+          : { pathEntries: entries.split(',').filter((entry) => entry.length > 0) }),
+      };
+    }
+    fail(
+      'Usage: qa toolchain custom status | qa toolchain custom install <name> --command "<command>" | qa toolchain custom remove <name> --yes',
+    );
   }
   if (area === 'settings' && action === 'show') {
     assertFlags(tail, []);
@@ -771,6 +854,113 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
     assertFlags(tail, []);
     assertPositionals(tail, 0, 'qa models update');
     return { command: 'models.update' };
+  }
+  if (area === 'provider') {
+    const providerName = (usage: string): string => {
+      const [name] = assertPositionals(
+        tail.filter((value, index) => value !== '--stdin' && !(tail[index - 1] === '--env')),
+        1,
+        usage,
+      );
+      if (name === undefined || !/^[A-Z][A-Z0-9_]{1,63}$/.test(name))
+        fail('A provider setting name looks like SENTRY_GLM_MODEL or DEEPSEEK_API_KEY', name);
+      return name;
+    };
+    if (action === 'status') {
+      assertFlags(tail, []);
+      assertPositionals(tail, 0, 'qa provider status');
+      return { command: 'provider.status' };
+    }
+    if (action === 'set') {
+      assertFlags(tail, ['--value', '--stdin', '--env']);
+      const name = providerName(
+        'qa provider set <NAME> (--value <text> | --stdin | --env <VARIABLE>)',
+      );
+      const inline = option(tail, '--value');
+      const environment = option(tail, '--env');
+      const stdin = tail.includes('--stdin');
+      if ([inline !== undefined, environment !== undefined, stdin].filter(Boolean).length !== 1)
+        fail('Give the value with exactly one of --value, --stdin or --env <VARIABLE>');
+      if (isSecretProviderName(name) && inline !== undefined)
+        fail(
+          name +
+            ' is a secret: pass it on standard input (--stdin) or from an environment variable (--env <VARIABLE>), never on the command line',
+          '--value',
+        );
+      if (environment !== undefined && !/^[A-Za-z_][A-Za-z0-9_]{0,127}$/.test(environment))
+        fail('--env takes the name of an environment variable', '--env');
+      const value: ProviderValueSource =
+        inline !== undefined
+          ? { kind: 'inline', text: inline }
+          : environment !== undefined
+            ? { kind: 'env', name: environment }
+            : { kind: 'stdin' };
+      return { command: 'provider.set', name, value };
+    }
+    if (action === 'clear') {
+      assertFlags(tail, []);
+      return { command: 'provider.clear', name: providerName('qa provider clear <NAME>') };
+    }
+    if (
+      action === 'forget-all' ||
+      action === 'forget-file' ||
+      action === 'persist' ||
+      action === 'detect-binaries'
+    ) {
+      assertFlags(tail, []);
+      assertPositionals(tail, 0, 'qa provider ' + action);
+      return { command: ('provider.' + action) as 'provider.persist' };
+    }
+    fail(
+      'Usage: qa provider status | set <NAME> (--value <text> | --stdin | --env <VARIABLE>) | clear <NAME> | forget-all | forget-file | persist | detect-binaries',
+    );
+  }
+  if (area === 'account') {
+    assertFlags(tail, []);
+    const providerOf = (value: string | undefined): AccountProvider => {
+      if (value !== 'openai' && value !== 'claude')
+        fail('The account provider is openai or claude', value);
+      return value;
+    };
+    if (action === 'status' || action === 'login' || action === 'logout' || action === 'cancel') {
+      const [provider] = assertPositionals(tail, 1, 'qa account ' + action + ' <openai|claude>');
+      return { command: ('account.' + action) as 'account.status', provider: providerOf(provider) };
+    }
+    if (action === 'code') {
+      const [provider, code] = assertPositionals(tail, 2, 'qa account code claude <code>');
+      if (providerOf(provider) !== 'claude' || code === undefined)
+        fail('Only the Claude sign-in takes a code: qa account code claude <code>');
+      return { command: 'account.code', provider: 'claude', code };
+    }
+    fail(
+      'Usage: qa account status|login|logout|cancel <openai|claude> | qa account code claude <code>',
+    );
+  }
+  if (area === 'runtime') {
+    assertFlags(tail, []);
+    if (action === 'status' || action === 'distros' || action === 'reclaim-space') {
+      assertPositionals(tail, 0, 'qa runtime ' + action);
+      return { command: ('runtime.' + action) as 'runtime.status' };
+    }
+    if (action === 'select') {
+      const [distro] = assertPositionals(tail, 1, 'qa runtime select <distro>');
+      return { command: 'runtime.select', distro: distro as string };
+    }
+    fail('Usage: qa runtime status | distros | select <distro> | reclaim-space');
+  }
+  if (area === 'system') {
+    assertFlags(tail, []);
+    if (action === 'info' || action === 'runs' || action === 'environment' || action === 'broker') {
+      assertPositionals(tail, 0, 'qa system ' + action);
+      return { command: ('system.' + action) as 'system.info' };
+    }
+    fail('Usage: qa system info | runs | environment | broker');
+  }
+  if (area === 'app' && action === 'language') {
+    assertFlags(tail, []);
+    const [language] = assertPositionals(tail, 1, 'qa app language <en|bg>');
+    if (language !== 'en' && language !== 'bg') fail('The language is en or bg', language);
+    return { command: 'app.language', language };
   }
   if (area === 'toolchain' && action === 'status') {
     assertFlags(tail, []);
