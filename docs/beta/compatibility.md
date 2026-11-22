@@ -1,7 +1,12 @@
 # Beta compatibility
 
-What changes for an existing 1.0.2 install when it moves to 2.0.x, and what 2.0.2 changes for a 2.0.1
-install. The product version is `2.0.2`; the runtime protocol stays 1.
+What changes for an existing 1.0.2 install when it moves to 2.0.x, and what 2.0.3 changes for a 2.0.2
+install. The product version is `2.0.3`; the runtime protocol stays 1.
+
+**2.0.2 to 2.0.3:** no database migration, no change to credentials or provider pins. The schemas change only
+by optional additions: the new CLI results (`provider`, `account`, `runtime`, `system`, `app language`, custom
+add-on install) and the `fullAccess` capability flag. Existing projects, runs and settings are kept, and going
+back to 2.0.2 needs no backup.
 
 **2.0.1 to 2.0.2:** no database migration, no change to credentials or provider pins. The schemas change only
 by optional additions: a run's `userNotes` and `secretsCheck`, the `claude` agent stack, the CLI's `noteLimit`

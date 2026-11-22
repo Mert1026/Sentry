@@ -5,7 +5,7 @@ investigate the same immutable snapshot of your project on their own and report
 findings, evidence, token usage and a persistent run history. Findings are never
 merged or ranked across agents, so you can compare what each one found.
 
-**Stable release:** [Sentry v2.0.2 — Windows](https://github.com/Mert1026/Sentry/releases/tag/v2.0.2)
+**Stable release:** [Sentry v2.0.3 — Windows](https://github.com/Mert1026/Sentry/releases/tag/v2.0.3)
 for **Windows 11 x64 with WSL2** (Ubuntu preferred). The ZIP is unsigned and uses an
 online Linux runtime bootstrap. Native Linux Desktop is deferred.
 Version 2.0 removes the 1.x merge, verification and issue features and keeps your
@@ -77,16 +77,15 @@ it, run `.\sentry.ps1 register-command` there.
 More detail: [getting started](docs/getting-started.md) and the
 [installation and maintenance guide](docs/setup/distribution.md).
 
-## Updating from 2.0.1
+## Updating from 2.0.2
 
-There is no automatic updater. Finish or cancel active runs, stop Sentry (`sentry stop`), back up your data and
-run the **Update an existing installation** block on the
-[v2.0.2 Release page](https://github.com/Mert1026/Sentry/releases/tag/v2.0.2): it downloads and verifies the
-new ZIP, sets up the matching runtime and registers the new command. Your projects, runs, history and provider
-settings are kept (no database migration). Afterwards check `sentry version` shows 2.0.2 and
-`sentry cli capabilities --json` lists `models`. From 2.0.2 on, later updates can use
-`sentry update <archive.zip>` with a ZIP you downloaded (it verifies it, backs up your data and sets up the new
-version). Full steps: [release notes](docs/releases/v2.0.2.md#updating-from-v201).
+There is no automatic updater. Finish or cancel active runs, then download the release ZIP and its `.sha256` file
+from the [v2.0.3 Release page](https://github.com/Mert1026/Sentry/releases/tag/v2.0.3) into one folder and run
+`sentry update <path-to-the-zip>`: it verifies the ZIP, backs up your data and sets up the new version. Your
+projects, runs, history and provider settings are kept (no database migration). Afterwards check `sentry version`
+shows 2.0.3 and `sentry cli capabilities --json` lists `fullAccess`. Updating from 2.0.1 or earlier: use the
+Release page's **Update an existing installation** block. Full steps:
+[release notes](docs/releases/v2.0.3.md#updating-from-v202).
 
 ## Configuration
 
@@ -221,6 +220,13 @@ The original beta executable is not an approved credential downgrade target.
 
 ## What's new
 
+### 2.0.3
+
+- **The CLI has full access to the app:** `provider`, `account`, `runtime`, `system`, `app language` and
+  `toolchain custom install` commands read and change what Desktop can. Keys are write-only and never go on the
+  command line. The CLI broker has no password, so keep the **Local CLI Broker** switch off when you are not
+  scripting. See the [CLI reference](docs/beta/cli.md).
+
 ### 2.0.2
 
 - **Claude** as a fifth, opt-in agent (Anthropic API key or Claude account), with its own model and effort.
@@ -268,7 +274,7 @@ The full list is in the [changelog](CHANGELOG.md).
 - [CLI reference and automation](docs/beta/cli.md)
 - [Contributing and development](CONTRIBUTING.md)
 - [Architecture](docs/architecture/README.md) and [decision records](docs/adr/0001-monorepo.md)
-- [Stable notes](docs/releases/v2.0.2.md) and [changelog](CHANGELOG.md)
+- [Stable notes](docs/releases/v2.0.3.md) and [changelog](CHANGELOG.md)
 - [Testing](docs/development/testing.md), [release procedure](docs/releases/RELEASE_CHECKLIST.md)
   and [branching policy](docs/development/branching.md)
 - [Historical reports and failed-test evidence](docs/history.md)

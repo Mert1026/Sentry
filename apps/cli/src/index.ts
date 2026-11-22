@@ -19,7 +19,7 @@ import {
   type CliIo,
 } from './output.js';
 
-export const QA_VERSION = '2.0.2';
+export const QA_VERSION = '2.0.3';
 
 export function versionLine(): string {
   return 'qa ' + QA_VERSION;
