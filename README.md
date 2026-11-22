@@ -5,11 +5,11 @@ investigate the same immutable snapshot of your project on their own and report
 findings, evidence, token usage and a persistent run history. Findings are never
 merged or ranked across agents, so you can compare what each one found.
 
-**Stable release:** [Sentry v2.0.1 — Windows](https://github.com/Mert1026/Sentry/releases/tag/v2.0.1)
+**Stable release:** [Sentry v2.0.2 — Windows](https://github.com/Mert1026/Sentry/releases/tag/v2.0.2)
 for **Windows 11 x64 with WSL2** (Ubuntu preferred). The ZIP is unsigned and uses an
 online Linux runtime bootstrap. Native Linux Desktop is deferred.
 Version 2.0 removes the 1.x merge, verification and issue features and keeps your
-Full and Targeted runs. Already on 2.0.0? See [Updating from 2.0.0](#updating-from-200).
+Full and Targeted runs. Already on 2.0.1? See [Updating from 2.0.1](#updating-from-201).
 What changed: [What's new](#whats-new).
 
 ## Contents
@@ -24,7 +24,7 @@ What changed: [What's new](#whats-new).
 - [CLI automation](#cli-automation)
 - [Security and recovery](#security-and-recovery)
 - [What's new](#whats-new)
-- [Updating from 2.0.0](#updating-from-200)
+- [Updating from 2.0.1](#updating-from-201)
 - [Documentation and development](#documentation-and-development)
 
 ## Features
@@ -77,16 +77,16 @@ it, run `.\sentry.ps1 register-command` there.
 More detail: [getting started](docs/getting-started.md) and the
 [installation and maintenance guide](docs/setup/distribution.md).
 
-## Updating from 2.0.0
+## Updating from 2.0.1
 
-There is no automatic updater. Finish or cancel active runs, then run `sentry update <archive.zip>` with the
-downloaded ZIP (it verifies it, backs up your data and sets up the new version), or stop Sentry (`sentry stop`),
-back up your data and run the **Update an existing installation** block on the
-[v2.0.1 Release page](https://github.com/Mert1026/Sentry/releases/tag/v2.0.1): it downloads and
-verifies the new ZIP, sets up the matching runtime and registers the new command. Your projects,
-runs, history and provider settings are kept (no database migration). Afterwards check
-`sentry version` shows 2.0.1 and `sentry cli capabilities --json` lists `runDepth` and `settings`.
-Full steps: [release notes](docs/releases/v2.0.1.md#updating-from-v200).
+There is no automatic updater. Finish or cancel active runs, stop Sentry (`sentry stop`), back up your data and
+run the **Update an existing installation** block on the
+[v2.0.2 Release page](https://github.com/Mert1026/Sentry/releases/tag/v2.0.2): it downloads and verifies the
+new ZIP, sets up the matching runtime and registers the new command. Your projects, runs, history and provider
+settings are kept (no database migration). Afterwards check `sentry version` shows 2.0.2 and
+`sentry cli capabilities --json` lists `models`. From 2.0.2 on, later updates can use
+`sentry update <archive.zip>` with a ZIP you downloaded (it verifies it, backs up your data and sets up the new
+version). Full steps: [release notes](docs/releases/v2.0.2.md#updating-from-v201).
 
 ## Configuration
 
@@ -221,6 +221,19 @@ The original beta executable is not an approved credential downgrade target.
 
 ## What's new
 
+### 2.0.2
+
+- **Claude** as a fifth, opt-in agent (Anthropic API key or Claude account), with its own model and effort.
+- **Notes for the agents** before a run, with a note length limit in Settings → Application.
+- **Secrets check** on every run (on by default), and a managed **headless browser** for web checks.
+- **Model picker** with an Update list button and your own model id; agent cards show the model you chose.
+- **`sentry update <archive.zip>`** installs a ZIP you downloaded, after checking it, with a backup first.
+- **Settings → Application** holds the run time limit and the note length limit, and a button that saves the
+  CLI command reference as a Markdown file. New CLI commands: `settings note-limit`, `models list`,
+  `models update`.
+- A redesigned **Providers** page, a sidebar that opens and closes from an edge tab, and a more structured run
+  page. Fixes from QA runs on Sentry's own code; see the [changelog](CHANGELOG.md).
+
 ### 2.0.1
 
 - **Run depth:** choose Fast (at most 3 planned checks) or Full when starting a run, in the app or
@@ -255,7 +268,7 @@ The full list is in the [changelog](CHANGELOG.md).
 - [CLI reference and automation](docs/beta/cli.md)
 - [Contributing and development](CONTRIBUTING.md)
 - [Architecture](docs/architecture/README.md) and [decision records](docs/adr/0001-monorepo.md)
-- [Stable notes](docs/releases/v2.0.1.md) and [changelog](CHANGELOG.md)
+- [Stable notes](docs/releases/v2.0.2.md) and [changelog](CHANGELOG.md)
 - [Testing](docs/development/testing.md), [release procedure](docs/releases/RELEASE_CHECKLIST.md)
   and [branching policy](docs/development/branching.md)
 - [Historical reports and failed-test evidence](docs/history.md)

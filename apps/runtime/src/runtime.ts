@@ -90,7 +90,7 @@ import { ToolchainManager } from './toolchains.js';
 import { OpenAiAccount } from './openai-account.js';
 import { ClaudeAccount } from './claude-account.js';
 const releaseIdentity = runtimeReleaseIdentity();
-export const RUNTIME_VERSION = releaseIdentity?.version ?? '2.0.1';
+export const RUNTIME_VERSION = releaseIdentity?.version ?? '2.0.2';
 
 const ProjectIdInput = z.string().min(1).max(200);
 const RunIdInput = z.string().regex(/^run_[0-9A-HJKMNP-TV-Z]{26}$/);

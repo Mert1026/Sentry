@@ -1,6 +1,6 @@
 {
   "name": "@qa/desktop",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "private": true,
   "type": "module",
   "description": "Sentry desktop QA workspace (Electron + React). Phase 8.",
@@ -54,7 +54,7 @@
     "@xyflow/react": "12.3.6",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "react-router-dom": "6.28.0",
+    "react-router-dom": "6.30.6",
     "zod": "catalog:",
     "zustand": "5.0.2",
     "lucide-react": "0.469.0"
