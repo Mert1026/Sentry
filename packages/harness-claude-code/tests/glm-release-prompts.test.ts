@@ -32,8 +32,12 @@ function hermeticUsersRoot(): string {
 }
 
 async function request(root: string) {
-  await mkdir(root, { recursive: true });
-  await writeFile(join(root, 'README.md'), '# Fixture\nimportant line\n');
+  // The adapter keeps its disposable home next to the workspace (<parent>/.sentry-claude-home). Put the workspace one
+  // level down so every test gets its own home: with the workspace directly in the system temp folder, all tests in
+  // every package shared one home and collided when the suites ran in parallel.
+  const workspace = join(root, 'workspace');
+  await mkdir(workspace, { recursive: true });
+  await writeFile(join(workspace, 'README.md'), '# Fixture\nimportant line\n');
   return HarnessRunRequestSchema.parse({
     schemaVersion: 1,
     agentRunId: createAgentRunId(),
@@ -41,7 +45,7 @@ async function request(root: string) {
     agentStackId: 'stack_glm_main',
     projectContextSnapshotId: createProjectContextSnapshotId(),
     workspace: {
-      runtimePath: root,
+      runtimePath: workspace,
       snapshotId: createSnapshotId(),
       writable: true,
       isolated: true,
@@ -204,14 +208,21 @@ describe('GLM ordered stage prompt behavior', () => {
         const running = (async () => {
           for await (const event of adapter.run(input)) events.push(event);
         })();
-        await blocked;
-        // Move the fake clock in small steps and let real file I/O finish between them. A single jump can land
-        // before the adapter registers its deadline timer, and then nothing ever fires and the test hangs.
+        // The clock is faked, so anything in the run that waits on a timer needs the test to move it. Step it in
+        // small amounts and let real file I/O finish between steps: a single jump can land before the adapter
+        // registers its deadline timer (or while it still waits on a start-up timer), and then nothing fires and the
+        // test hangs until its timeout.
+        let reachedBlock = false;
         let settled = false;
+        void blocked.then(() => (reachedBlock = true));
         void running.then(
           () => (settled = true),
           () => (settled = true),
         );
+        while (!reachedBlock && !settled) {
+          await realTick();
+          await vi.advanceTimersByTimeAsync(1);
+        }
         while (!settled) {
           await realTick();
           await vi.advanceTimersByTimeAsync(50);
