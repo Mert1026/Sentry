@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+- **CI no longer fails on slow runners.** The release-prompt tests of the GLM and Claude harnesses run the real adapter
+  against scripted turns and could pass the default 5 second limit on a busy runner, which failed a healthy run
+  and the tests after it. Those two packages now allow 30 seconds per test. No product code changed.
+
 ## [2.0.2] - 2026-11-22
 
 Update from 2.0.1. It adds a fifth agent (Claude), notes for the agents with a note length limit, a secrets check,
