@@ -2,6 +2,223 @@
 
 ## [Unreleased]
 
+- **Download the CLI commands from Settings → Application.** A new "CLI command reference" row has a button that
+  saves a Markdown file, `sentry-cli-commands.md`, with every `sentry cli` command, its options and what it does
+  (the same guide that ships as CLI.md). The text is built into the app, so it works offline and always matches
+  the version you run; the save location comes from the normal Save As dialog.
+
+- **The agent cards on the project page show the model you chose.** The DeepSeek, GLM and Claude cards kept showing
+  the model they were registered with ("unconfigured" or the built-in default) next to "configured", even after you
+  had chosen a model in Settings → Providers; only OpenCode and ChatGPT followed the change. Every agent now reports
+  the model it will really use, and it updates as soon as the setting changes.
+- **The sidebar closes from a tab on its edge.** The double-arrow button under the menu is gone. A small tab sits on
+  the sidebar's right edge, like the split handle of a spreadsheet, and closes or opens the sidebar when pressed.
+
+- **A more organised Providers page.** Each agent (OpenCode, DeepSeek, GLM, ChatGPT, Claude) is one wide card with a
+  title bar, and its settings (model, keys, endpoint, reasoning effort) sit in equal panels in two columns, one column
+  on a narrow window. The two floating info buttons are now one row under the title.
+  Every card now carries the agent's logo (the marks come from the MIT-licensed `@lobehub/icons-static-svg` set and
+  belong to their owners), a line saying what the agent is for, a Ready / Needs a key chip, a brand-coloured accent,
+  and a gentle entrance and hover. Every drop-down on the page (OpenCode provider, reasoning effort) is now the same
+  custom list as the model picker, with the same keyboard use, instead of the browser's own.
+  The ChatGPT and Claude account sections are panels like the other settings, with a Signed in / Not signed in pill, and
+  the two page-level info buttons are labelled buttons (Provider credentials, Advanced runtime binaries).
+
+- **The command line follows Desktop.** `sentry cli settings note-limit <default|5k|20k|none|12000>` reads and sets the
+  note length limit from Settings → Application, and `settings show` reports it. `sentry cli models list [--agent ...]`
+  prints the model list behind the model picker, and `sentry cli models update` fetches the public catalog and
+  lists the new models. `capabilities` reports `features.models`. The run time limit, the reasoning effort and
+  `sentry update <archive.zip>` were already there.
+- **Settings → Application: the note length limit, and the run time limit moved here.** The counter under the notes
+  for the agents (the "0 / 5000") is now a setting: 5,000 characters (default), 20,000, No limit or a custom length
+  between 500 and 200,000. No limit takes any length up to one million characters. The limit holds for the note
+  to all agents and for each agent's own note, in Desktop and from the command line. The Run time limit card moved
+  from Settings → Runtime to the same new Runs section in Settings → Application.
+- **A better model picker, with an Update list button.** In Settings → Providers the model of each agent is chosen in
+  a searchable list instead of a plain drop-down: every row shows the model's name and its exact id, a badge (New or
+  Legacy), its context size and release date, current models first and older ones after. **Update list** fetches the
+  public model catalog (models.dev, the one OpenCode uses; no account, nothing of yours is sent), keeps it under the
+  data folder so it works offline, and adds the models the app did not know, marked New. The list that comes with the
+  app stays as the baseline and nothing is taken away. Writing your own model id is still the last row of every list,
+  for a model that is in no list. New runtime methods `models.catalog` and `models.refresh`; Bulgarian text included.
+
+- **`sentry update <archive.zip>` for the packaged Windows release.** Download a release ZIP and its `.sha256` file,
+  then run the command: it checks the checksum (and the GitHub build attestation when `gh` is installed), extracts the
+  ZIP beside the current install, refuses the same or an older version, backs up the Desktop profile and Linux data
+  into `Documents\Sentry backups`, and runs the new archive's own setup. A failed setup leaves the previous install
+  untouched. It never downloads or follows a branch. The distribution workflow now attests the ZIPs it builds.
+- **A more structured run header.** The facts under the run title are three labelled groups side by side: the run
+  (project, started, completed, duration), its results (agents, findings, evidence, in larger numbers) and its
+  identifiers (run, snapshot and revision ids with copy buttons). Each fact is a label with its value on one line,
+  and the groups stack on a narrow window.
+  Started and Completed now both show the date and the time in your own time zone (for example
+  "19 Nov 2026, 19:18"). Completed used to show the stored UTC text next to a local start time, so a run looked
+  as if it had ended before it began.
+  In Bulgarian the date no longer carries the "г." mark, and the Low colour in the findings bar and the legend
+  is a clear blue, so it is no longer mistaken for the green of Completed.
+  The run page never scrolls: the panels scroll inside themselves, and opening or filling the details panel cannot make
+  the page taller. A chevron in the header folds the run facts away to give the canvas the room (folded by default on a
+  short window and remembered), and a long note about failed agents scrolls inside itself. The legend opens inside
+  the canvas and scrolls if it is taller than it.
+  The note under the header for a partial or failed run has a row per agent that did not finish, with a plain
+  sentence first (for example that the provider's usage limit was reached) and the code and the provider's own
+  words under Technical details. The agent count in the header is a number with its unit beside it.
+  Every failure an agent or the run engine can record (about 80 codes across OpenCode, DeepSeek, GLM and Claude, plus
+  timeouts, interruptions and report deadlines) now has a plain sentence, in English and Bulgarian. The note has an X
+  in its corner to close it; it comes back if a new agent fails.
+  A **Show issues** button in the run header brings back the notes you closed. The stage bars on an agent box read as
+  one line: a stage no event showed, before the furthest one reached, is drawn dimmer instead of empty, and the count
+  beside it (for example 6/7) is the position of the furthest stage, so it agrees with the bars and the stage name.
+  The bars are filled up to the stage the agent's own phase says it is in and empty after it: commands and findings are
+  activity inside a phase (an agent that is still planning runs commands too), so they no longer fill the bars ahead of
+  it or pull the count forward. The agent details keep listing what was really observed.
+- **More fixes from a second QA run on Sentry's own code.** Stored events now have secrets removed from the text of
+  commands, tool summaries and errors, status, warnings, failures, cancel reasons and test suites, not only from
+  messages, plans and findings. The redactor also catches a token after an underscore (`GH_ghp_…`), camelCase
+  names such as `dbPassword`, and a value followed by `&` in a URL. A failed workspace creation removes the
+  partial workspace it wrote. The check that a data root does not sit inside the project follows a link even
+  when two or more of its folders do not exist yet. The Claude sign-in refuses an account folder that is a link,
+  and the Claude agents delete their disposable home only when Sentry made it.
+- **Fixes from a QA run on Sentry's own code.** The Markdown export now escapes brackets and angle brackets
+  in findings, so an agent's text cannot form a link, an image or an HTML tag (the file's own promise).
+  Secret redaction now also covers investigation plans and hypotheses, `Bearer` and `Basic` credentials,
+  `Cookie` headers, bare `token=` and `password=` values (with prefixed names such as `GITHUB_TOKEN`),
+  JSON fields and quoted values with spaces, and every harness runs the shared redactor too; plain prose
+  and code such as `password = get_password()` are left alone. A toolchain or add-on marker of the wrong
+  shape counts as not installed instead of throwing, an add-on program folder that is a link leading
+  outside the add-on is refused, a project id must name one project folder, and workspace cleanup removes
+  only agent workspaces.
+- **The stages in an agent's details are a timeline.** Each stage has a marker joined to the next by a line,
+  its name, and a coloured state badge (completed green, observed grey-green, active yellow, warning, failed
+  red, not reached dashed), with the count of stages reached in the heading. Long names wrap on a narrow
+  panel instead of being cut off.
+- **A clearer agent box on the run canvas.** Each box has a fixed width and every line is trimmed to it,
+  so long model names and translated words no longer spill out. It shows the name, the model without its
+  provider prefix, a status badge with the elapsed time, the stage bars across the full width with how many
+  stages are done and where the agent is, the live activity line while it works, three equal cells for
+  findings, evidence and the secrets light, and a thin bar of the findings by severity.
+  A **Legend** button on the canvas toolbar opens a dropdown that names the colour of every stage bar and
+  every severity in the findings bar, one per line with its full word. It closes on a click elsewhere,
+  on Escape or on the button.
+- **A tidier Overview on the run page.** It now shows only what the page does not already show: the run
+  status, mode, run depth, time limit, the add-ons and the agent counts. The add-ons (web access, tool
+  and SDK downloads, secrets check, project profile) are one list with a clear On or Off for each, and the
+  secrets check is listed for every production run. The per-agent rows, the progress bar and the
+  snapshot ids are gone because the canvas and the run header already show them.
+  "Agents rated these differently" is a section of its own, and it no longer ties two different issues
+  together because one long title touches both (for example a code execution finding and a duplicate-keys
+  finding that only shared the word "attacker").
+  When the panel is dragged narrow the add-ons become a row of coloured icons (green on, dim off, a
+  tooltip names each), the small tiles keep their value, and the agent counts keep a short word under
+  the number (the words go only in a very narrow panel). Selected and Running have clearer icons.
+- **Token counts mean the same for every agent.** Input is now the whole prompt (new tokens plus cache
+  reads and writes) and cached is the cached part of it, so Claude no longer shows a few hundred input
+  tokens next to the others' hundreds of thousands. OpenCode and ChatGPT count their reasoning tokens
+  as output, which they used to leave out. Numbers for new runs are larger than before; old runs keep
+  the figures they were stored with.
+- **Agents that report in a fresh session keep the lines they read.** Each file read was cut to 260
+  characters before the report stage, and the long workspace path used most of that, so OpenCode and
+  ChatGPT saw no line numbers (every finding said line 1) and listed the output as truncated. Reads now
+  keep up to 1,500 characters, without the workspace path.
+- A **Claude** agent, the fifth, opt-in like ChatGPT. It runs the official Claude Code app against
+  Anthropic itself, in its own harness package (`@qa/harness-claude`), so it is fully apart from the
+  GLM agent: GLM keeps its Z.AI endpoint and token, and the Claude agent never receives them (its
+  child environment strips them, and a test checks it). Under **Settings → Providers → Claude** a
+  switch, like ChatGPT's, chooses how it signs in: an Anthropic API key, or **Claude account**.
+  Account sign-in is **Sign in with Claude**: Sentry runs Anthropic's own `claude setup-token` in
+  the Linux runtime, shows the sign-in link, and you paste back the code the page shows (no
+  third-party bridge). The one-year token it returns stays in a private file in the runtime data
+  folder and goes only to the Claude agent; **Sign out** deletes it. The model and reasoning effort
+  are its own (`SENTRY_ANTHROPIC_MODEL`, `SENTRY_ANTHROPIC_REASONING`). It shares the
+  Sentry-managed Claude Code binary with GLM and nothing else. In the CLI it is `claude` (`--agents claude`, `agent doctor claude`,
+  `settings effort claude …`). `sentry setup` and `sentry doctor` now also check the util-linux `script` tool the
+  account sign-in needs (a warning if it is missing; the API key sign-in does not need it).
+- The CLI now has what the app has. New commands: `project suggest-targets` (paths for a targeted run),
+  `project toolchain-needs`, `project toolchain-selection` and `project toolchain-assess` (the Setup tab's
+  toolchain needs; the last one asks the agents and uses provider budget), and `toolchain custom status|remove`
+  (custom add-ons). Installing a custom add-on stays app-only on purpose, because it runs a shell command the
+  caller supplies. `sentry doctor` now reports the headless browser agents use (PASS with the Chrome version
+  once it rendered a test page just now, or a warning if it is missing or unusable), and `capabilities` lists
+  the new features so scripts can detect them.
+- Notes for the agents. Before a run, **Run QA** now has a **Notes for the agents** box: what to focus on,
+  known problems, things to leave alone. One note goes to every agent, or a switch gives each selected
+  agent a note of its own (an agent only ever sees its own). The agents treat it as your instruction but
+  still have to prove every finding, and a note cannot switch off the safety rules, the network limits or
+  the secrets check. A new run always starts with empty notes. The notes are saved with the run, shown in
+  the run summary and on each agent's page as **User description / note**, and included in findings
+  exports under the same heading (Markdown, JSON and plain text). Re-test runs take no notes. Behind the
+  box, the run API gained `agentInstructions` (a note per agent); `sentry cli run start --instructions`
+  keeps sending one note to everyone.
+- Export in **Findings by revision** now works, and saves one .md, .json or .txt file. Pressing Export
+  failed with `Unknown runtime method: projects.exportFindings`: the runtime only accepts methods on
+  its allowed list, and this one was never added to it, so the export (and `sentry cli project
+export-findings`) could not run at all. The list and the handlers are now checked against each
+  other by a test. The export formats are Markdown (.md), JSON (.json) and plain text (.txt),
+  replacing GitHub issues (ZIP) and SARIF, so every export is a single file.
+- The hazard sweep no longer scans what an agent unpacked into its workspace. After the planned checks,
+  Sentry probes the riskiest-looking source files, but it walked the live workspace, so a Go SDK an
+  agent had downloaded into a plain `go/` folder outranked the five real project files. In a reviewed
+  run that sweep spent about 25 minutes on the Go standard distribution and one agent recorded two
+  findings about it. The sweep now only looks at files that existed before the agent started.
+- A provider's safety filter at the report stage is now named for what it is. When OpenAI's filter flags a security-testing run ("flagged for possible cybersecurity risk") while an agent writes its report,
+  the agent used to fail with a generic `OPENCODE_START_FAILED` and a cut-off message. It now fails with `OPENCODE_PROVIDER_REFUSED`, says the provider declined the content (not an outage or a
+  credential problem), that retrying does not help, and shows the provider's own explanation, which can name its permissive-access program for authorized security work. The agent's finished checks are
+  still kept in the run's Activity as `[not reported]`; they are unverified and never recorded as findings.
+- Agents now have a real headless browser. Until now agents could not get one (browser downloads are
+  skipped and their hosts are outside the network allowlist), so checks on web pages (narrow-viewport
+  overflow, focus order, mobile menus, link targets) ended `inconclusive` on hand-built replicas.
+  `sentry setup` and `sentry update` now install one managed browser (Chrome headless shell and
+  `puppeteer-core`, plus the few system libraries a minimal host lacks; rootless, about 350 MB, once)
+  under `~/.local/share/sentry/tools/browser`, and the check prompt of OpenCode, ChatGPT, DeepSeek and
+  GLM tells agents how to use it. If the install fails, setup warns and continues; agents run as before.
+  In a reviewed run, the one agent that found a browser on its own needed about 30 commands to do it.
+- Agents no longer reinstall dependencies that Sentry already installed. Sentry prepares each agent's
+  workspace (`node_modules`) before a run, but agents then ran a plain `pnpm install`, which deleted and
+  recreated it: 135-145 s per agent in a reviewed run, and when the tool timed out the workspace was left
+  half rebuilt, which cost one agent its executable checks. The check prompt now says the dependencies are
+  already there, why not to reinstall them, and what to run instead (for example a scoped
+  `pnpm --filter <package>... build`); an install is still allowed once a command proves a dependency is
+  missing.
+- A failed report no longer loses a finished investigation. When an agent has investigated but its report
+  cannot be produced (a quota or billing error, a provider outage, an invalid answer), its own closing
+  statement for each check is kept in the run's Activity as `[not reported] ...`, with a line saying why.
+  They are unverified and never recorded as findings or evidence. In a reviewed run a DeepSeek agent lost
+  6.6 minutes of paid investigation to an `Insufficient Balance` error at its report stage.
+- An OpenCode or ChatGPT agent whose first turn fails to start before reaching the provider (for example
+  `Unexpected server error. No upstream requests were relayed`) is retried once with a fresh OpenCode
+  server. If the second try fails the same way, the message says nothing reached the provider, that the
+  retry also failed, and to check the sign-in or API key in Settings → Providers.
+- A silent agent no longer holds a finished run for long: once every other agent of a run has
+  finished, an agent that stops sending events is stopped after 5 minutes instead of 15 (a run with
+  one agent is unchanged). The failure now says "Agent stopped responding" and why, not "exceeded run
+  budget". In a reviewed run one hung GLM turn kept a run open for about 42 minutes after the other
+  agents had finished or failed.
+- GLM sandbox: a system that lets bubblewrap start but refuses the nested user namespace the Claude Code
+  sandbox needs (`apply-seccomp: write /proc/self/setgroups ... Permission denied`) is now detected on the
+  first command, and the failure explains the likely cause and where to read more. `sentry setup` and
+  `sentry doctor` now test that nested step too and report `nested-user-namespaces-blocked` before a run
+  is wasted. New troubleshooting entry: "GLM sandbox starts but commands fail".
+- Run depth: a **Fast** run now plans at most 2 checks (was 3) and skips the deepening round and
+  the hazard sweep after them (a second pass on undecided checks still runs), so it is much shorter.
+  In one measured run those two extras were about 55% of a 36-minute Fast run, and a Fast run
+  without them took about 15 minutes with 3 checks. **Full** is unchanged.
+- Run option **Check for secrets** (on by default; CLI `run start --no-secrets`): turn it off for the
+  shortest run. No search is made and no secrets light is shown, and the run records that the check
+  was off. A Fast run without it takes about 5 minutes.
+- Secrets light: every QA run now makes each agent also search the project for hard-coded secrets
+  (passwords, API keys, tokens, private keys, credentials in connection strings). Each agent's box
+  on the run page shows a light: red when it found some, green when it searched and found none,
+  amber when it could not check fully. The agent's own explanation (the places and kinds, never the
+  values) is in the agent's Overview. Known secret formats are removed from agent messages, findings
+  and evidence before they are stored. The check adds one check per agent, so a run takes slightly
+  longer; re-test runs and simulations are unchanged.
+
+- Export findings: in **Findings by revision**, tick findings (or use **Export all in this
+  revision**) and save them as one file: a Markdown report (.md), a JSON document (.json) or plain
+  text (.txt). The files are built from what the agents reported, with no AI, nothing is sent anywhere and nothing is
+  written into your project. CLI: `project export-findings`. Up to 500 findings per export;
+  re-testing is unchanged.
+
 ## [2.0.1] - 2026-11-10
 
 Update from 2.0.0. It adds run depth (Fast / Full), a default run time limit, per-agent reasoning

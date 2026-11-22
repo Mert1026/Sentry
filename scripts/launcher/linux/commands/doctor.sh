@@ -133,6 +133,26 @@ cmd_doctor() {
     else
       doctor_add "Claude Code" FAIL "no usable $pinned_cc binary"
     fi
+    local br_out="$(bash "$linux_dir/check-browser.sh")"
+    if printf '%s\n' "$br_out" | grep -q '^BROWSER_OK'; then
+      doctor_add "Headless browser" PASS "Chrome $(printf '%s\n' "$br_out" | sed -n 's/^BROWSER_OK //p' | head -n 1) rendered a test page (agents use it for browser checks)"
+    elif printf '%s\n' "$br_out" | grep -q '^BROWSER_MISSING'; then
+      doctor_add "Headless browser" WARN "not installed: agents report browser checks as inconclusive (run: sentry setup)"
+    elif printf '%s\n' "$br_out" | grep -q '^BROWSER_BROKEN'; then
+      doctor_add "Headless browser" WARN "installed but unusable: $(printf '%s\n' "$br_out" | sed -n 's/^BROWSER_BROKEN //p' | head -n 1) (run: sentry setup)"
+    else
+      doctor_add "Headless browser" WARN "could not check (run: sentry setup)"
+    fi
+    local tm_out="$(bash "$linux_dir/check-terminal.sh")"
+    if printf '%s\n' "$tm_out" | grep -q '^TERMINAL_OK'; then
+      doctor_add "Claude sign-in terminal" PASS "script provides a terminal (Claude account sign-in can run)"
+    elif printf '%s\n' "$tm_out" | grep -q '^TERMINAL_MISSING'; then
+      doctor_add "Claude sign-in terminal" WARN "script (util-linux) not found: the Claude account sign-in cannot run; the API key sign-in still works"
+    elif printf '%s\n' "$tm_out" | grep -q '^TERMINAL_BROKEN'; then
+      doctor_add "Claude sign-in terminal" WARN "script did not provide a terminal: $(printf '%s\n' "$tm_out" | sed -n 's/^TERMINAL_BROKEN //p' | head -n 1); the API key sign-in still works"
+    else
+      doctor_add "Claude sign-in terminal" WARN "could not check (run: sentry setup)"
+    fi
   else
     doctor_add "Agent tools" WARN "skipped: unsupported host or missing node"
   fi

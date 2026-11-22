@@ -180,6 +180,85 @@ describe('project section navigation', () => {
     );
   });
 
+  it('checks for secrets by default: the switch is on and a start sends no secretsCheck', async () => {
+    const f = fixture();
+    const start = await screen.findByRole('button', { name: 'Start Full QA' });
+    await waitFor(() => expect((start as HTMLButtonElement).disabled).toBe(false));
+    expect(
+      (screen.getByRole('switch', { name: 'Check for secrets' }) as HTMLInputElement).checked,
+    ).toBe(true);
+    fireEvent.click(start);
+    const dialog = await screen.findByRole('dialog', { name: 'Confirm start full QA' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Start QA' }));
+    await waitFor(() => expect(f.api.runs.start).toHaveBeenCalledTimes(1));
+    expect(f.api.runs.start.mock.calls[0]?.[1]).not.toHaveProperty('secretsCheck');
+  });
+
+  it('sends secretsCheck:false when the secrets switch is turned off', async () => {
+    const f = fixture();
+    const start = await screen.findByRole('button', { name: 'Start Full QA' });
+    await waitFor(() => expect((start as HTMLButtonElement).disabled).toBe(false));
+    const secrets = screen.getByRole('switch', { name: 'Check for secrets' }) as HTMLInputElement;
+    fireEvent.click(secrets.closest('label') as HTMLLabelElement);
+    expect(secrets.checked).toBe(false);
+    fireEvent.click(start);
+    const dialog = await screen.findByRole('dialog', { name: 'Confirm start full QA' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Start QA' }));
+    await waitFor(() =>
+      expect(f.api.runs.start).toHaveBeenCalledWith(
+        'proj_alpha',
+        expect.objectContaining({ secretsCheck: false }),
+      ),
+    );
+  });
+
+  async function startFullQa(f: ReturnType<typeof fixture>): Promise<Record<string, unknown>> {
+    const start = await screen.findByRole('button', { name: 'Start Full QA' });
+    await waitFor(() => expect((start as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(start);
+    const dialog = await screen.findByRole('dialog', { name: 'Confirm start full QA' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Start QA' }));
+    await waitFor(() => expect(f.api.runs.start).toHaveBeenCalledTimes(1));
+    return f.api.runs.start.mock.calls[0]?.[1] as Record<string, unknown>;
+  }
+
+  it('starts without notes unless the person writes some, and the field starts empty', async () => {
+    const f = fixture();
+    const field = (await screen.findByLabelText('Note for all agents')) as HTMLTextAreaElement;
+    expect(field.value).toBe('');
+    const options = await startFullQa(f);
+    expect(options).not.toHaveProperty('instructions');
+    expect(options).not.toHaveProperty('agentInstructions');
+  });
+
+  it('sends the note for all agents as the run’s instructions', async () => {
+    const f = fixture();
+    fireEvent.change(await screen.findByLabelText('Note for all agents'), {
+      target: { value: '  Focus on the login flow.  ' },
+    });
+    const options = await startFullQa(f);
+    expect(options).toMatchObject({ instructions: 'Focus on the login flow.' });
+    expect(options).not.toHaveProperty('agentInstructions');
+  });
+
+  it('sends a separate note for each agent when the switch is on', async () => {
+    const f = fixture({ multipleAgents: true });
+    fireEvent.change(await screen.findByLabelText('Note for all agents'), {
+      target: { value: 'Shared start' },
+    });
+    fireEvent.click(screen.getByRole('switch', { name: 'Different notes for each agent' }));
+    fireEvent.change(screen.getByLabelText('Note for DeepSeek'), {
+      target: { value: 'Only DeepSeek' },
+    });
+    fireEvent.change(screen.getByLabelText('Note for GLM'), { target: { value: '' } });
+    const options = await startFullQa(f);
+    expect(options).not.toHaveProperty('instructions');
+    expect(options['agentInstructions']).toEqual({
+      stack_opencode_main: 'Shared start',
+      stack_deepseek_main: 'Only DeepSeek',
+    });
+  });
+
   it('opens on Run QA and preserves options when switching sections', async () => {
     fixture();
     await screen.findByLabelText('Run revision');

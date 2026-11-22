@@ -1,6 +1,7 @@
 import React from 'react';
 import enMessages from '../locales/en.json';
 import bgMessages from '../locales/bg.json';
+import { translatePatterns } from './i18n-patterns.js';
 import {
   getLanguage,
   setLanguage,
@@ -70,6 +71,12 @@ const STATUS_BG: Readonly<Record<string, string>> = {
   not_built: 'не е създаден',
   not_started: 'не е стартиран',
   stale: 'остарял',
+  critical: 'критична',
+  high: 'висока',
+  medium: 'средна',
+  low: 'ниска',
+  info: 'информационна',
+  uncategorized: 'некатегоризирана',
 };
 // "timed_out" and "timed out" are the same status.
 for (const key of Object.keys(STATUS_BG))
@@ -254,6 +261,11 @@ function translateCore(trimmed: string): string {
     return `Изберете до ${retestInfo[1]} констатации от по-стара ревизия и ги проверете повторно в текущата ревизия на проекта. ${translateCore(retestInfo[2] ?? '')}`;
   const retestSelected = /^Re-test (\d+) selected$/.exec(trimmed);
   if (retestSelected !== null) return `Повторна проверка на ${retestSelected[1]} избрани`;
+  const exportSelected = /^Export (\d+) selected$/.exec(trimmed);
+  if (exportSelected !== null) return `Експортирай ${exportSelected[1]} избрани`;
+  const savedFindings = /^Saved (\d+) findings? to (.+)$/.exec(trimmed);
+  if (savedFindings !== null)
+    return `Запазени ${savedFindings[1]} ${savedFindings[1] === '1' ? 'констатация' : 'констатации'} в ${savedFindings[2]}`;
   const pickAtMost = /^Pick at most (\d+)\.$/.exec(trimmed);
   if (pickAtMost !== null) return `Изберете най-много ${pickAtMost[1]}.`;
   const agentRunsFindings = /^(\d+) runs?, (\d+) findings?$/.exec(trimmed);
@@ -296,6 +308,11 @@ function translateCore(trimmed: string): string {
   if (installOne !== null) return `Инсталиране на ${installOne[1]}? Около ${installOne[2]} MB.`;
   const usesInstalled = /^Installed: a run uses (.+)\.$/.exec(trimmed);
   if (usesInstalled !== null) return `Инсталирана: изпълнението използва ${usesInstalled[1]}.`;
+  // The versions of a toolchain that are installed, listed after its status sentence.
+  const installedList = /^Installed: (.+)\.$/.exec(trimmed);
+  if (installedList !== null) return `Инсталирани: ${installedList[1]}.`;
+  const installVersion = /^Install (\d[\w.+-]*)$/.exec(trimmed);
+  if (installVersion !== null) return `Инсталирай ${installVersion[1]}`;
   const wouldUse =
     /^Not installed\. A run would use (.+) instead(; the library has no such version)?\.$/.exec(
       trimmed,
@@ -639,7 +656,8 @@ function translateCore(trimmed: string): string {
     return `${currentRevisionMatch[1] ?? ''} · ${currentRevisionMatch[2] ?? ''} · текуща`;
   }
 
-  return trimmed;
+  // Text built from parts: counts, names, "Label: value" pairs, sentences with a value inside.
+  return translatePatterns(trimmed, translateCore);
 }
 
 export function translateText(text: string, language: AppLanguage = getLanguage()): string {

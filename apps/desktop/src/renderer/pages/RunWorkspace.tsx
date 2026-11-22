@@ -2,12 +2,14 @@ import React from 'react';
 import { LoadingOverlay } from '../components/BlockingOverlay.js';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronUp, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { RunCanvas } from '../components/RunCanvas.js';
 import { AgentInspector } from '../components/AgentInspector.js';
 import { RunSummaryPanel } from '../components/RunSummaryPanel.js';
+import { notesForAgent } from '../lib/run-notes.js';
 import { CopyId } from '../components/CopyId.js';
 import { StatusPill } from '../components/ui/StatusPill.js';
+import { NoticeClose } from '../components/ui/NoticeClose.js';
 import { ToastStack, type ToastItem } from '../components/ui/Toast.js';
 import { EdgeInspector, NodeStatusHeader } from '../components/PipelineInspectors.js';
 import { AGENT_DISPLAY_NAMES } from '../lib/agent-telemetry.js';
@@ -15,7 +17,11 @@ import { buildRunGraph } from '../lib/run-graph.js';
 import { useRunSnapshot } from '../lib/use-live-run.js';
 import { useDeveloperMode } from '../lib/developer-mode.js';
 import { sentryApi } from '../lib/sentry-api.js';
+import { formatDateTime } from '../lib/date-format.js';
+import { describeFailure } from '../lib/failure-text.js';
+import { useI18n } from '../lib/i18n.js';
 
+const FACTS_KEY = 'sentry:run-layout:facts';
 const LEFT_KEY = 'sentry:run-layout:left-width';
 const RIGHT_KEY = 'sentry:run-layout:right-width';
 const LEFT_DEFAULT = 280;
@@ -30,13 +36,6 @@ function loadWidth(key: string, fallback: number): number {
   } catch {
     return fallback;
   }
-}
-
-function formatClock(iso: string | undefined): string {
-  if (iso === undefined || iso === '') return '—';
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
 function formatDuration(startIso: string | undefined, endIso: string | null | undefined): string {
@@ -56,6 +55,7 @@ export function RunWorkspace(): React.JSX.Element {
   const { runId } = useParams();
   const queryClient = useQueryClient();
   const developerMode = useDeveloperMode();
+  const { language } = useI18n();
   const [selectedId, setSelectedId] = React.useState<string | undefined>(undefined);
   const [centerRequest, setCenterRequest] = React.useState<{ id: string; key: number } | undefined>(
     undefined,
@@ -65,6 +65,28 @@ export function RunWorkspace(): React.JSX.Element {
   const [leftWidth, setLeftWidth] = React.useState(() => loadWidth(LEFT_KEY, LEFT_DEFAULT));
   const [rightWidth, setRightWidth] = React.useState(() => loadWidth(RIGHT_KEY, RIGHT_DEFAULT));
   const [confirmCancel, setConfirmCancel] = React.useState(false);
+  // The facts under the title can be folded away to give the canvas the room; folded by default on a short window.
+  const [factsOpen, setFactsOpen] = React.useState<boolean>(() => {
+    try {
+      const saved = window.localStorage.getItem(FACTS_KEY);
+      if (saved === 'open' || saved === 'closed') return saved === 'open';
+    } catch {
+      /* presentation-only storage */
+    }
+    return window.innerHeight >= 800;
+  });
+  const toggleFacts = (): void => {
+    const next = !factsOpen;
+    setFactsOpen(next);
+    try {
+      window.localStorage.setItem(FACTS_KEY, next ? 'open' : 'closed');
+    } catch {
+      /* presentation-only storage */
+    }
+  };
+  // Notices the person closed, by what they said: a notice that changes (a new failure) shows again.
+  const [dismissed, setDismissed] = React.useState<Record<string, string>>({});
+  React.useEffect(() => setDismissed({}), [runId]);
   const [toasts, setToasts] = React.useState<ToastItem[]>([]);
   const snapshot = useRunSnapshot(runId, 500);
 
@@ -152,6 +174,7 @@ export function RunWorkspace(): React.JSX.Element {
           completedAt?: string | null;
           configuration?: {
             agentStackIds?: string[];
+            userNotes?: { shared?: string; agents?: Record<string, string> };
             retest?: {
               items: Array<{
                 n: number;
@@ -299,6 +322,20 @@ export function RunWorkspace(): React.JSX.Element {
   const selectedAgent = graph?.agents.find((a) => 'agent-' + a.agentStackId === selectedId);
   const selectedEdge = graph?.edges.find((e) => e.id === selectedId);
   const cancelState = (cancel.data as { status?: string } | undefined)?.status;
+  // What the analysis note says: the status and which agents did not finish, and how.
+  const analysisSignature =
+    data.run.status +
+    '|' +
+    data.agentRuns
+      .filter((agent) => ['failed', 'timed_out', 'interrupted'].includes(agent.status))
+      .map((agent) => agent.id + ':' + agent.status)
+      .join(',');
+  // Notices the person closed that would still be showing: a button brings them back.
+  const refreshNoticeApplies = snapshot.isError || snapshot.runtimeUnavailable;
+  const analysisNoticeApplies = ['failed', 'partial', 'cancelled'].includes(data.run.status);
+  const hiddenNotices =
+    (refreshNoticeApplies && dismissed['refresh'] === 'refresh' ? 1 : 0) +
+    (analysisNoticeApplies && dismissed['analysis'] === analysisSignature ? 1 : 0);
   const focusAgent = (stackId: string): void => {
     const id = 'agent-' + stackId;
     setSelectedId(id);
@@ -308,8 +345,9 @@ export function RunWorkspace(): React.JSX.Element {
 
   return (
     <div className="run-page">
-      {snapshot.isError || snapshot.runtimeUnavailable ? (
-        <div className="inline-notice tone-warning" role="status">
+      {(snapshot.isError || snapshot.runtimeUnavailable) && dismissed['refresh'] !== 'refresh' ? (
+        <div className="inline-notice tone-warning has-close" role="status">
+          <NoticeClose onClick={() => setDismissed((all) => ({ ...all, refresh: 'refresh' }))} />
           {
             'Run refresh unavailable. Cached results remain available; the last recorded status below may have changed. Check'
           }{' '}
@@ -337,6 +375,31 @@ export function RunWorkspace(): React.JSX.Element {
             )}
           </div>
           <div className="run-actions">
+            {hiddenNotices > 0 ? (
+              <button
+                type="button"
+                className="compact ghost show-issues"
+                onClick={() => setDismissed({})}
+              >
+                <AlertTriangle size={14} aria-hidden="true" />
+                <span>Show issues</span>
+                <span className="show-issues-count">{hiddenNotices}</span>
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="icon-btn ghost"
+              onClick={toggleFacts}
+              aria-expanded={factsOpen}
+              aria-label={factsOpen ? 'Hide run facts' : 'Show run facts'}
+              title={factsOpen ? 'Hide run facts' : 'Show run facts'}
+            >
+              {factsOpen ? (
+                <ChevronUp size={15} aria-hidden="true" />
+              ) : (
+                <ChevronDown size={15} aria-hidden="true" />
+              )}
+            </button>
             {terminal ? (
               <>
                 <button
@@ -381,93 +444,143 @@ export function RunWorkspace(): React.JSX.Element {
             ) : null}
           </div>
         </div>
-        <dl className="run-details">
-          <div className="run-detail">
-            <dt>Project</dt>
-            <dd>
-              <Link to={'/projects/' + data.run.projectId}>{resolvedProjectName}</Link>
-            </dd>
+        {factsOpen ? (
+          <div className="run-details">
+            <section className="run-group" aria-label="Run">
+              <h2 className="run-group-title">Run</h2>
+              <dl className="run-facts">
+                <div className="run-detail">
+                  <dt>Project</dt>
+                  <dd>
+                    <Link to={'/projects/' + data.run.projectId}>{resolvedProjectName}</Link>
+                  </dd>
+                </div>
+                <div className="run-detail">
+                  <dt>Started</dt>
+                  <dd className="mono" title={String(data.run.startedAt ?? data.run.createdAt)}>
+                    {formatDateTime(data.run.startedAt ?? data.run.createdAt, language)}
+                  </dd>
+                </div>
+                {data.run.completedAt != null ? (
+                  <div className="run-detail">
+                    <dt>Completed</dt>
+                    <dd className="mono" title={String(data.run.completedAt)}>
+                      {formatDateTime(data.run.completedAt, language)}
+                    </dd>
+                  </div>
+                ) : null}
+                <div className="run-detail">
+                  <dt>Duration</dt>
+                  <dd className="mono">
+                    {formatDuration(data.run.startedAt ?? data.run.createdAt, data.run.completedAt)}
+                  </dd>
+                </div>
+                {cancelState !== undefined ? (
+                  <div className="run-detail">
+                    <dt>Cancellation</dt>
+                    <dd>{cancelState}</dd>
+                  </div>
+                ) : null}
+              </dl>
+            </section>
+            <section className="run-group run-group--results" aria-label="Results">
+              <h2 className="run-group-title">Results</h2>
+              <dl className="run-facts">
+                <div className="run-detail">
+                  <dt>Agents</dt>
+                  <dd>
+                    <strong>
+                      {String(
+                        data.run.configuration?.agentStackIds?.length ?? data.agentRuns.length,
+                      )}
+                    </strong>{' '}
+                    <span className="run-fact-unit">selected</span>
+                  </dd>
+                </div>
+                <div className="run-detail">
+                  <dt>Findings</dt>
+                  <dd>{String(data.findings.length)}</dd>
+                </div>
+                <div className="run-detail">
+                  <dt>Evidence</dt>
+                  <dd>{String(data.evidence.length)}</dd>
+                </div>
+              </dl>
+            </section>
+            <section className="run-group" aria-label="Identifiers">
+              <h2 className="run-group-title">Identifiers</h2>
+              <dl className="run-facts">
+                <div className="run-detail">
+                  <dt>Run ID</dt>
+                  <dd>
+                    <CopyId id={data.run.id} short={22} />
+                  </dd>
+                </div>
+                <div className="run-detail">
+                  <dt>Snapshot</dt>
+                  <dd>
+                    <CopyId id={data.run.snapshotId} short={22} />
+                  </dd>
+                </div>
+                {data.run.projectRevisionId !== undefined ? (
+                  <div className="run-detail">
+                    <dt>Revision</dt>
+                    <dd>
+                      <CopyId id={data.run.projectRevisionId} short={22} />
+                    </dd>
+                  </div>
+                ) : null}
+              </dl>
+            </section>
           </div>
-          <div className="run-detail">
-            <dt>Started</dt>
-            <dd className="mono" title={String(data.run.startedAt ?? data.run.createdAt)}>
-              {formatClock(data.run.startedAt ?? data.run.createdAt)}
-            </dd>
-          </div>
-          <div className="run-detail">
-            <dt>Duration</dt>
-            <dd className="mono">
-              {formatDuration(data.run.startedAt ?? data.run.createdAt, data.run.completedAt)}
-            </dd>
-          </div>
-          <div className="run-detail">
-            <dt>Agents</dt>
-            <dd>
-              {String(data.run.configuration?.agentStackIds?.length ?? data.agentRuns.length) +
-                ' selected'}
-            </dd>
-          </div>
-          <div className="run-detail">
-            <dt>Findings</dt>
-            <dd>{String(data.findings.length)}</dd>
-          </div>
-          <div className="run-detail">
-            <dt>Evidence</dt>
-            <dd>{String(data.evidence.length)}</dd>
-          </div>
-          {cancelState !== undefined ? (
-            <div className="run-detail">
-              <dt>Cancellation</dt>
-              <dd>{cancelState}</dd>
-            </div>
-          ) : null}
-          <div className="run-detail">
-            <dt>Run ID</dt>
-            <dd>
-              <CopyId id={data.run.id} short={22} />
-            </dd>
-          </div>
-          <div className="run-detail">
-            <dt>Snapshot</dt>
-            <dd>
-              <CopyId id={data.run.snapshotId} short={22} />
-            </dd>
-          </div>
-          {data.run.projectRevisionId !== undefined ? (
-            <div className="run-detail">
-              <dt>Revision</dt>
-              <dd>
-                <CopyId id={data.run.projectRevisionId} short={22} />
-              </dd>
-            </div>
-          ) : null}
-          {data.run.completedAt != null ? (
-            <div className="run-detail">
-              <dt>Completed</dt>
-              <dd className="mono">{String(data.run.completedAt)}</dd>
-            </div>
-          ) : null}
-        </dl>
+        ) : null}
       </header>
-      {['failed', 'partial', 'cancelled'].includes(data.run.status) ? (
-        <div className="inline-notice tone-warning" role="status">
-          <strong>{'Analysis ' + data.run.status + '.'}</strong>{' '}
-          <span>Reported findings and evidence are retained independently for each agent.</span>
-          {data.agentRuns
-            .filter((agent) => ['failed', 'timed_out', 'interrupted'].includes(agent.status))
-            .map((agent) => (
-              <p key={agent.id}>
-                {AGENT_DISPLAY_NAMES[agent.agentStackId] ?? agent.agentStackId}:{' '}
-                {agent.status.replaceAll('_', ' ')}.
-                {agent.failure !== undefined
-                  ? ' ' + agent.failure.code + ': ' + agent.failure.message
-                  : ' Structured failure details were not recorded.'}
-              </p>
-            ))}
-          {data.agentRuns.length === 0 ? <span> No agent execution was recorded.</span> : null}{' '}
-          <span>
+      {['failed', 'partial', 'cancelled'].includes(data.run.status) &&
+      dismissed['analysis'] !== analysisSignature ? (
+        <div className="inline-notice tone-warning run-notice has-close" role="status">
+          <NoticeClose
+            onClick={() => setDismissed((all) => ({ ...all, analysis: analysisSignature }))}
+          />
+          <div className="run-notice-head">
+            <AlertTriangle size={16} aria-hidden="true" />
+            <strong>{'Analysis ' + data.run.status + '.'}</strong>
+            <span>Reported findings and evidence are retained independently for each agent.</span>
+          </div>
+          <ul className="run-notice-agents">
+            {data.agentRuns
+              .filter((agent) => ['failed', 'timed_out', 'interrupted'].includes(agent.status))
+              .map((agent) => (
+                <li key={agent.id} className="run-notice-agent">
+                  <span className="run-notice-name">
+                    {AGENT_DISPLAY_NAMES[agent.agentStackId] ?? agent.agentStackId}
+                  </span>
+                  <span className="run-notice-state">{agent.status.replaceAll('_', ' ')}</span>
+                  {agent.failure !== undefined ? (
+                    <span className="run-notice-reason">
+                      {describeFailure(agent.failure) ?? agent.failure.message}
+                    </span>
+                  ) : (
+                    <span className="run-notice-reason">
+                      Structured failure details were not recorded.
+                    </span>
+                  )}
+                  {agent.failure !== undefined ? (
+                    <details className="run-notice-details">
+                      <summary>Technical details</summary>
+                      <code className="wrap-anywhere">
+                        {agent.failure.code + ': ' + agent.failure.message}
+                      </code>
+                    </details>
+                  ) : null}
+                </li>
+              ))}
+          </ul>
+          {data.agentRuns.length === 0 ? (
+            <p className="run-notice-hint">No agent execution was recorded.</p>
+          ) : null}
+          <p className="run-notice-hint">
             Review agent details and Environment before deliberately starting another run.
-          </span>
+          </p>
         </div>
       ) : null}
       {!terminal ? <div className="inline-notice">Export unlocks at terminal status.</div> : null}
@@ -572,6 +685,11 @@ export function RunWorkspace(): React.JSX.Element {
                       ),
                       evidence: data.evidence.filter(
                         (e) => e.agentRunId === selectedAgent.agentRunId,
+                      ),
+                      userNote: notesForAgent(
+                        data.run.configuration?.userNotes,
+                        data.agentRuns.find((a) => a.id === selectedAgent.agentRunId)
+                          ?.agentStackId ?? '',
                       ),
                       ...(data.run.configuration?.retest === undefined
                         ? {}

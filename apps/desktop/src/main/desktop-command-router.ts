@@ -1,10 +1,18 @@
 // Shared desktop command router: single validated dispatch path for Renderer IPC
 // and the external CLI broker. One behavior, one backend per command.
 import { z } from 'zod';
-import { CLI_BROKER_COMMANDS, RUN_TIMEOUT_MS_MAX, RUN_TIMEOUT_MS_MIN } from '@qa/shared';
+import {
+  CLI_BROKER_COMMANDS,
+  NOTE_LIMIT_UNLIMITED,
+  RUN_TIMEOUT_MS_MAX,
+  RUN_TIMEOUT_MS_MIN,
+} from '@qa/shared';
 import type { DesktopApplicationService } from './services/desktop-service.js';
 import type { SaveDialogOptions } from './services/export-save.js';
 import { revealSavedExport, saveExportRun } from './services/export-save.js';
+import { saveFindingsExport } from './services/findings-export-save.js';
+import { saveCliReference } from './services/cli-reference-save.js';
+import { FindingExportRequestSchema } from '@qa/schemas';
 
 export const DesktopChannelSchemas: Record<string, z.ZodTypeAny> = {
   'projects:list': z.object({}).strict(),
@@ -12,6 +20,7 @@ export const DesktopChannelSchemas: Record<string, z.ZodTypeAny> = {
   'projects:cancel-add': z.object({}).strict(),
   'projects:cancel-update': z.object({}).strict(),
   'app:set-language': z.object({ language: z.enum(['en', 'bg']) }).strict(),
+  'app:save-cli-reference': z.object({}).strict(),
   'projects:get': z.object({ projectId: z.string().min(1).max(200) }).strict(),
   'projects:revisions': z.object({ projectId: z.string().min(1).max(200) }).strict(),
   'projects:delete': z.object({ projectId: z.string().min(1).max(200) }).strict(),
@@ -51,11 +60,15 @@ export const DesktopChannelSchemas: Record<string, z.ZodTypeAny> = {
         .regex(/^rev_[0-9A-HJKMNP-TV-Z]{26}$/)
         .optional(),
       includePaths: z.array(z.string().min(1).max(500)).max(100).optional(),
-      instructions: z.string().min(1).max(5000).optional(),
+      instructions: z.string().min(1).max(NOTE_LIMIT_UNLIMITED).optional(),
+      agentInstructions: z
+        .record(z.string().min(1).max(200), z.string().min(1).max(NOTE_LIMIT_UNLIMITED))
+        .optional(),
       agentStackIds: z.array(z.string().min(1).max(200)).min(1).max(10).optional(),
       runTimeoutMs: z.number().int().min(RUN_TIMEOUT_MS_MIN).max(RUN_TIMEOUT_MS_MAX).optional(),
       webAccess: z.boolean().optional(),
       toolDownloads: z.boolean().optional(),
+      secretsCheck: z.boolean().optional(),
       depth: z.enum(['fast', 'full']).optional(),
       useProfile: z.boolean().optional(),
       retest: z
@@ -86,11 +99,15 @@ export const DesktopChannelSchemas: Record<string, z.ZodTypeAny> = {
         .regex(/^rev_[0-9A-HJKMNP-TV-Z]{26}$/)
         .optional(),
       includePaths: z.array(z.string().min(1).max(500)).max(100).optional(),
-      instructions: z.string().min(1).max(5000).optional(),
+      instructions: z.string().min(1).max(NOTE_LIMIT_UNLIMITED).optional(),
+      agentInstructions: z
+        .record(z.string().min(1).max(200), z.string().min(1).max(NOTE_LIMIT_UNLIMITED))
+        .optional(),
       agentStackIds: z.array(z.string().min(1).max(200)).min(1).max(10).optional(),
       runTimeoutMs: z.number().int().min(RUN_TIMEOUT_MS_MIN).max(RUN_TIMEOUT_MS_MAX).optional(),
       webAccess: z.boolean().optional(),
       toolDownloads: z.boolean().optional(),
+      secretsCheck: z.boolean().optional(),
       depth: z.enum(['fast', 'full']).optional(),
       useProfile: z.boolean().optional(),
       retest: z
@@ -123,6 +140,14 @@ export const DesktopChannelSchemas: Record<string, z.ZodTypeAny> = {
   'runs:export-content': z
     .object({ runId: z.string().min(1).max(100), format: z.enum(['log', 'json']) })
     .strict(),
+  'projects:export-findings': z
+    .object({ projectId: z.string().min(1).max(100) })
+    .merge(FindingExportRequestSchema)
+    .strict(),
+  'projects:save-findings-export': z
+    .object({ projectId: z.string().min(1).max(100) })
+    .merge(FindingExportRequestSchema)
+    .strict(),
   'doctors:environment': z.object({}).strict(),
   'providers:status': z.object({}).strict(),
   'providers:save': z
@@ -139,16 +164,19 @@ export const DesktopChannelSchemas: Record<string, z.ZodTypeAny> = {
     z
       .object({
         setting: z.literal('reasoning-effort'),
-        agent: z.enum(['opencode', 'deepseek', 'glm', 'chatgpt']),
+        agent: z.enum(['opencode', 'deepseek', 'glm', 'chatgpt', 'claude']),
         value: z.string().min(1).max(20),
       })
       .strict(),
     z.object({ setting: z.literal('run-time-limit'), value: z.string().min(1).max(20) }).strict(),
+    z.object({ setting: z.literal('note-limit'), value: z.string().min(1).max(20) }).strict(),
   ]),
   'production:readiness': z
     .object({ agentStackIds: z.array(z.string().min(1).max(200)).max(10).optional() })
     .strict(),
   'system:info': z.object({}).strict(),
+  'models:catalog': z.object({}).strict(),
+  'models:refresh': z.object({}).strict(),
   'toolchains:status': z.object({}).strict(),
   'toolchains:custom-status': z.object({}).strict(),
   'toolchains:custom-install': z
@@ -163,6 +191,11 @@ export const DesktopChannelSchemas: Record<string, z.ZodTypeAny> = {
   'openai:account-login': z.object({}).strict(),
   'openai:account-cancel-login': z.object({}).strict(),
   'openai:account-logout': z.object({}).strict(),
+  'claude:account-status': z.object({}).strict(),
+  'claude:account-login': z.object({}).strict(),
+  'claude:account-submit-code': z.object({ code: z.string().min(1).max(2000) }).strict(),
+  'claude:account-cancel-login': z.object({}).strict(),
+  'claude:account-logout': z.object({}).strict(),
   'toolchains:install': z
     .object({ packId: z.string().min(1).max(40), version: z.string().min(1).max(40) })
     .strict(),
@@ -357,10 +390,12 @@ export async function dispatchDesktopCommand(
         mode: parsed['mode'],
         includePaths: parsed['includePaths'],
         instructions: parsed['instructions'],
+        agentInstructions: parsed['agentInstructions'],
         agentStackIds: parsed['agentStackIds'],
         runTimeoutMs: parsed['runTimeoutMs'],
         webAccess: parsed['webAccess'],
         toolDownloads: parsed['toolDownloads'],
+        secretsCheck: parsed['secretsCheck'],
         depth: parsed['depth'],
         useProfile: parsed['useProfile'],
         retest: parsed['retest'],
@@ -383,6 +418,24 @@ export async function dispatchDesktopCommand(
       return saveExportRun(parsed['runId'] as string, parsed['format'] as 'log' | 'json', {
         requestSavePath,
         fetchContent: (runId, format) => service.exportContent(runId, format),
+      });
+    }
+    case 'projects:export-findings':
+      return service.exportFindings(parsed['projectId'] as string, {
+        format: parsed['format'],
+        selection: parsed['selection'],
+      });
+    case 'projects:save-findings-export': {
+      const requestSavePath = hooks.requestSavePath;
+      if (requestSavePath === undefined)
+        throw Object.assign(new Error('Save dialog unavailable'), { code: 'DIALOG_UNAVAILABLE' });
+      return saveFindingsExport({
+        requestSavePath,
+        fetchExport: () =>
+          service.exportFindings(parsed['projectId'] as string, {
+            format: parsed['format'],
+            selection: parsed['selection'],
+          }),
       });
     }
     case 'runs:export-reveal': {
@@ -435,6 +488,20 @@ export async function dispatchDesktopCommand(
       return service.openAiAccountCancelLogin();
     case 'openai:account-logout':
       return service.openAiAccountLogout();
+    case 'claude:account-status':
+      return service.claudeAccountStatus();
+    case 'claude:account-login':
+      return service.claudeAccountLogin();
+    case 'claude:account-submit-code':
+      return service.claudeAccountSubmitCode(parsed['code'] as string);
+    case 'claude:account-cancel-login':
+      return service.claudeAccountCancelLogin();
+    case 'claude:account-logout':
+      return service.claudeAccountLogout();
+    case 'models:catalog':
+      return service.modelCatalog();
+    case 'models:refresh':
+      return service.refreshModelCatalog();
     case 'toolchains:status':
       return service.toolchainStatus();
     case 'toolchains:install':
@@ -455,6 +522,12 @@ export async function dispatchDesktopCommand(
       if (hooks.cliStatus === undefined)
         throw Object.assign(new Error('CLI broker unavailable'), { code: 'CLI_UNAVAILABLE' });
       return hooks.cliStatus();
+    }
+    case 'app:save-cli-reference': {
+      const requestSavePath = hooks.requestSavePath;
+      if (requestSavePath === undefined)
+        throw Object.assign(new Error('Save dialog unavailable'), { code: 'DIALOG_UNAVAILABLE' });
+      return saveCliReference({ requestSavePath });
     }
     case 'app:set-language': {
       // Renderer owns the selection; main only mirrors it for native UI.

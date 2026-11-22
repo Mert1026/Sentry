@@ -9,6 +9,7 @@ import {
   createInvestigationPlanId,
   createOperationId,
   nowIsoTimestamp,
+  NON_INTERACTIVE_ENVIRONMENT,
   toolDownloadsEnabled,
   webAccessEnabled,
   withToolchains,
@@ -22,6 +23,7 @@ import {
 import {
   limitPhase,
   investigateChecks,
+  listHazardCandidates,
   scanHazardFiles,
   reportAttemptDeadline,
   promisePhase,
@@ -61,8 +63,11 @@ import {
   downgradeUngroundedFindings,
   buildGroundingRepairPrompt,
   isGroundingRepairableError,
+  browserNetworkOption,
   type EvidencePipelineContext,
   type ObservedOperation,
+  unreportedInvestigationMessages,
+  type UnreportedInvestigation,
 } from '@qa/evidence-pipeline';
 import {
   FindingSchema,
@@ -324,7 +329,10 @@ function tokenUsageFromEvent(data: AssistantMessageDataView): AgentUsage | undef
   )
     return undefined;
   return {
-    ...(inputTokens === undefined ? {} : { inputTokens }),
+    // The whole prompt: uncached plus cache reads and writes (cachedInputTokens is the cached part of it).
+    ...(inputTokens === undefined && cacheReadTokens === undefined && cacheWriteTokens === undefined
+      ? {}
+      : { inputTokens: (inputTokens ?? 0) + (cacheReadTokens ?? 0) + (cacheWriteTokens ?? 0) }),
     ...(outputTokens === undefined ? {} : { outputTokens }),
     ...(cacheReadTokens === undefined && cacheWriteTokens === undefined
       ? {}
@@ -444,6 +452,8 @@ export class DeepSeekHarnessAdapter implements HarnessAdapter {
   private closePromise: Promise<void> | undefined;
   private cancelled = false;
   private readonly toolNotes = new ObservedToolNotes();
+  /** What the agent concluded per check, kept in case the report that follows fails (see unreported.ts). */
+  private unreportedInvestigation: UnreportedInvestigation | undefined;
   private readonly operationIds = new Map<string, OperationId>();
   private readonly pendingToolCalls = new Map<string, PendingToolCall>();
   private readonly liveOpenOperations = new Map<OperationId, string>();
@@ -949,6 +959,8 @@ export class DeepSeekHarnessAdapter implements HarnessAdapter {
 
   async *run(request: HarnessRunRequest): AsyncIterable<HarnessEvent> {
     yield event(request.agentRunId, { type: 'run.started' });
+    // The hazard sweep may only look at files that existed before the agent started working.
+    const originalSource = await listHazardCandidates(request.workspace.runtimePath);
     if (depthPolicy(request.task.context) !== undefined) {
       yield event(request.agentRunId, {
         type: 'agent.message',
@@ -1000,7 +1012,11 @@ export class DeepSeekHarnessAdapter implements HarnessAdapter {
       const toolchains = await this.options
         .toolchains?.(request.workspace.runtimePath)
         .catch(() => undefined);
-      const runEnvironment = withToolchains(this.environment, toolchains);
+      // The worker's shell has no terminal either: without these a command that prompts hangs.
+      const runEnvironment = withToolchains(
+        { ...this.environment, ...NON_INTERACTIVE_ENVIRONMENT },
+        toolchains,
+      );
       const createClient = () =>
         this.clientFactory({
           executable: this.runtime.executable,
@@ -1176,6 +1192,7 @@ export class DeepSeekHarnessAdapter implements HarnessAdapter {
           // line is guidance in the prompt, not an enforced allowlist.
           toolDownloads: toolDownloadsEnabled(request.executionSafeguards),
           webToolsAvailable: false,
+          ...browserNetworkOption(),
         },
         event: (body) => event(request.agentRunId, body),
         streamTurn: (turnText) =>
@@ -1193,12 +1210,17 @@ export class DeepSeekHarnessAdapter implements HarnessAdapter {
           ) + '\n',
         startReportContext,
         cancelled: () => this.cancelled,
-        hazardFiles: () => scanHazardFiles(request.workspace.runtimePath),
+        hazardFiles: () => scanHazardFiles(request.workspace.runtimePath, 40, originalSource),
         isTurnTimeout: (cause) => cause instanceof DeepSeekTurnTimeoutError,
         onInterrupted: () => this.liveOpenOperations.clear(),
       });
       conclusionBlock = renderCheckConclusions(planResult, investigation.checkConclusions);
       const { blockedChecks, unprovenChecks, redRetryChecks } = investigation;
+      // From here until the report is accepted, a failure would lose these conclusions: keep them.
+      this.unreportedInvestigation = {
+        plan: planResult,
+        conclusions: investigation.checkConclusions,
+      };
       const investigationUsage = investigation.usage;
       const investigationTurns = investigation.steps;
 
@@ -1563,6 +1585,12 @@ export class DeepSeekHarnessAdapter implements HarnessAdapter {
           tool: { name, errorPreview: 'Turn interrupted before a tool outcome was observed.' },
         });
       this.liveOpenOperations.clear();
+      // A failed report must not erase an investigation that finished: keep what each check concluded.
+      for (const message of unreportedInvestigationMessages(
+        this.unreportedInvestigation,
+        typed.code,
+      ))
+        yield event(request.agentRunId, { type: 'agent.message', message });
       yield event(request.agentRunId, {
         type: 'run.failed',
         failure: {

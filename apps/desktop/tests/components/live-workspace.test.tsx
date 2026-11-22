@@ -59,6 +59,9 @@ function snapshot(status = 'agents_running') {
   };
 }
 function workspace(data = snapshot()) {
+  // A test window is short, which would fold the run facts away; most tests want them showing.
+  if (window.localStorage.getItem('sentry:run-layout:facts') === null)
+    window.localStorage.setItem('sentry:run-layout:facts', 'open');
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: Infinity } },
   });
@@ -126,9 +129,160 @@ describe('truthful run workspace', () => {
     ]) {
       expect(within(details).getByText(label)).toBeTruthy();
     }
-    expect(within(details).getByText(`${stacks.length} selected`)).toBeTruthy();
+    const agentsRow = [...details.querySelectorAll('.run-detail')].find(
+      (row) => row.querySelector('dt')?.textContent === 'Agents',
+    );
+    expect(agentsRow?.querySelector('dd')?.textContent).toBe(`${stacks.length} selected`);
     // No tile boxes in the header (they overflowed the layout).
     expect(document.querySelector('header .rs-tile')).toBeNull();
+  });
+
+  it('groups the run facts into the run, its results and its identifiers', async () => {
+    const data = snapshot('completed') as ReturnType<typeof snapshot> & {
+      run: { startedAt?: string; completedAt?: string };
+    };
+    data.run.startedAt = '2026-10-10T09:00:00Z';
+    data.run.completedAt = '2026-10-10T09:10:02Z';
+    workspace(data);
+    await screen.findByText('10m 02s');
+    const groups = [...document.querySelectorAll('.run-details .run-group')].map((group) => ({
+      title: group.querySelector('.run-group-title')?.textContent,
+      labels: [...group.querySelectorAll('dt')].map((dt) => dt.textContent),
+    }));
+    // Both moments are local date and time: no stored ISO text, and the end is not shown in another zone.
+    const fact = (label: string): string =>
+      [...document.querySelectorAll('.run-details .run-detail')]
+        .find((row) => row.querySelector('dt')?.textContent === label)
+        ?.querySelector('dd')?.textContent ?? '';
+    expect(fact('Started')).toContain('2026');
+    expect(fact('Completed')).toContain('2026');
+    expect(fact('Completed')).not.toContain('T09:');
+    expect(fact('Started')).toMatch(/\d{2}:\d{2}$/);
+    expect(fact('Completed')).toMatch(/\d{2}:\d{2}$/);
+    expect(groups).toEqual([
+      { title: 'Run', labels: ['Project', 'Started', 'Completed', 'Duration'] },
+      { title: 'Results', labels: ['Agents', 'Findings', 'Evidence'] },
+      { title: 'Identifiers', labels: expect.arrayContaining(['Run ID', 'Snapshot']) },
+    ]);
+  });
+
+  it('explains a failed agent in a row of its own, with the provider text as technical details', async () => {
+    const data = snapshot('partial') as ReturnType<typeof snapshot> & {
+      agentRuns: Array<{ status: string; failure?: { code: string; message: string } }>;
+    };
+    data.agentRuns[0] = {
+      ...data.agentRuns[0]!,
+      status: 'failed',
+      failure: {
+        code: 'OPENCODE_UPSTREAM_FAILED',
+        message:
+          'OpenCode openai failed openai/gpt-6.1-sol (HTTP 429): The usage limit has been reached',
+      },
+    };
+    workspace(data);
+    await screen.findByText('Technical details');
+    const rows = document.querySelectorAll('.run-notice-agent');
+    expect(rows).toHaveLength(1);
+    const row = rows[0] as HTMLElement;
+    expect(row.querySelector('.run-notice-name')?.textContent).toBe('OpenCode');
+    expect(row.querySelector('.run-notice-state')?.textContent).toBe('failed');
+    // The first thing read is a plain sentence, not the code and the provider's wording.
+    expect(row.querySelector('.run-notice-reason')?.textContent).toContain(
+      'usage limit was reached',
+    );
+    expect(row.querySelector('.run-notice-reason')?.textContent).not.toContain(
+      'OPENCODE_UPSTREAM_FAILED',
+    );
+    const details = row.querySelector('details') as HTMLDetailsElement;
+    expect(details.textContent).toContain('OPENCODE_UPSTREAM_FAILED: OpenCode openai failed');
+  });
+
+  it('folds the run facts away with the chevron in the header, and remembers it', async () => {
+    workspace(snapshot('completed'));
+    const hide = await screen.findByRole('button', { name: 'Hide run facts' });
+    expect(document.querySelector('.run-details')).not.toBeNull();
+    fireEvent.click(hide);
+    expect(document.querySelector('.run-details')).toBeNull();
+    expect(window.localStorage.getItem('sentry:run-layout:facts')).toBe('closed');
+    fireEvent.click(screen.getByRole('button', { name: 'Show run facts' }));
+    expect(document.querySelector('.run-details')).not.toBeNull();
+    expect(window.localStorage.getItem('sentry:run-layout:facts')).toBe('open');
+  });
+
+  it('starts with the run facts folded on a short window when nothing was chosen', async () => {
+    window.localStorage.removeItem('sentry:run-layout:facts');
+    Object.defineProperty(window, 'innerHeight', { value: 700, configurable: true });
+    try {
+      // The helper would open them; set the storage back to nothing right after.
+      const data = snapshot('completed');
+      const client = new QueryClient({
+        defaultOptions: { queries: { retry: false, gcTime: Infinity } },
+      });
+      clients.push(client);
+      client.setQueryData(['run', 'r'], data);
+      vi.stubGlobal('sentry', {
+        runs: {
+          get: vi.fn(async () => data),
+          exportSave: vi.fn(),
+          revealExport: vi.fn(),
+          cancel: vi.fn(),
+        },
+        projects: { get: vi.fn(async () => ({ name: 'Fixture project' })) },
+        runtime: { status: vi.fn(async () => ({ connected: true })) },
+        subscribe: { onRunUpdate: () => () => undefined },
+      });
+      render(
+        <QueryClientProvider client={client}>
+          <MemoryRouter initialEntries={['/runs/r']}>
+            <Routes>
+              <Route path="/runs/:runId" element={<RunWorkspace />} />
+            </Routes>
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+      await screen.findByRole('button', { name: 'Show run facts' });
+      expect(document.querySelector('.run-details')).toBeNull();
+    } finally {
+      Object.defineProperty(window, 'innerHeight', { value: 768, configurable: true });
+    }
+  });
+
+  it('lets the person close the note about a partial run with the X in its corner', async () => {
+    const data = snapshot('partial') as ReturnType<typeof snapshot> & {
+      agentRuns: Array<{ status: string; failure?: { code: string; message: string } }>;
+    };
+    data.agentRuns[0] = {
+      ...data.agentRuns[0]!,
+      status: 'failed',
+      failure: { code: 'GLM_TURN_TIMEOUT', message: 'turn took too long' },
+    };
+    workspace(data);
+    await screen.findByText('Technical details');
+    // A plain sentence for this code, and the close button inside the note.
+    expect(document.querySelector('.run-notice-reason')?.textContent).toContain('took too long');
+    const notice = document.querySelector('.run-notice') as HTMLElement;
+    const close = within(notice).getByRole('button', { name: 'Dismiss notification' });
+    expect(close.closest('.has-close')).toBe(notice);
+    fireEvent.click(close);
+    expect(document.querySelector('.run-notice')).toBeNull();
+    // Closing the note changes nothing else on the page.
+    expect(document.querySelector('.run-details')).not.toBeNull();
+    // A button brings the closed note back, and goes away once it is showing again.
+    const show = screen.getByRole('button', { name: /Show issues/ });
+    expect(show.textContent).toContain('1');
+    fireEvent.click(show);
+    expect(document.querySelector('.run-notice')).not.toBeNull();
+    expect(screen.queryByRole('button', { name: /Show issues/ })).toBeNull();
+  });
+
+  it('offers no Show issues button while nothing was closed', async () => {
+    const data = snapshot('partial') as ReturnType<typeof snapshot> & {
+      agentRuns: Array<{ status: string; failure?: { code: string; message: string } }>;
+    };
+    data.agentRuns[0] = { ...data.agentRuns[0]!, status: 'failed' };
+    workspace(data);
+    await screen.findByText('Structured failure details were not recorded.');
+    expect(screen.queryByRole('button', { name: /Show issues/ })).toBeNull();
   });
 
   it('a status query error does not leave a cached connected indicator or claim no active runs', async () => {
@@ -195,16 +349,15 @@ describe('truthful run workspace', () => {
   );
 
   it.each([1, 2, 3])(
-    'overview includes all %i selected agents even before workers exist',
+    'overview counts all %i selected agents even before workers exist',
     (count) => {
       const data = snapshot();
       data.run.configuration.agentStackIds = stacks.slice(0, count);
       data.agentRuns = [];
       render(<RunSummaryPanel snapshot={data} />);
       expect(screen.getByLabelText(`Selected: ${count}`)).toBeTruthy();
-      expect(
-        within(screen.getByRole('region', { name: 'Results by agent' })).getAllByRole('button'),
-      ).toHaveLength(count);
+      expect(screen.getByLabelText('Running: 0')).toBeTruthy();
+      expect(screen.getByLabelText('Completed: 0')).toBeTruthy();
     },
   );
   it('no longer prints the total findings and evidence line under the agents', () => {
@@ -263,15 +416,60 @@ describe('truthful run workspace', () => {
       return data;
     }
 
-    it('shows mode, web access, downloads and profile as labelled tiles, not plain lines', () => {
+    it('shows mode, depth and time limit as tiles and the add-ons as rows with a clear On or Off', () => {
       render(<RunSummaryPanel snapshot={mixed()} />);
       expect(screen.getByLabelText('Mode: FULL QA')).toBeTruthy();
       expect(screen.getByLabelText('Web access: On')).toBeTruthy();
       expect(screen.getByLabelText('Tool and SDK downloads: Off')).toBeTruthy();
-      const profile = screen.getByLabelText('Project profile: Used by 1 agent(s)');
+      const profile = screen.getByLabelText('Project profile: On');
+      expect(profile.textContent).toContain('Used by 1 agent(s)');
       expect(profile.textContent).toContain('1 without (out of date or not built)');
-      // Each tile carries an icon.
+      // Each add-on carries an icon and its state in words.
       expect(screen.getByLabelText('Web access: On').querySelector('svg')).not.toBeNull();
+      expect(screen.getByLabelText('Web access: On').textContent).toContain('On');
+      expect(screen.getByLabelText('Tool and SDK downloads: Off').textContent).toContain('Off');
+    });
+
+    it('gives the add-ons and the small tiles a tooltip, so a narrow panel can hide their words', () => {
+      render(<RunSummaryPanel snapshot={mixed()} />);
+      expect(screen.getByLabelText('Web access: On').getAttribute('title')).toBe('Web access: On');
+      expect(screen.getByLabelText('Tool and SDK downloads: Off').getAttribute('title')).toBe(
+        'Tool and SDK downloads: Off',
+      );
+      expect(screen.getByLabelText('Run depth: Full').getAttribute('title')).toBe(
+        'Run depth: Full',
+      );
+      // The count tiles keep their word in the page; the stylesheet decides when to hide it.
+      expect(screen.getByLabelText('Running: 1').textContent).toContain('Running');
+    });
+
+    it('shows the Secrets check as On for a production run and Off when it was turned off', () => {
+      render(<RunSummaryPanel snapshot={mixed()} />);
+      expect(screen.getByLabelText('Secrets check: On')).toBeTruthy();
+      cleanup();
+      const off = mixed();
+      (off.run.configuration as { executionSafeguards: object }).executionSafeguards = {
+        webAccess: true,
+        secretsCheck: false,
+      };
+      render(<RunSummaryPanel snapshot={off} />);
+      expect(screen.getByLabelText('Secrets check: Off')).toBeTruthy();
+    });
+
+    it('shows a switched-off profile as Off and leaves out what the header already shows', () => {
+      const data = mixed();
+      (data.run.configuration as { profileUsage: object }).profileUsage = {
+        requested: false,
+        usedAgentStackIds: [],
+        staleAgentStackIds: [],
+        missingAgentStackIds: [],
+      };
+      render(<RunSummaryPanel snapshot={data} />);
+      expect(screen.getByLabelText('Project profile: Off')).toBeTruthy();
+      // The ids sit in the run header and the agents on the canvas, so the panel does not repeat them.
+      expect(screen.queryByText('Snapshot')).toBeNull();
+      expect(screen.queryByText('AGENT EXECUTIONS COMPLETE')).toBeNull();
+      expect(screen.queryByTitle('Select this agent on the canvas')).toBeNull();
     });
 
     it('counts agents by state and makes each count a button that focuses the first such agent', () => {
@@ -303,7 +501,10 @@ describe('truthful run workspace', () => {
     data.agentRuns = [];
     render(<RunSummaryPanel snapshot={data} />);
     expect(screen.queryByText(/agents are waiting/)).toBeNull();
-    expect(screen.getAllByText('Not started')).toHaveLength(3);
+    // Nothing started, so nothing is counted as running or completed.
+    expect(screen.getByLabelText('Selected: 3')).toBeTruthy();
+    expect(screen.getByLabelText('Running: 0')).toBeTruthy();
+    expect(screen.getByLabelText('Completed: 0')).toBeTruthy();
   });
 });
 

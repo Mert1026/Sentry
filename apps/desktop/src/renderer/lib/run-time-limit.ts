@@ -1,5 +1,5 @@
 /**
- * The default run time limit, as Settings → Runtime offers it. This mirrors the limits in
+ * The default run time limit, as Settings → Application offers it. This mirrors the limits in
  * @qa/shared (a test keeps the two identical); the renderer keeps its own copy so it never imports
  * the runtime-side package.
  */

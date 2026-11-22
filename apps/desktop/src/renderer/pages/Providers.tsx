@@ -7,7 +7,6 @@ import { Check } from 'lucide-react';
 import { sentryApi } from '../lib/sentry-api.js';
 import { AGENT_EFFORT_SETTING, effortOptions, type EffortAgent } from '../lib/agent-effort.js';
 import {
-  CUSTOM_MODEL_VALUE,
   CHATGPT_MODELS,
   DEEPSEEK_MODELS,
   LEGACY_DEEPSEEK_ALIASES,
@@ -15,13 +14,25 @@ import {
   OPENCODE_GO_MODELS,
   OPENCODE_ZEN_MODELS,
   ZAI_GLM_MODELS,
+  ANTHROPIC_CLAUDE_MODELS,
   modelsForOpenCodeMode,
   resolveOpenCodeBinarySuggestion,
   resolveOpenCodeModelMode,
   stripKnownOpenCodePrefix,
 } from '../lib/provider-models.js';
+import { buildModelOptions } from '../lib/model-options.js';
+import { useModelCatalog } from '../lib/use-model-catalog.js';
+import { Select } from '../components/Select.js';
+import openCodeLogo from '../assets/providers/opencode.svg';
+import deepSeekLogo from '../assets/providers/deepseek.svg';
+import glmLogo from '../assets/providers/zhipu.svg';
+import chatGptLogo from '../assets/providers/openai.svg';
+import claudeLogo from '../assets/providers/claude.svg';
+import { ModelPicker } from '../components/ModelPicker.js';
+import { ModelListUpdate } from '../components/ModelListUpdate.js';
 import { PageHeader } from '../components/ui/PageHeader.js';
 import { OpenAiAccountPanel } from '../components/OpenAiAccountPanel.js';
+import { ClaudeAccountPanel } from '../components/ClaudeAccountPanel.js';
 import { SegmentedControl } from '../components/ui/Tabs.js';
 
 interface ProviderStatus {
@@ -40,9 +51,17 @@ const DESCRIPTIONS: Record<string, string> = {
     'OpenCode model id (non-secret) for the selected provider — e.g. kimi-k3 or gemini-4-argon-contributor (opencode-go), gpt-5.5 (opencode), or anthropic/claude-opus-4-6 (openrouter). Prefixing with opencode-go/, opencode/, or openrouter/ also selects that provider when Provider is unset.',
   DEEPSEEK_API_KEY: 'DeepSeek provider key (secret). Used by the DeepSeek harness host process.',
   ANTHROPIC_AUTH_TOKEN:
-    'GLM/Claude-Code provider token (secret). Used by the Claude parent process.',
+    'GLM provider token (secret). Used by the GLM agent only; the Claude agent never sees it.',
   ANTHROPIC_BASE_URL:
     'GLM endpoint override (non-secret). Trusted Z.AI Anthropic-compatible base URL, e.g. https://api.z.ai/api/anthropic.',
+  ANTHROPIC_API_KEY:
+    'Anthropic API key (secret, from console.anthropic.com). Used by the Claude agent, pay-as-you-go on your Anthropic account. The Claude agent always talks to Anthropic itself and never uses the GLM endpoint.',
+  SENTRY_ANTHROPIC_AUTH:
+    'How the Claude agent signs in (non-secret): key (Anthropic API key) or account (your Claude account through Claude Code).',
+  SENTRY_ANTHROPIC_MODEL:
+    'Claude agent model id (non-secret), an Anthropic model such as claude-sonnet-5-5. The Claude agent runs Claude Code against Anthropic.',
+  SENTRY_ANTHROPIC_REASONING:
+    'How hard the Claude agent thinks (non-secret): low, medium, high, extra high or maximum. It is passed to Claude Code as its effort level. Higher effort usually finds more but takes longer and costs more. Unset uses the provider default.',
   SENTRY_DEEPSEEK_MODEL: 'DeepSeek model id override (non-secret).',
   SENTRY_GLM_MODEL: 'GLM model id override (non-secret).',
   SENTRY_DEEPSEEK_BINARY:
@@ -75,13 +94,14 @@ const SECRET_NAMES: ReadonlySet<string> = new Set([
   'OPENAI_API_KEY',
   'DEEPSEEK_API_KEY',
   'ANTHROPIC_AUTH_TOKEN',
+  'ANTHROPIC_API_KEY',
 ]);
 
 interface AgentFieldSpec {
   readonly name: string;
   readonly label: string;
   readonly placeholder?: string;
-  readonly modelList?: 'opencode' | 'deepseek' | 'glm' | 'chatgpt';
+  readonly modelList?: 'opencode' | 'deepseek' | 'glm' | 'chatgpt' | 'claude';
   readonly detailsLabel?: string | null;
 }
 
@@ -90,6 +110,31 @@ interface AgentCardSpec {
   readonly subtitle: string;
   readonly fields: ReadonlyArray<AgentFieldSpec>;
 }
+
+/** Each agent's logo, and the settings that show it can run: a key, or a signed-in account. */
+const CARD_BRAND: Readonly<
+  Record<string, { logo: string; tone: string; keys: readonly string[]; account?: string }>
+> = {
+  OpenCode: {
+    logo: openCodeLogo,
+    tone: 'opencode',
+    keys: ['OPENCODE_API_KEY', 'OPENROUTER_API_KEY'],
+  },
+  DeepSeek: { logo: deepSeekLogo, tone: 'deepseek', keys: ['DEEPSEEK_API_KEY'] },
+  GLM: { logo: glmLogo, tone: 'glm', keys: ['ANTHROPIC_AUTH_TOKEN'] },
+  ChatGPT: {
+    logo: chatGptLogo,
+    tone: 'chatgpt',
+    keys: ['OPENAI_API_KEY'],
+    account: 'SENTRY_OPENAI_AUTH',
+  },
+  Claude: {
+    logo: claudeLogo,
+    tone: 'claude',
+    keys: ['ANTHROPIC_API_KEY'],
+    account: 'SENTRY_ANTHROPIC_AUTH',
+  },
+};
 
 const AGENT_CARDS: readonly AgentCardSpec[] = [
   {
@@ -162,6 +207,18 @@ const AGENT_CARDS: readonly AgentCardSpec[] = [
         modelList: 'chatgpt',
         label: 'Model',
         placeholder: 'e.g. gpt-5.5',
+      },
+    ],
+  },
+  {
+    title: 'Claude',
+    subtitle: 'Fifth reviewer · Claude Code on Anthropic, with an API key or your Claude account',
+    fields: [
+      {
+        name: 'SENTRY_ANTHROPIC_MODEL',
+        modelList: 'claude',
+        label: 'Model',
+        placeholder: 'e.g. claude-sonnet-5-5',
       },
     ],
   },
@@ -322,11 +379,25 @@ export function Providers(): React.JSX.Element {
           </>
         }
       />
-      <div className="info-aligned-row" style={{ justifyContent: 'flex-end' }}>
-        <InfoPopover title="Provider credentials">
+      <div className="provider-toolbar">
+        <InfoPopover title="Provider credentials" showLabel>
           Save encrypts the credential with the OS keychain, persists it, and loads it into the host
           process immediately — it survives application restarts. Secret values are never displayed
           and never leave the desktop host process.
+        </InfoPopover>
+        <InfoPopover title="Advanced runtime binaries" showLabel>
+          <HarnessBinaryCard
+            statuses={statuses.isError ? [] : (statuses.data ?? [])}
+            statusPending={statuses.isLoading}
+            detectedOpenCodeBinary={detectedOpenCodeBinary}
+            values={values}
+            setValues={setValues}
+            onSave={(name, value) => save.mutate({ name, value })}
+            onClear={(name) => clear.mutate(name)}
+            savePending={save.isPending}
+            clearPending={clear.isPending}
+            onError={fail}
+          />
         </InfoPopover>
       </div>
       {error !== undefined ? (
@@ -368,85 +439,105 @@ export function Providers(): React.JSX.Element {
           </button>
         </div>
       ) : null}
-      <div className="cards">
+      <div className="provider-cards">
         {AGENT_CARDS.map((card) => (
-          <section className="card" key={card.title} aria-label={card.title + ' provider settings'}>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                marginBottom: 12,
-                justifyContent: 'space-between',
-              }}
-            >
-              <h2 className="section-title">{card.title}</h2>
-              <InfoPopover title={card.title}>{card.subtitle}</InfoPopover>
+          <section
+            className="card provider-card"
+            key={card.title}
+            aria-label={card.title + ' provider settings'}
+          >
+            <div className="provider-card-head">
+              <span className="provider-logo" aria-hidden="true">
+                <img src={CARD_BRAND[card.title]?.logo} alt="" width={28} height={28} />
+              </span>
+              <div className="provider-card-title">
+                <h2 className="section-title">{card.title}</h2>
+                <p className="metadata">{card.subtitle}</p>
+              </div>
+              {statuses.isSuccess
+                ? (() => {
+                    const brand = CARD_BRAND[card.title];
+                    const ready =
+                      brand !== undefined &&
+                      (brand.keys.some((name) => byName.get(name)?.configured === true) ||
+                        (brand.account !== undefined &&
+                          byName.get(brand.account)?.configured === true &&
+                          byName.get(brand.account)?.hint.trim().toLowerCase() === 'account'));
+                    return (
+                      <span className={'provider-chip ' + (ready ? 'ready' : 'needs')}>
+                        {ready ? 'Ready' : 'Needs a key'}
+                      </span>
+                    );
+                  })()
+                : null}
             </div>
-            {card.title === 'OpenCode' ? <OpenCodeProviderGuidance byName={byName} /> : null}
-            {card.title === 'OpenCode' ? (
-              <OpenCodeCard {...fieldProps} />
-            ) : card.title === 'ChatGPT' ? (
-              <ChatGptCard {...fieldProps} onError={fail} />
-            ) : (
-              card.fields.map((field) =>
-                field.modelList === undefined ? (
-                  <CredentialField
-                    key={field.name}
-                    label={field.label}
-                    name={field.name}
-                    placeholder={field.placeholder}
-                    detailsLabel={field.detailsLabel}
-                    {...fieldProps}
-                  />
-                ) : (
-                  <ModelSelectField
-                    key={field.name}
-                    label={field.label}
-                    name={field.name}
-                    placeholder={field.placeholder ?? 'Select a model…'}
-                    detailsLabel={field.detailsLabel}
-                    description={DESCRIPTIONS[field.name]}
-                    options={
-                      field.modelList === 'deepseek'
-                        ? DEEPSEEK_MODELS
-                        : field.modelList === 'glm'
-                          ? ZAI_GLM_MODELS
-                          : OPENCODE_GO_MODELS
-                    }
-                    optionNote={field.modelList === 'deepseek' ? deepSeekOptionNote : undefined}
-                    {...fieldProps}
-                  />
-                ),
-              )
-            )}
-            {card.title === 'DeepSeek' || card.title === 'GLM' ? (
-              <ReasoningEffortField
-                agent={card.title === 'GLM' ? 'glm' : 'deepseek'}
-                byName={byName}
-                pending={save.isPending || clear.isPending}
-                onSave={fieldProps.onSave}
-                onClear={fieldProps.onClear}
-              />
-            ) : null}
+            <div className="provider-card-body">
+              {card.title === 'OpenCode' ? <OpenCodeProviderGuidance byName={byName} /> : null}
+              {card.title === 'OpenCode' ? (
+                <OpenCodeCard {...fieldProps} />
+              ) : card.title === 'ChatGPT' ? (
+                <ChatGptCard {...fieldProps} onError={fail} />
+              ) : card.title === 'Claude' ? (
+                <ClaudeCard {...fieldProps} onError={fail} />
+              ) : (
+                card.fields.map((field) =>
+                  field.modelList === undefined ? (
+                    <CredentialField
+                      key={field.name}
+                      label={field.label}
+                      name={field.name}
+                      placeholder={field.placeholder}
+                      detailsLabel={field.detailsLabel}
+                      {...fieldProps}
+                    />
+                  ) : (
+                    <ModelSelectField
+                      key={field.name}
+                      label={field.label}
+                      name={field.name}
+                      placeholder={field.placeholder ?? 'Select a model…'}
+                      detailsLabel={field.detailsLabel}
+                      description={DESCRIPTIONS[field.name]}
+                      options={
+                        field.modelList === 'deepseek'
+                          ? DEEPSEEK_MODELS
+                          : field.modelList === 'glm'
+                            ? ZAI_GLM_MODELS
+                            : field.modelList === 'claude'
+                              ? ANTHROPIC_CLAUDE_MODELS
+                              : OPENCODE_GO_MODELS
+                      }
+                      optionNote={field.modelList === 'deepseek' ? deepSeekOptionNote : undefined}
+                      legacyIds={
+                        field.modelList === 'deepseek' ? LEGACY_DEEPSEEK_ALIASES : undefined
+                      }
+                      catalogKey={
+                        field.modelList === 'deepseek'
+                          ? 'deepseek'
+                          : field.modelList === 'glm'
+                            ? 'zai'
+                            : field.modelList === 'claude'
+                              ? 'anthropic'
+                              : 'opencode-go'
+                      }
+                      {...fieldProps}
+                    />
+                  ),
+                )
+              )}
+              {/* OpenCode, ChatGPT and Claude show their own effort field inside their card. */}
+              {card.title === 'DeepSeek' || card.title === 'GLM' ? (
+                <ReasoningEffortField
+                  agent={card.title === 'GLM' ? 'glm' : 'deepseek'}
+                  byName={byName}
+                  pending={save.isPending || clear.isPending}
+                  onSave={fieldProps.onSave}
+                  onClear={fieldProps.onClear}
+                />
+              ) : null}
+            </div>
           </section>
         ))}
-      </div>
-      <div className="info-aligned-row" style={{ justifyContent: 'flex-end' }}>
-        <InfoPopover title="Advanced runtime binaries">
-          <HarnessBinaryCard
-            statuses={statuses.isError ? [] : (statuses.data ?? [])}
-            statusPending={statuses.isLoading}
-            detectedOpenCodeBinary={detectedOpenCodeBinary}
-            values={values}
-            setValues={setValues}
-            onSave={(name, value) => save.mutate({ name, value })}
-            onClear={(name) => clear.mutate(name)}
-            savePending={save.isPending}
-            clearPending={clear.isPending}
-            onError={fail}
-          />
-        </InfoPopover>
       </div>
       <div className="card">
         <h2 className="section-title">Forget all provider credentials</h2>
@@ -518,7 +609,7 @@ function OpenCodeProviderGuidance(props: {
 
   if (!explicit && hasOpenCodeKey && !hasOpenRouterKey) {
     return (
-      <div className="inline-notice" style={{ marginBottom: 12 }}>
+      <div className="inline-notice provider-wide">
         <strong>Provider selection needed:</strong> You saved an{' '}
         <strong>OpenCode API key (Zen &amp; Go)</strong>, while <strong>Provider</strong> is unset
         (defaults to <code>openrouter</code>). Save <code>opencode-go</code> (for an OpenCode Go
@@ -533,7 +624,7 @@ function OpenCodeProviderGuidance(props: {
     hasOpenRouterKey
   ) {
     return (
-      <div className="inline-notice" style={{ marginBottom: 12 }}>
+      <div className="inline-notice provider-wide">
         <strong>Key field mismatch:</strong> <strong>Provider</strong> is set to{' '}
         <code>{provider}</code>, which uses the <strong>OpenCode API key (Zen &amp; Go)</strong>{' '}
         field. The <strong>OpenRouter API key (Pay-as-you-go)</strong> field is only used when{' '}
@@ -566,7 +657,7 @@ function CredentialField(props: {
     !secret && item?.configured === true && item.hint !== '' ? item.hint : undefined;
   const disclosureLabel = props.detailsLabel === undefined ? 'Advanced' : props.detailsLabel;
   return (
-    <div style={{ marginBottom: 12 }}>
+    <div className="provider-field">
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <label htmlFor={'provider-' + props.name} className="card-title">
           {props.label}
@@ -675,6 +766,10 @@ interface ModelFieldProps {
   readonly detailsLabel?: string | null | undefined;
   readonly description?: string | undefined;
   readonly optionNote?: ((id: string) => string | undefined) | undefined;
+  /** The provider in the model catalog whose updated list adds to `options`. */
+  readonly catalogKey?: string | undefined;
+  /** Ids in `options` that are old aliases rather than current models. */
+  readonly legacyIds?: readonly string[] | undefined;
 }
 function modelFieldValue(
   values: Record<string, string>,
@@ -701,33 +796,38 @@ function ModelSelectField(props: ModelFieldProps): React.JSX.Element {
   const current = modelFieldValue(props.values, props.name, activeHint);
   const trimmed = current.trim();
   const stripped = stripKnownOpenCodePrefix(trimmed);
-  const known =
-    trimmed === '' || props.options.includes(trimmed) || props.options.includes(stripped);
-  const selectedOption = props.options.includes(trimmed)
+  // The list that comes with the app, plus what the last update of the list added.
+  const { catalog } = useModelCatalog();
+  const modelOptions = React.useMemo(
+    () =>
+      buildModelOptions(
+        props.options,
+        props.catalogKey === undefined ? undefined : catalog?.providers[props.catalogKey],
+        { legacyIds: props.legacyIds, note: props.optionNote },
+      ),
+    [props.options, props.catalogKey, props.legacyIds, props.optionNote, catalog],
+  );
+  const optionIds = modelOptions.map((option) => option.id);
+  const known = trimmed === '' || optionIds.includes(trimmed) || optionIds.includes(stripped);
+  const selectedOption = optionIds.includes(trimmed)
     ? trimmed
-    : stripped !== trimmed && props.options.includes(stripped)
+    : stripped !== trimmed && optionIds.includes(stripped)
       ? stripped
       : '';
   const [customMode, setCustomMode] = React.useState(false);
   const showCustom = customMode || (!known && trimmed !== '');
-  const selectValue =
-    known && selectedOption !== '' ? selectedOption : customMode ? CUSTOM_MODEL_VALUE : '';
   // Save tracks the unsaved draft only: the saved hint stays visible as the
   // current value, but the button dims once there is nothing new to save.
   const hasDraft = draft.trim() !== '';
   const saveValue = current.trim();
   const onSelect = (raw: string): void => {
-    if (raw === CUSTOM_MODEL_VALUE) {
-      setCustomMode(true);
-      return;
-    }
     setCustomMode(false);
     props.setValues((prev) => ({ ...prev, [props.name]: raw }));
   };
   const selectedNote = selectedOption !== '' ? props.optionNote?.(selectedOption) : undefined;
   const disclosureLabel = props.detailsLabel === undefined ? 'Advanced' : props.detailsLabel;
   return (
-    <div style={{ marginBottom: 12 }}>
+    <div className="provider-field">
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <label htmlFor={'provider-' + props.name} className="card-title">
           {props.label}
@@ -765,27 +865,20 @@ function ModelSelectField(props: ModelFieldProps): React.JSX.Element {
           </InfoPopover>
         ) : null}
       </div>
+      {props.catalogKey === undefined ? null : <ModelListUpdate providerKey={props.catalogKey} />}
       <div
         style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 4 }}
       >
-        <select
+        <ModelPicker
           id={'provider-' + props.name}
-          aria-label={'Value for ' + props.name}
-          value={selectValue}
-          onChange={(e) => onSelect(e.target.value)}
-          style={{ minWidth: 200, flex: 1 }}
-        >
-          <option value="">Select a model…</option>
-          {props.options.map((id) => {
-            const note = props.optionNote?.(id);
-            return (
-              <option key={id} value={id}>
-                {note === undefined ? id : id + ' (' + note + ')'}
-              </option>
-            );
-          })}
-          <option value={CUSTOM_MODEL_VALUE}>Custom model id…</option>
-        </select>
+          label={'Value for ' + props.name}
+          options={modelOptions}
+          value={known ? selectedOption : ''}
+          customActive={customMode}
+          placeholder="Select a model…"
+          onSelect={onSelect}
+          onCustom={() => setCustomMode(true)}
+        />
         <button
           className="primary compact"
           disabled={!hasDraft || props.savePending}
@@ -898,7 +991,7 @@ function CredentialSourceSelector(props: {
   const active = draft !== '' ? draft : persistedValue;
   const usingOpenRouter = active === '' || active === 'openrouter';
   return (
-    <div style={{ marginBottom: 12 }}>
+    <div className="provider-field">
       <span id="credential-source-label" className="card-title">
         Credential source
       </span>
@@ -958,6 +1051,17 @@ function OpenCodeCard(props: {
 }): React.JSX.Element {
   const providerStatus = props.byName.get('SENTRY_OPENCODE_PROVIDER');
   const modelStatus = props.byName.get('SENTRY_OPENCODE_MODEL');
+  // The suggestions for a Zen model: the list that comes with the app plus what the last update added.
+  const { catalog } = useModelCatalog();
+  const zenSuggestions = React.useMemo(
+    () => [
+      ...new Set([
+        ...OPENCODE_ZEN_MODELS,
+        ...(catalog?.providers['opencode']?.map((model) => model.id) ?? []),
+      ]),
+    ],
+    [catalog],
+  );
   const persistedProvider =
     providerStatus?.configured === true ? providerStatus.hint.trim().toLowerCase() : '';
   const draftRaw = props.values['SENTRY_OPENCODE_PROVIDER'];
@@ -992,13 +1096,13 @@ function OpenCodeCard(props: {
     statusPending: props.statusPending,
   };
   return (
-    <div>
+    <div className="provider-fields-root">
       {hasPersistedState ? (
-        <p className="metadata" style={{ margin: '0 0 12px' }}>
+        <p className="metadata provider-wide">
           {`Active upstream: ${persistedProvider === '' ? 'openrouter (default)' : persistedProvider}${activeModel !== undefined ? ' · ' + activeModel : ' · no model saved'}`}
         </p>
       ) : null}
-      <div style={{ marginBottom: 12 }}>
+      <div className="provider-field">
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <label htmlFor="provider-SENTRY_OPENCODE_PROVIDER" className="card-title">
             Provider
@@ -1021,30 +1125,29 @@ function OpenCodeCard(props: {
         <div
           style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 4 }}
         >
-          <select
+          <Select
             id="provider-SENTRY_OPENCODE_PROVIDER"
-            aria-label="Value for SENTRY_OPENCODE_PROVIDER"
+            label="Value for SENTRY_OPENCODE_PROVIDER"
             value={selectValue}
-            onChange={(e) =>
+            onChange={(next) =>
               props.setValues((prev) => ({
                 ...prev,
-                SENTRY_OPENCODE_PROVIDER: e.target.value,
+                SENTRY_OPENCODE_PROVIDER: next,
               }))
             }
-            style={{ minWidth: 200, flex: 1 }}
-          >
-            <option value="">Not set (defaults to OpenRouter pay-as-you-go)</option>
-            {OPENCODE_PROVIDER_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-            {!persistedKnown && !hasDraft ? (
-              <option value={persistedProvider}>
-                {`Keep saved “${persistedProvider}” (unrecognized)`}
-              </option>
-            ) : null}
-          </select>
+            options={[
+              { value: '', label: 'Not set (defaults to OpenRouter pay-as-you-go)' },
+              ...OPENCODE_PROVIDER_OPTIONS,
+              ...(!persistedKnown && !hasDraft
+                ? [
+                    {
+                      value: persistedProvider,
+                      label: `Keep saved “${persistedProvider}” (unrecognized)`,
+                    },
+                  ]
+                : []),
+            ]}
+          />
           <button
             className="primary compact"
             disabled={!hasDraft || !draftValid || props.savePending}
@@ -1075,25 +1178,29 @@ function OpenCodeCard(props: {
           detailsLabel={null}
           description={DESCRIPTIONS['SENTRY_OPENCODE_MODEL']}
           options={modelsForOpenCodeMode('go')}
+          catalogKey="opencode-go"
           {...common}
         />
       ) : (
-        <CredentialField
-          label="Model"
-          name="SENTRY_OPENCODE_MODEL"
-          placeholder={
-            mode === 'zen'
-              ? 'e.g. gpt-5.5, claude-opus-4-6, or kimi-k3'
-              : 'e.g. anthropic/claude-sonnet-4'
-          }
-          detailsLabel={null}
-          listId={mode === 'zen' ? 'opencode-zen-model-suggestions' : undefined}
-          {...common}
-        />
+        <>
+          {mode === 'zen' ? <ModelListUpdate providerKey="opencode" /> : null}
+          <CredentialField
+            label="Model"
+            name="SENTRY_OPENCODE_MODEL"
+            placeholder={
+              mode === 'zen'
+                ? 'e.g. gpt-5.5, claude-opus-4-6, or kimi-k3'
+                : 'e.g. anthropic/claude-sonnet-4'
+            }
+            detailsLabel={null}
+            listId={mode === 'zen' ? 'opencode-zen-model-suggestions' : undefined}
+            {...common}
+          />
+        </>
       )}
       {mode === 'zen' ? (
         <datalist id="opencode-zen-model-suggestions">
-          {OPENCODE_ZEN_MODELS.map((id) => (
+          {zenSuggestions.map((id) => (
             <option key={id} value={id} />
           ))}
         </datalist>
@@ -1141,7 +1248,7 @@ function ReasoningEffortField(props: {
   const options = effortOptions(props.agent);
   const known = options.some((option) => option.value === value);
   return (
-    <div style={{ marginBottom: 12 }}>
+    <div className="provider-field">
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <label htmlFor={'provider-' + name} className="card-title">
           Reasoning effort
@@ -1149,22 +1256,14 @@ function ReasoningEffortField(props: {
         <span className="info-row-spacer" />
         <InfoPopover title="Reasoning effort">{DESCRIPTIONS[name] ?? ''}</InfoPopover>
       </div>
-      <select
+      <Select
         id={'provider-' + name}
-        aria-label={'Value for ' + name}
+        label={'Value for ' + name}
         value={known ? value : ''}
         disabled={props.pending}
-        onChange={(event) =>
-          event.target.value === '' ? props.onClear(name) : props.onSave(name, event.target.value)
-        }
-        style={{ minWidth: 200, width: '100%', marginTop: 4 }}
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
+        options={options}
+        onChange={(next) => (next === '' ? props.onClear(name) : props.onSave(name, next))}
+      />
     </div>
   );
 }
@@ -1199,7 +1298,7 @@ function ChatGptCard(props: {
     statusPending: props.statusPending,
   };
   return (
-    <div>
+    <div className="provider-fields-root">
       <ModelSelectField
         label="Model"
         name="SENTRY_CHATGPT_MODEL"
@@ -1208,9 +1307,10 @@ function ChatGptCard(props: {
         description={DESCRIPTIONS['SENTRY_CHATGPT_MODEL']}
         options={CHATGPT_MODELS}
         optionNote={chatGptModelNote}
+        catalogKey="openai"
         {...common}
       />
-      <div style={{ marginBottom: 12 }}>
+      <div className="provider-field">
         <span id="openai-auth-label" className="metadata">
           Sign in with
         </span>
@@ -1249,6 +1349,82 @@ function ChatGptCard(props: {
     </div>
   );
 }
+function ClaudeCard(props: {
+  readonly onError: (error: unknown) => void;
+  readonly values: Record<string, string>;
+  readonly setValues: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  readonly onSave: (name: string, value: string) => void;
+  readonly onClear: (name: string) => void;
+  readonly savePending: boolean;
+  readonly clearPending: boolean;
+  readonly byName: Map<string, ProviderStatus>;
+  readonly statusPending: boolean;
+}): React.JSX.Element {
+  const authStatus = props.byName.get('SENTRY_ANTHROPIC_AUTH');
+  const account =
+    authStatus?.configured === true && authStatus.hint.trim().toLowerCase() === 'account';
+  const common = {
+    values: props.values,
+    setValues: props.setValues,
+    onSave: props.onSave,
+    onClear: props.onClear,
+    savePending: props.savePending,
+    clearPending: props.clearPending,
+    byName: props.byName,
+    statusPending: props.statusPending,
+  };
+  return (
+    <div className="provider-fields-root">
+      <ModelSelectField
+        label="Model"
+        name="SENTRY_ANTHROPIC_MODEL"
+        placeholder="e.g. claude-sonnet-5-5"
+        detailsLabel="Explanation"
+        description={DESCRIPTIONS['SENTRY_ANTHROPIC_MODEL']}
+        options={ANTHROPIC_CLAUDE_MODELS}
+        catalogKey="anthropic"
+        {...common}
+      />
+      <div className="provider-field">
+        <span id="claude-auth-label" className="metadata">
+          Sign in with
+        </span>
+        <div style={{ marginTop: 6 }}>
+          <SegmentedControl
+            label="Sign in with"
+            value={account ? 'account' : 'key'}
+            onChange={(value) => {
+              if (props.savePending || (value === 'account') === account) return;
+              props.onSave('SENTRY_ANTHROPIC_AUTH', value);
+            }}
+            options={[
+              { value: 'key', label: 'API key' },
+              { value: 'account', label: 'Claude account' },
+            ]}
+          />
+        </div>
+      </div>
+      {account ? (
+        <ClaudeAccountPanel onError={props.onError} />
+      ) : (
+        <CredentialField
+          label="Anthropic API key"
+          name="ANTHROPIC_API_KEY"
+          detailsLabel="Explanation"
+          {...common}
+        />
+      )}
+      <ReasoningEffortField
+        agent="claude"
+        byName={props.byName}
+        pending={props.savePending || props.clearPending}
+        onSave={props.onSave}
+        onClear={props.onClear}
+      />
+    </div>
+  );
+}
+
 const BINARY_FIELDS = [
   { name: 'SENTRY_OPENCODE_BINARY', label: 'OpenCode executable' },
   { name: 'SENTRY_DEEPSEEK_BINARY', label: 'DeepSeek executable' },

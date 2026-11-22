@@ -2,6 +2,10 @@ import type { CliCommand } from '@qa/schemas';
 import type { SimulationScenario } from '@qa/run-engine';
 import {
   AGENT_EFFORT_LEVELS,
+  NOTE_LIMIT_CUSTOM_MAX,
+  NOTE_LIMIT_CUSTOM_MIN,
+  NOTE_LIMIT_DEFAULT,
+  NOTE_LIMIT_UNLIMITED,
   RUN_TIME_LIMIT_CUSTOM_MIN_MS,
   RUN_TIME_LIMIT_DEFAULT_MS,
   RUN_TIME_LIMIT_UNLIMITED_MS,
@@ -25,9 +29,15 @@ interface BaseCommand<C extends CliCommand> {
   readonly command: C;
 }
 
-export type AgentName = 'opencode' | 'deepseek' | 'glm' | 'chatgpt';
+export type AgentName = 'opencode' | 'deepseek' | 'glm' | 'chatgpt' | 'claude';
 
-export const AGENT_NAMES: readonly AgentName[] = ['opencode', 'deepseek', 'glm', 'chatgpt'];
+export const AGENT_NAMES: readonly AgentName[] = [
+  'opencode',
+  'deepseek',
+  'glm',
+  'chatgpt',
+  'claude',
+];
 /** Chosen when --agents is omitted. ChatGPT is opt-in: it needs an API key or a signed-in account. */
 export const DEFAULT_AGENT_NAMES: readonly AgentName[] = ['opencode', 'deepseek', 'glm'];
 
@@ -59,10 +69,14 @@ export type ParsedCliCommand =
       readonly agents: readonly AgentName[];
       readonly wait: boolean;
       readonly instructions?: string;
+      /** A note for single agents (`--agent-note opencode=text`); the agent also gets `instructions`. */
+      readonly agentNotes?: Readonly<Partial<Record<AgentName, string>>>;
       readonly runTimeoutMs?: number;
       readonly webAccess?: boolean;
       readonly paths?: string;
       readonly toolDownloads?: boolean;
+      /** false (--no-secrets) turns off each agent's "Secrets in code" check; omitted keeps it. */
+      readonly secretsCheck?: false;
       /** How deep the run investigates; omitted means full. */
       readonly depth?: 'fast' | 'full';
       readonly useProfile?: boolean;
@@ -85,6 +99,20 @@ export type ParsedCliCommand =
   | (BaseCommand<'run.cancel'> & { readonly runId: string })
   | (BaseCommand<'project.revisions'> & { readonly projectId: string })
   | (BaseCommand<'project.findings'> & { readonly projectId: string })
+  | (BaseCommand<'project.export-findings'> & {
+      readonly projectId: string;
+      readonly format: 'markdown' | 'json' | 'text';
+      readonly selection:
+        | {
+            readonly findings: ReadonlyArray<{
+              readonly runId: string;
+              readonly findingId: string;
+            }>;
+          }
+        | { readonly runId: string }
+        | { readonly revisionIds: readonly string[] };
+      readonly out: string;
+    })
   | (BaseCommand<'project.profile'> & { readonly projectId: string })
   | (BaseCommand<'project.profile-build'> & {
       readonly projectId: string;
@@ -93,6 +121,18 @@ export type ParsedCliCommand =
   | BaseCommand<'settings.show'>
   | (BaseCommand<'settings.set-effort'> & { readonly agent: AgentName; readonly value: string })
   | (BaseCommand<'settings.set-run-limit'> & { readonly value: string })
+  | (BaseCommand<'settings.set-note-limit'> & { readonly value: string })
+  | (BaseCommand<'models.list'> & { readonly agent?: AgentName })
+  | BaseCommand<'models.update'>
+  | (BaseCommand<'project.suggest-targets'> & { readonly projectId: string })
+  | (BaseCommand<'project.toolchain-needs'> & { readonly projectId: string })
+  | (BaseCommand<'project.toolchain-selection'> & { readonly projectId: string })
+  | (BaseCommand<'project.toolchain-assess'> & {
+      readonly projectId: string;
+      readonly agents?: readonly AgentName[];
+    })
+  | BaseCommand<'toolchain.custom-status'>
+  | (BaseCommand<'toolchain.custom-remove'> & { readonly name: string })
   | BaseCommand<'toolchain.status'>
   | (BaseCommand<'toolchain.install'> & { readonly packId: string; readonly version: string })
   | (BaseCommand<'toolchain.remove'> & { readonly packId: string; readonly version: string })
@@ -127,6 +167,28 @@ export function parseRunLimit(text: string): string {
       text,
     );
   return ms === RUN_TIME_LIMIT_DEFAULT_MS ? 'default' : String(ms);
+}
+
+/**
+ * The note limit as Desktop's setting takes it: default (5,000, the same as 5k), none (no limit), or a number of
+ * characters. Written as 5k, 20k, 12000 or 12k.
+ */
+export function parseNoteLimitArgument(text: string): string {
+  const value = text.trim().toLowerCase().replaceAll(',', '');
+  if (value === 'default' || value === '5k') return 'default';
+  if (value === 'none') return 'none';
+  const match = /^(\d{1,7})(k?)$/.exec(value);
+  const chars = match === null ? NaN : Number(match[1]) * (match[2] === 'k' ? 1000 : 1);
+  if (!(chars >= NOTE_LIMIT_CUSTOM_MIN && chars <= NOTE_LIMIT_CUSTOM_MAX))
+    fail(
+      'The note limit is default, 5k, 20k, none, or ' +
+        NOTE_LIMIT_CUSTOM_MIN +
+        ' to ' +
+        NOTE_LIMIT_CUSTOM_MAX +
+        ' characters (for example 12000 or 12k)',
+      text,
+    );
+  return chars === NOTE_LIMIT_DEFAULT ? 'default' : String(chars);
 }
 
 function fail(message: string, argument?: string): never {
@@ -174,14 +236,24 @@ export function commandHint(args: readonly string[]): CliCommand | 'unknown' {
     'project.delete',
     'project.revisions',
     'project.findings',
+    'project.export-findings',
     'project.profile',
     'project.profile-build',
     'toolchain.status',
     'toolchain.install',
     'toolchain.remove',
+    'toolchain.custom-status',
+    'toolchain.custom-remove',
+    'project.suggest-targets',
+    'project.toolchain-needs',
+    'project.toolchain-selection',
+    'project.toolchain-assess',
     'settings.show',
     'settings.set-effort',
     'settings.set-run-limit',
+    'settings.set-note-limit',
+    'models.list',
+    'models.update',
     'agent.list',
     'agent.doctor',
     'run.simulate',
@@ -217,9 +289,16 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
   }
   if (area === 'agent' && action === 'doctor') {
     assertFlags(tail, []);
-    const [agent] = assertPositionals(tail, 1, 'qa agent doctor opencode|deepseek|glm|chatgpt');
+    const [agent] = assertPositionals(
+      tail,
+      1,
+      'qa agent doctor opencode|deepseek|glm|chatgpt|claude',
+    );
     if (agent === undefined || !isAgentName(agent))
-      fail('Unknown agent: ' + agent + ' (expected opencode, deepseek, glm, or chatgpt)', agent);
+      fail(
+        'Unknown agent: ' + agent + ' (expected opencode, deepseek, glm, chatgpt, or claude)',
+        agent,
+      );
     return { command: 'agent.doctor', agent };
   }
   if (area === 'project' && action === 'add') {
@@ -286,11 +365,13 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
       '--wait',
       '--no-wait',
       '--instructions',
+      '--agent-note',
       '--timeout-ms',
       '--paths',
       '--web',
       '--tools',
       '--profile',
+      '--no-secrets',
       '--depth',
       '--revision',
       '--retest',
@@ -299,7 +380,7 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
     const [projectId] = positional(tail);
     if (projectId === undefined || positional(tail).length !== 1) {
       fail(
-        'Usage: qa run start <project-id> --mode full|targeted [--agents opencode,deepseek,glm,chatgpt] --wait [--paths a,b] [--instructions text] | --retest <run-id>:<finding-id>,...',
+        'Usage: qa run start <project-id> --mode full|targeted [--agents opencode,deepseek,glm,chatgpt,claude] --wait [--paths a,b] [--instructions text] [--agent-note <agent>=<text>] | --retest <run-id>:<finding-id>,...',
       );
     }
     const retestText = option(tail, '--retest');
@@ -334,8 +415,12 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
       if (new Set(findings.map((f) => f.runId + ':' + f.findingId)).size !== findings.length)
         fail('--retest lists a duplicate finding', '--retest');
       retest = { findings, who: retestWith === 'all' ? 'all' : 'reporter' };
-      if (option(tail, '--instructions') !== undefined || option(tail, '--paths') !== undefined)
-        fail('--retest takes no --instructions or --paths', '--retest');
+      if (
+        option(tail, '--instructions') !== undefined ||
+        option(tail, '--paths') !== undefined ||
+        tail.includes('--agent-note')
+      )
+        fail('--retest takes no --instructions, --agent-note or --paths', '--retest');
     }
     // Omitted --agents selects the stable real AgentStacks. A retest with the default
     // "reporter" choice leaves the agents to the findings (each goes to the agent that reported it).
@@ -353,7 +438,7 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
     for (const name of agents) {
       if (!isAgentName(name))
         fail(
-          'Unknown agent: ' + name + ' (expected opencode, deepseek, glm, or chatgpt)',
+          'Unknown agent: ' + name + ' (expected opencode, deepseek, glm, chatgpt, or claude)',
           '--agents',
         );
     }
@@ -375,6 +460,32 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
       fail('--wait and --no-wait are mutually exclusive', '--wait');
     const wait = tail.includes('--wait');
     const instructions = option(tail, '--instructions');
+    const agentNotes: Partial<Record<AgentName, string>> = {};
+    tail.forEach((value, index) => {
+      if (value !== '--agent-note') return;
+      const text = tail[index + 1];
+      if (text === undefined || text.startsWith('--'))
+        fail('--agent-note requires <agent>=<note>', '--agent-note');
+      const equals = text.indexOf('=');
+      const name = equals < 0 ? '' : text.slice(0, equals);
+      const note = equals < 0 ? '' : text.slice(equals + 1).trim();
+      if (!isAgentName(name) || note.length === 0)
+        fail(
+          '--agent-note looks like <agent>=<note>, with an agent of opencode, deepseek, glm, chatgpt or claude',
+          '--agent-note',
+        );
+      if (!agents.includes(name))
+        fail('--agent-note names ' + name + ', which is not in --agents', '--agent-note');
+      if (agentNotes[name] !== undefined)
+        fail('--agent-note names ' + name + ' twice', '--agent-note');
+      // The limit Settings → Application sets is checked by Desktop; this is only the outer bound.
+      if (note.length > NOTE_LIMIT_UNLIMITED)
+        fail(
+          '--agent-note takes at most ' + NOTE_LIMIT_UNLIMITED + ' characters per agent',
+          '--agent-note',
+        );
+      agentNotes[name] = note;
+    });
     const timeoutText = option(tail, '--timeout-ms');
     const runTimeoutMs = timeoutText === undefined ? undefined : Number(timeoutText);
     if (
@@ -405,9 +516,11 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
       agents,
       wait,
       ...(instructions === undefined ? {} : { instructions }),
+      ...(Object.keys(agentNotes).length === 0 ? {} : { agentNotes }),
       ...(runTimeoutMs === undefined ? {} : { runTimeoutMs }),
       ...(tail.includes('--web') ? { webAccess: true } : {}),
       ...(tail.includes('--tools') ? { toolDownloads: true } : {}),
+      ...(tail.includes('--no-secrets') ? { secretsCheck: false as const } : {}),
       ...(tail.includes('--profile') ? { useProfile: true } : {}),
       ...(depth === undefined ? {} : { depth }),
       ...(revisionId === undefined ? {} : { revisionId }),
@@ -435,6 +548,58 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
     const [projectId] = assertPositionals(tail, 1, 'qa project findings <project-id>');
     return { command: 'project.findings', projectId: projectId as string };
   }
+  if (area === 'project' && action === 'export-findings') {
+    assertFlags(tail, ['--format', '--findings', '--run', '--revision', '--out', '--json']);
+    const usage =
+      'Usage: qa project export-findings <project-id> --format markdown|json|text (--findings <run-id>:<finding-id>,... | --run <run-id> | --revision <rev-id>,...) --out <path>';
+    const [projectId] = positional(tail);
+    if (projectId === undefined || positional(tail).length !== 1) fail(usage);
+    const format = option(tail, '--format');
+    if (format !== 'markdown' && format !== 'json' && format !== 'text')
+      fail('--format must be markdown, json or text', '--format');
+    const out = option(tail, '--out');
+    if (out === undefined) fail('--out is required: the file to write', '--out');
+    const findingsText = option(tail, '--findings');
+    const runText = option(tail, '--run');
+    const revisionText = option(tail, '--revision');
+    if ([findingsText, runText, revisionText].filter((v) => v !== undefined).length !== 1)
+      fail('Choose exactly one of --findings, --run or --revision', '--findings');
+    const list = (text: string): string[] =>
+      text
+        .split(',')
+        .map((value) => value.trim())
+        .filter((value) => value.length > 0);
+    let selection:
+      | { findings: Array<{ runId: string; findingId: string }> }
+      | { runId: string }
+      | { revisionIds: string[] };
+    if (findingsText !== undefined) {
+      const findings = list(findingsText).map((value) => {
+        const [runId, findingId, extra] = value.split(':');
+        if (!runId || !findingId || extra !== undefined)
+          fail('--findings entries look like <run-id>:<finding-id>', '--findings');
+        return { runId, findingId };
+      });
+      if (findings.length === 0)
+        fail('--findings needs at least one <run-id>:<finding-id>', '--findings');
+      if (findings.length > 500) fail('--findings takes at most 500 findings', '--findings');
+      selection = { findings };
+    } else if (runText !== undefined) {
+      selection = { runId: runText };
+    } else {
+      const revisionIds = list(revisionText as string);
+      if (revisionIds.length === 0) fail('--revision needs at least one revision id', '--revision');
+      if (revisionIds.length > 50) fail('--revision takes at most 50 revisions', '--revision');
+      selection = { revisionIds };
+    }
+    return {
+      command: 'project.export-findings',
+      projectId,
+      format,
+      selection,
+      out,
+    };
+  }
   if (area === 'project' && action === 'profile') {
     assertFlags(tail, []);
     const [projectId] = assertPositionals(tail, 1, 'qa project profile <project-id>');
@@ -444,7 +609,9 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
     assertFlags(tail, ['--agents']);
     const [projectId] = positional(tail);
     if (projectId === undefined || positional(tail).length !== 1)
-      fail('Usage: qa project profile-build <project-id> [--agents opencode,deepseek,glm,chatgpt]');
+      fail(
+        'Usage: qa project profile-build <project-id> [--agents opencode,deepseek,glm,chatgpt,claude]',
+      );
     const agentsText = option(tail, '--agents');
     const agents =
       agentsText === undefined
@@ -458,7 +625,7 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
     for (const name of agents ?? []) {
       if (!isAgentName(name))
         fail(
-          'Unknown agent: ' + name + ' (expected opencode, deepseek, glm, or chatgpt)',
+          'Unknown agent: ' + name + ' (expected opencode, deepseek, glm, chatgpt, or claude)',
           '--agents',
         );
     }
@@ -467,6 +634,73 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
       projectId,
       ...(agents === undefined ? {} : { agents: agents as AgentName[] }),
     };
+  }
+  if (
+    area === 'project' &&
+    (action === 'suggest-targets' ||
+      action === 'toolchain-needs' ||
+      action === 'toolchain-selection')
+  ) {
+    assertFlags(tail, []);
+    const [projectId] = assertPositionals(tail, 1, 'qa project ' + action + ' <project-id>');
+    return {
+      command:
+        action === 'suggest-targets'
+          ? 'project.suggest-targets'
+          : action === 'toolchain-needs'
+            ? 'project.toolchain-needs'
+            : 'project.toolchain-selection',
+      projectId: projectId as string,
+    };
+  }
+  if (area === 'project' && action === 'toolchain-assess') {
+    assertFlags(tail, ['--agents']);
+    const [projectId] = positional(tail);
+    if (projectId === undefined || positional(tail).length !== 1)
+      fail(
+        'Usage: qa project toolchain-assess <project-id> [--agents opencode,deepseek,glm,chatgpt,claude]',
+      );
+    const agentsText = option(tail, '--agents');
+    const agents =
+      agentsText === undefined
+        ? undefined
+        : agentsText
+            .split(',')
+            .map((value) => value.trim())
+            .filter((value) => value.length > 0);
+    if (agents !== undefined && agents.length === 0)
+      fail('--agents requires at least one agent stack', '--agents');
+    for (const name of agents ?? []) {
+      if (!isAgentName(name))
+        fail(
+          'Unknown agent: ' + name + ' (expected opencode, deepseek, glm, chatgpt, or claude)',
+          '--agents',
+        );
+    }
+    return {
+      command: 'project.toolchain-assess',
+      projectId,
+      ...(agents === undefined ? {} : { agents: agents as AgentName[] }),
+    };
+  }
+  if (area === 'toolchain' && action === 'custom') {
+    const [what, ...rest] = tail;
+    if (what === 'status') {
+      assertFlags(rest, []);
+      assertPositionals(rest, 0, 'qa toolchain custom status');
+      return { command: 'toolchain.custom-status' };
+    }
+    if (what === 'remove') {
+      assertFlags(rest, ['--yes']);
+      const [name] = assertPositionals(
+        rest.filter((value) => value !== '--yes'),
+        1,
+        'qa toolchain custom remove <name> --yes',
+      );
+      if (!rest.includes('--yes')) fail('Removing a custom add-on requires --yes', '--yes');
+      return { command: 'toolchain.custom-remove', name: name as string };
+    }
+    fail('Usage: qa toolchain custom status | qa toolchain custom remove <name> --yes');
   }
   if (area === 'settings' && action === 'show') {
     assertFlags(tail, []);
@@ -478,10 +712,13 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
     const [agent, level] = assertPositionals(
       tail,
       2,
-      'qa settings effort <opencode|deepseek|glm|chatgpt> <level|default>',
+      'qa settings effort <opencode|deepseek|glm|chatgpt|claude> <level|default>',
     );
     if (agent === undefined || !isAgentName(agent))
-      fail('Unknown agent: ' + agent + ' (expected opencode, deepseek, glm, or chatgpt)', agent);
+      fail(
+        'Unknown agent: ' + agent + ' (expected opencode, deepseek, glm, chatgpt, or claude)',
+        agent,
+      );
     const value = (level ?? '').toLowerCase();
     const allowed = AGENT_EFFORT_LEVELS[agent] as readonly string[];
     if (value !== 'default' && !allowed.includes(value))
@@ -505,6 +742,35 @@ export function parseCommand(args: readonly string[]): ParsedCliCommand {
       'qa settings run-limit <default|3h|6h|none|<number>m|<number>h>',
     );
     return { command: 'settings.set-run-limit', value: parseRunLimit(text as string) };
+  }
+  if (area === 'settings' && action === 'note-limit') {
+    assertFlags(tail, []);
+    const [text] = assertPositionals(
+      tail,
+      1,
+      'qa settings note-limit <default|5k|20k|none|<characters>>',
+    );
+    return { command: 'settings.set-note-limit', value: parseNoteLimitArgument(text as string) };
+  }
+  if (area === 'models' && action === 'list') {
+    assertFlags(tail, ['--agent']);
+    assertPositionals(
+      tail.filter((value, index) => value !== '--agent' && tail[index - 1] !== '--agent'),
+      0,
+      'qa models list [--agent opencode|deepseek|glm|chatgpt|claude]',
+    );
+    const agent = option(tail, '--agent');
+    if (agent !== undefined && !isAgentName(agent))
+      fail(
+        'Unknown agent: ' + agent + ' (expected opencode, deepseek, glm, chatgpt, or claude)',
+        agent,
+      );
+    return { command: 'models.list', ...(agent === undefined ? {} : { agent }) };
+  }
+  if (area === 'models' && action === 'update') {
+    assertFlags(tail, []);
+    assertPositionals(tail, 0, 'qa models update');
+    return { command: 'models.update' };
   }
   if (area === 'toolchain' && action === 'status') {
     assertFlags(tail, []);

@@ -87,6 +87,28 @@ async function harness() {
 }
 
 describe('desktop RPC adapter', () => {
+  it('forwards the notes for all agents and for single agents to the runtime', async () => {
+    const h = await harness();
+    const id = 'proj_01K7777777777777777777A8W1';
+    await h.service.startRun(id, {
+      mode: 'full',
+      instructions: 'Focus on login.',
+      agentInstructions: { stack_opencode_main: 'Check the parser.' },
+    });
+    const call = h.seen.filter((c) => c.method === 'runs.start').at(-1);
+    expect(call?.params).toMatchObject({
+      instructions: 'Focus on login.',
+      agentInstructions: { stack_opencode_main: 'Check the parser.' },
+    });
+    await h.service.startRun(id, { mode: 'full' });
+    const plain = h.seen.filter((c) => c.method === 'runs.start').at(-1);
+    expect(plain?.params).not.toHaveProperty('agentInstructions');
+    expect(plain?.params).not.toHaveProperty('instructions');
+    await expect(
+      h.service.startRun(id, { mode: 'full', agentInstructions: { stack_opencode_main: '' } }),
+    ).rejects.toThrow();
+  });
+
   it('forwards startRun without a simulation executionKind', async () => {
     const h = await harness();
     const operation = await h.service.startRun('proj_01K7777777777777777777A8W1', { mode: 'full' });
@@ -247,6 +269,47 @@ describe('run time limit and depth reach the runtime', () => {
     expect(started()).not.toHaveProperty('runTimeoutMs');
   });
 
+  it('limits the notes to 5,000 characters unless Settings → Application allows more', async () => {
+    const h = await harness();
+    const id = 'proj_01K7777777777777777777A8W1';
+    const long = 'x'.repeat(6000);
+    await expect(h.service.startRun(id, { mode: 'full', instructions: long })).rejects.toThrow(
+      /at most 5000 characters/,
+    );
+    await expect(
+      h.service.startRun(id, { mode: 'full', agentInstructions: { stack_opencode_main: long } }),
+    ).rejects.toThrow(/at most 5000 characters/);
+    await h.service.providerSaveKey('SENTRY_NOTE_LIMIT_CHARS', '20000');
+    await h.service.startRun(id, { mode: 'full', instructions: long });
+    expect(h.seen.filter((c) => c.method === 'runs.start').at(-1)?.params).toMatchObject({
+      instructions: long,
+    });
+    // No limit takes a very long note, up to the outer bound.
+    await h.service.providerSaveKey('SENTRY_NOTE_LIMIT_CHARS', '1000000');
+    await h.service.startRun(id, { mode: 'full', instructions: 'y'.repeat(300_000) });
+    await expect(
+      h.service.startRun(id, { mode: 'full', instructions: 'z'.repeat(1_000_001) }),
+    ).rejects.toThrow();
+    // A saved value out of range is ignored: back to 5,000.
+    await h.service.providerSaveKey('SENTRY_NOTE_LIMIT_CHARS', '10');
+    await expect(h.service.startRun(id, { mode: 'full', instructions: long })).rejects.toThrow(
+      /at most 5000 characters/,
+    );
+  });
+
+  it('sets the note limit through settings, and refuses a value outside the range', async () => {
+    const h = await harness();
+    const note = (value: string) => h.service.setRunSetting({ setting: 'note-limit', value });
+    expect(await note('20000')).toEqual({ chars: 20000, isDefault: false, unlimited: false });
+    expect(h.credentials.getValue('SENTRY_NOTE_LIMIT_CHARS')).toBe('20000');
+    expect(await note('none')).toEqual({ chars: 1_000_000, isDefault: false, unlimited: true });
+    expect(h.credentials.getValue('SENTRY_NOTE_LIMIT_CHARS')).toBe('1000000');
+    expect(await note('default')).toEqual({ chars: 5000, isDefault: true, unlimited: false });
+    expect(h.credentials.getValue('SENTRY_NOTE_LIMIT_CHARS')).toBeUndefined();
+    for (const bad of ['499', '200001', '999999', 'x', '1e5'])
+      await expect(note(bad), bad).rejects.toThrow(/note limit must be/);
+  });
+
   it('forwards the run depth', async () => {
     const h = await harness();
     const id = 'proj_01K7777777777777777777A8W1';
@@ -256,5 +319,24 @@ describe('run time limit and depth reach the runtime', () => {
     await h.service.startRun(id, { mode: 'full' });
     expect(started()).not.toHaveProperty('depth');
     await expect(h.service.startRun(id, { mode: 'full', depth: 'turbo' })).rejects.toThrow();
+  });
+});
+
+describe('findings export through the service', () => {
+  it('asks the runtime for the files and checks the request first', async () => {
+    const h = await harness();
+    const id = 'proj_01K7777777777777777777A8W1';
+    const selection = { runId: 'run_01K7777777777777777777A8W1' };
+    await h.service.exportFindings(id, { format: 'markdown', selection });
+    expect(h.seen.filter((c) => c.method === 'projects.exportFindings').at(-1)?.params).toEqual({
+      projectId: id,
+      format: 'markdown',
+      selection,
+    });
+    const before = h.seen.length;
+    await expect(h.service.exportFindings(id, { format: 'pdf', selection })).rejects.toThrow();
+    await expect(h.service.exportFindings('', { format: 'text', selection })).rejects.toThrow();
+    // Nothing reached the runtime for a request that was refused.
+    expect(h.seen).toHaveLength(before);
   });
 });

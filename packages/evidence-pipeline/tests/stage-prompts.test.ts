@@ -1,10 +1,15 @@
 import { describe, it, expect } from 'vitest';
 import {
+  buildDeepeningPrompt,
+  buildHazardPrompt,
+  buildLeadPrompt,
   buildQaCheckInvestigationPrompt,
   buildQaPlanningPrompt,
   buildQaInvestigationPrompt,
   buildQaReportPrompt,
+  EXECUTION_PROOF_RULE,
   QA_SESSION_CONTRACT,
+  REPRODUCED_VIOLATION_RULE,
 } from '../src/stage-prompts.js';
 import { composeProfileText, profileContextEntry } from '../src/profile.js';
 const request = {
@@ -101,6 +106,45 @@ describe('ordered compact QA stages', () => {
     expect(text).toContain('never critical');
   });
 
+  it('rates attacker-controlled code execution critical however it was proven, and counts one defect once', () => {
+    const text = buildQaReportPrompt(plan, new Map());
+    // The input path comes from the project itself, not from what the agent could see of the deployment.
+    expect(text).toContain('Code execution:');
+    expect(text).toContain('critical when the project itself');
+    // A marker file or directory proves the primitive; privilege and unseen deployments do not lower it.
+    expect(text).toContain('harmless proof payload');
+    expect(text).toContain(
+      'only evidence that no outside party can supply the input moves it below high',
+    );
+    // A vulnerable pin is part of the code-path finding, not a second finding for the same defect.
+    expect(text).toContain('One finding per defect');
+    expect(text).toContain('dependency pin in the code-path finding');
+  });
+
+  it('asks for harmless proof of execution, not just object construction, in every investigation prompt', () => {
+    expect(EXECUTION_PROOF_RULE).toContain('not proof that code runs');
+    // A marker inside the workspace is the harmless proof; nothing else may be touched.
+    expect(EXECUTION_PROOF_RULE).toContain('marker file or directory inside the workspace');
+    expect(EXECUTION_PROOF_RULE).toContain('never one that touches anything else');
+    // A rejected form is not the end of the check, and the report must say which was reached.
+    expect(EXECUTION_PROOF_RULE).toContain('try the other forms this library version supports');
+    expect(EXECUTION_PROOF_RULE).toContain('only constructed');
+    const plan = { plannedChecks: ['Untrusted YAML cannot run code'] };
+    const prompts = [
+      buildQaCheckInvestigationPrompt(plan, 0, new Map()),
+      buildDeepeningPrompt(plan, 0, 'earlier conclusion', []),
+      buildLeadPrompt(plan, 0, 'the loader may accept python tags'),
+      buildHazardPrompt('settings.py', ['loads YAML']),
+    ];
+    for (const prompt of prompts) expect(prompt).toContain(EXECUTION_PROOF_RULE);
+  });
+
+  it('does not let the reachability rule undo the code-execution rule', () => {
+    expect(REPRODUCED_VIOLATION_RULE).toContain(
+      'the code-execution rule in the severity rubric still applies',
+    );
+  });
+
   it('keeps reporting tool-free and puts unavailable environment checks in limitations', () => {
     const text = buildQaReportPrompt(plan, new Map());
     expect(text).not.toContain(QA_SESSION_CONTRACT);
@@ -109,7 +153,7 @@ describe('ordered compact QA stages', () => {
     expect(text).toContain('check_1');
     expect(text).toContain('breaks attempted');
     expect(text).toContain('reproductionSteps');
-    expect(text.length).toBeLessThan(6500);
+    expect(text.length).toBeLessThan(6750);
     expect(buildQaReportPrompt(plan, new Map(), ['Invalid strength']).length).toBeLessThan(
       text.length,
     );

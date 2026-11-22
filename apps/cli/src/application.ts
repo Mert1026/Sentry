@@ -297,11 +297,12 @@ export async function executeCommand(
       input.retest !== undefined ||
       input.useProfile === true ||
       input.toolDownloads === true ||
+      input.secretsCheck === false ||
       input.depth !== undefined ||
       input.revisionId !== undefined
     )
       throw new CliUsageError(
-        '--retest, --profile, --tools, --depth and --revision need Sentry Desktop (the direct development transport does not support them).',
+        '--retest, --profile, --tools, --no-secrets, --depth and --revision need Sentry Desktop (the direct development transport does not support them).',
       );
     const projectId = parseArgument(ProjectIdSchema, input.projectId, 'project-id');
     const registry = new HarnessAdapterRegistry()
@@ -331,6 +332,16 @@ export async function executeCommand(
               }
             : {}),
           ...(input.instructions === undefined ? {} : { instructions: input.instructions }),
+          ...(input.agentNotes === undefined
+            ? {}
+            : {
+                agentInstructions: Object.fromEntries(
+                  Object.entries(input.agentNotes).map(([name, note]) => [
+                    'stack_' + name + '_main',
+                    note,
+                  ]),
+                ),
+              }),
           ...(input.runTimeoutMs === undefined ? {} : { runTimeoutMs: input.runTimeoutMs }),
           ...(input.webAccess === true ? { webAccess: true } : {}),
         });
@@ -475,14 +486,24 @@ export async function executeCommand(
   }
   if (
     input.command === 'project.findings' ||
+    input.command === 'project.export-findings' ||
     input.command === 'project.profile' ||
     input.command === 'project.profile-build' ||
     input.command === 'settings.show' ||
     input.command === 'settings.set-effort' ||
     input.command === 'settings.set-run-limit' ||
+    input.command === 'settings.set-note-limit' ||
+    input.command === 'models.list' ||
+    input.command === 'models.update' ||
     input.command === 'toolchain.status' ||
     input.command === 'toolchain.install' ||
-    input.command === 'toolchain.remove'
+    input.command === 'toolchain.remove' ||
+    input.command === 'toolchain.custom-status' ||
+    input.command === 'toolchain.custom-remove' ||
+    input.command === 'project.suggest-targets' ||
+    input.command === 'project.toolchain-needs' ||
+    input.command === 'project.toolchain-selection' ||
+    input.command === 'project.toolchain-assess'
   )
     throw new CliUsageError(
       input.command +

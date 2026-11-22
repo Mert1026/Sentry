@@ -3,6 +3,7 @@
  * Observable execution only. Never invents chain-of-thought, progress
  * percentages, or ETAs. Unknown telemetry → "Working".
  */
+import { secretsLightFrom } from './secrets-light.js';
 import type {
   ActivityLike,
   AgentNodeView,
@@ -24,6 +25,7 @@ export const AGENT_DISPLAY_NAMES: Record<string, string> = {
   stack_deepseek_main: 'DeepSeek',
   stack_glm_main: 'GLM',
   stack_chatgpt_main: 'ChatGPT',
+  stack_claude_main: 'Claude',
 };
 
 const STAGE_LABELS: Record<AgentStageId, string> = {
@@ -45,6 +47,48 @@ const STAGE_ORDER: readonly AgentStageId[] = [
   'reporting',
   'completed',
 ];
+
+/** The position of the furthest stage an agent reached, or -1 when it has not reached any. */
+export function reachedStageIndex(stages: readonly { readonly state: StageState }[]): number {
+  let furthest = -1;
+  stages.forEach((stage, index) => {
+    if (stage.state !== 'not_started') furthest = index;
+  });
+  return furthest;
+}
+
+/**
+ * Where the line of stage bars ends: the stage that carries the marker (active, warning, failed or cancelled),
+ * which is where the agent's own phase says it is, or the furthest stage reached when nothing carries it. The
+ * commands and findings an agent produces are activity inside a phase and do not move it (an agent that is
+ * still planning runs commands too), so the bars are filled up to this stage and empty after it.
+ */
+export function stageHeadIndex(stages: readonly { readonly state: StageState }[]): number {
+  const marker = stages.findIndex((stage) =>
+    ['active', 'warning', 'failed', 'cancelled'].includes(stage.state),
+  );
+  return marker >= 0 ? marker : reachedStageIndex(stages);
+}
+
+/** A bar after the head: whatever was observed there, the line has not got that far. */
+export function isBeyondHead(
+  stages: readonly { readonly state: StageState }[],
+  index: number,
+): boolean {
+  return index > stageHeadIndex(stages);
+}
+
+/**
+ * A stage before the head that no event showed. The events are milestones, not a required sequence, so an
+ * agent can be reporting while "Evidence" never showed up; the bars still read as one line, with such a stage
+ * drawn as passed. Its label stays "Not observed": nothing claims it was seen.
+ */
+export function isPassedStage(
+  stages: readonly { readonly state: StageState }[],
+  index: number,
+): boolean {
+  return stages[index]?.state === 'not_started' && index < stageHeadIndex(stages);
+}
 
 /** Human label for a stage id; falls back to the raw id for forward compatibility. */
 export function stageLabel(stage: AgentStageId | string): string {
@@ -470,6 +514,11 @@ export function projectAgentTelemetry(input: {
       e.type === 'tool.started' || e.type === 'tool.completed' || e.type === 'command.executed',
   ).length;
   const tests = events.filter((e) => e.type === 'test.result').length;
+  const secrets = secretsLightFrom(
+    events.flatMap((e) =>
+      e.type === 'agent.message' && e.message !== undefined ? [e.message] : [],
+    ),
+  );
   return {
     agentRunId: agentRun.id,
     agentStackId: agentRun.agentStackId,
@@ -498,6 +547,7 @@ export function projectAgentTelemetry(input: {
     cachedInputTokens: usage?.cachedInputTokens,
     totalTokens,
     severityCounts,
+    ...(secrets === undefined ? {} : { secrets }),
   };
 }
 

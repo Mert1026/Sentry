@@ -155,6 +155,51 @@ describe('runtime host identity', () => {
     }
   });
 
+  it('reports the model each agent really uses, and follows a change, instead of the registered placeholder', async () => {
+    const dataRoot = await tempDataRoot();
+    const host = new SentryRuntimeHost(dataRoot, () => undefined);
+    const names = [
+      'SENTRY_DEEPSEEK_MODEL',
+      'SENTRY_GLM_MODEL',
+      'SENTRY_ANTHROPIC_MODEL',
+      'SENTRY_OPENCODE_MODEL',
+      'SENTRY_CHATGPT_MODEL',
+    ];
+    const saved = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+    try {
+      await host.recover();
+      const models = async () =>
+        Object.fromEntries(
+          (
+            (await host.dispatch('runtime.environment', {})) as {
+              agentStacks: Array<{ id: string; modelId?: string }>;
+            }
+          ).agentStacks.map((stack) => [stack.id, stack.modelId]),
+        );
+      for (const name of names) delete process.env[name];
+      // Nothing chosen yet: the placeholder stays.
+      expect((await models())['stack_claude_main']).toBe('unconfigured');
+      process.env['SENTRY_DEEPSEEK_MODEL'] = 'deepseek-v4-pro';
+      process.env['SENTRY_GLM_MODEL'] = 'glm-5.3';
+      process.env['SENTRY_ANTHROPIC_MODEL'] = 'claude-opus-5-5';
+      let shown = await models();
+      expect(shown['stack_deepseek_main']).toBe('deepseek-v4-pro');
+      expect(shown['stack_glm_main']).toBe('glm-5.3');
+      expect(shown['stack_claude_main']).toBe('claude-opus-5-5');
+      // A later change shows at once.
+      process.env['SENTRY_ANTHROPIC_MODEL'] = 'claude-sonnet-5-5';
+      shown = await models();
+      expect(shown['stack_claude_main']).toBe('claude-sonnet-5-5');
+    } finally {
+      for (const name of names) {
+        const value = saved[name];
+        if (value === undefined) delete process.env[name];
+        else process.env[name] = value;
+      }
+      host.close();
+    }
+  });
+
   it('reports the real execution path of EVERY agent, not a value baked in per agent', async () => {
     const dataRoot = await tempDataRoot();
     const host = new SentryRuntimeHost(dataRoot, () => undefined);
@@ -195,6 +240,10 @@ describe('runtime host identity', () => {
       // The ChatGPT and OpenCode agents report one too.
       expect(byId(stacks, 'stack_opencode_main')?.executionPath).toBeTruthy();
       expect(byId(stacks, 'stack_chatgpt_main')?.executionPath).toBeTruthy();
+      // The Claude agent shares the managed Claude Code binary with GLM but reports on its own.
+      const claude = byId(stacks, 'stack_claude_main');
+      expect(claude?.executionPath).toBe(glm?.executionPath);
+      expect(claude?.provider).toBe('anthropic');
       // An override changes what is shown, and the source says it came from the environment.
       process.env['SENTRY_DEEPSEEK_BINARY'] = '/custom/bin/dsh';
       process.env['SENTRY_CLAUDE_BINARY'] = '/custom/bin/claude';
@@ -455,6 +504,7 @@ describe('runtime reasoning effort', () => {
       'SENTRY_CHATGPT_REASONING',
       'SENTRY_OPENCODE_VARIANT',
       'SENTRY_GLM_REASONING',
+      'SENTRY_ANTHROPIC_REASONING',
       'SENTRY_DEEPSEEK_REASONING',
     ];
     const saved = names.map((name) => process.env[name]);
@@ -464,8 +514,16 @@ describe('runtime reasoning effort', () => {
       await host.configure({
         models: {},
         providers: {},
-        reasoningEffort: { chatgpt: 'high', opencode: 'low', glm: 'max', deepseek: 'off' },
+        reasoningEffort: {
+          chatgpt: 'high',
+          opencode: 'low',
+          glm: 'max',
+          claude: 'xhigh',
+          deepseek: 'off',
+        },
       });
+      // The Claude agent has its own variable; GLM's is separate.
+      expect(process.env['SENTRY_ANTHROPIC_REASONING']).toBe('xhigh');
       expect(process.env['SENTRY_CHATGPT_REASONING']).toBe('high');
       expect(process.env['SENTRY_OPENCODE_VARIANT']).toBe('low');
       expect(process.env['SENTRY_GLM_REASONING']).toBe('max');
@@ -479,6 +537,41 @@ describe('runtime reasoning effort', () => {
       expect(process.env['SENTRY_DEEPSEEK_REASONING']).toBeUndefined();
       // An agent not mentioned keeps what it had.
       expect(process.env['SENTRY_CHATGPT_REASONING']).toBe('high');
+    } finally {
+      host.close();
+      names.forEach((name, index) => {
+        const value = saved[index];
+        if (value === undefined) delete process.env[name];
+        else process.env[name] = value;
+      });
+    }
+  });
+});
+
+describe('runtime Claude agent settings', () => {
+  it('keeps the Claude agent credentials, model and effort apart from the GLM agent', async () => {
+    const names = [
+      'SENTRY_ANTHROPIC_MODEL',
+      'SENTRY_GLM_MODEL',
+      'ANTHROPIC_API_KEY',
+      'SENTRY_ANTHROPIC_AUTH',
+      'ANTHROPIC_AUTH_TOKEN',
+    ];
+    const saved = names.map((name) => process.env[name]);
+    const host = new SentryRuntimeHost(await tempDataRoot(), () => undefined);
+    try {
+      await host.recover();
+      await host.configure({
+        models: { claude: 'claude-sonnet-5-5' },
+        providers: { anthropicApiKey: 'sk-ant-test' },
+        claudeAuth: 'account',
+      });
+      expect(process.env['SENTRY_ANTHROPIC_MODEL']).toBe('claude-sonnet-5-5');
+      expect(process.env['ANTHROPIC_API_KEY']).toBe('sk-ant-test');
+      expect(process.env['SENTRY_ANTHROPIC_AUTH']).toBe('account');
+      // Nothing of GLM's changed.
+      expect(process.env['SENTRY_GLM_MODEL']).toBe(saved[1]);
+      expect(process.env['ANTHROPIC_AUTH_TOKEN']).toBe(saved[4]);
     } finally {
       host.close();
       names.forEach((name, index) => {

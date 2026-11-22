@@ -113,7 +113,10 @@ export const RUNTIME_METHODS = [
   'projects.toolchainNeeds',
   'projects.assessToolchains',
   'projects.findingsByRevision',
+  'projects.exportFindings',
   'projects.toolchainSelection',
+  'models.catalog',
+  'models.refresh',
   'toolchains.status',
   'toolchains.install',
   'toolchains.remove',
@@ -124,6 +127,11 @@ export const RUNTIME_METHODS = [
   'openai.accountLogin',
   'openai.accountCancelLogin',
   'openai.accountLogout',
+  'claude.accountStatus',
+  'claude.accountLogin',
+  'claude.accountSubmitCode',
+  'claude.accountCancelLogin',
+  'claude.accountLogout',
   'runs.list',
   'runs.get',
   'runs.status',
@@ -199,6 +207,7 @@ export const RuntimeConfigureParamsSchema = z
         deepseek: z.string().min(1).max(300).optional(),
         glm: z.string().min(1).max(300).optional(),
         chatgpt: z.string().min(1).max(300).optional(),
+        claude: z.string().min(1).max(300).optional(),
       })
       .strict()
       .default({}),
@@ -210,6 +219,9 @@ export const RuntimeConfigureParamsSchema = z
         deepseekApiKey: z.string().min(1).max(5000).optional(),
         anthropicAuthToken: z.string().min(1).max(5000).optional(),
         anthropicBaseUrl: z.string().min(1).max(2000).optional(),
+        // The Claude agent's own API key (separate from the GLM agent's Z.AI token above). Its
+        // account sign-in token is kept by the runtime itself and is never sent here.
+        anthropicApiKey: z.string().min(1).max(5000).optional(),
       })
       .strict()
       .default({}),
@@ -219,12 +231,15 @@ export const RuntimeConfigureParamsSchema = z
     // How provider `openai` authenticates: an API key (default) or the
     // person's ChatGPT account through the runtime's loopback bridge.
     openAiAuth: z.enum(['key', 'account']).optional(),
+    // How the Claude agent signs in: an Anthropic API key (default) or the person's Claude account.
+    claudeAuth: z.enum(['key', 'account']).optional(),
     // Reasoning effort per agent (provider default when 'default'). Full-state like openAiAuth.
     reasoningEffort: z
       .object({
         chatgpt: z.enum(['default', 'low', 'medium', 'high']).optional(),
         opencode: z.enum(['default', 'low', 'medium', 'high']).optional(),
         glm: z.enum(['default', 'low', 'medium', 'high', 'xhigh', 'max']).optional(),
+        claude: z.enum(['default', 'low', 'medium', 'high', 'xhigh', 'max']).optional(),
         deepseek: z.enum(['default', 'off', 'low', 'high', 'max']).optional(),
       })
       .strict()

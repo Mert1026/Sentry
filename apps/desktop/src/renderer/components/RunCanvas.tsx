@@ -10,9 +10,10 @@ import {
   type Viewport,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { Maximize, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react';
+import { Info, Maximize, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react';
 import type { RunGraphEdge, RunGraphNode } from '../lib/run-graph.js';
 import { AgentCanvasNode } from './nodes/AgentCanvasNode.js';
+import { CanvasLegend } from './CanvasLegend.js';
 import { PipelineNode } from './nodes/PipelineNode.js';
 import { NeonEdge } from './edges/NeonEdge.js';
 import { useReducedMotion } from '../lib/use-reduced-motion.js';
@@ -258,6 +259,31 @@ function RunCanvasScene({
     );
   };
 
+  // The legend is a dropdown: it opens on the button, and closes on a click elsewhere, Escape or the button.
+  const [legendOpen, setLegendOpen] = React.useState(false);
+  const legendButtonRef = React.useRef<HTMLDivElement | null>(null);
+  const legendCardRef = React.useRef<HTMLDivElement | null>(null);
+  React.useEffect(() => {
+    if (!legendOpen) return;
+    const onPointerDown = (event: MouseEvent): void => {
+      const target = event.target;
+      const inside =
+        target instanceof HTMLElement &&
+        (legendButtonRef.current?.contains(target) === true ||
+          legendCardRef.current?.contains(target) === true);
+      if (!inside) setLegendOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setLegendOpen(false);
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [legendOpen]);
+
   return (
     <div
       className="canvas-host"
@@ -303,6 +329,17 @@ function RunCanvasScene({
         >
           <Maximize size={15} />
         </button>
+        <div className="canvas-legend-anchor" ref={legendButtonRef}>
+          <button
+            className="icon-btn ghost"
+            onClick={() => setLegendOpen((open) => !open)}
+            aria-label="Legend: what the colours in each box mean"
+            aria-expanded={legendOpen}
+            title="Legend: what the colours in each box mean"
+          >
+            <Info size={15} />
+          </button>
+        </div>
         <button
           className="icon-btn ghost"
           onClick={resetLayout}
@@ -312,6 +349,11 @@ function RunCanvasScene({
           <RotateCcw size={15} />
         </button>
       </div>
+      {legendOpen ? (
+        <div className="canvas-legend-layer" ref={legendCardRef}>
+          <CanvasLegend />
+        </div>
+      ) : null}
       <ReactFlow
         nodes={flowNodes}
         edges={flowEdges}

@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, readdir, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import { join, resolve, sep } from 'node:path';
 import {
   CUSTOM_ADDON_COMMAND_MAX,
@@ -32,6 +32,36 @@ interface Marker {
   readonly installedAt: string;
 }
 
+/** A marker written by `runInstall`: strings, and a list of strings for the program folders. */
+function isMarker(value: unknown): value is Marker {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+  const marker = value as Record<string, unknown>;
+  return (
+    typeof marker['name'] === 'string' &&
+    typeof marker['command'] === 'string' &&
+    typeof marker['installedAt'] === 'string' &&
+    Array.isArray(marker['pathEntries']) &&
+    marker['pathEntries'].every((entry) => typeof entry === 'string')
+  );
+}
+
+/**
+ * True when `target`, with every symlink resolved, is the add-on folder or sits below it. A folder that
+ * does not exist yet cannot lead anywhere; a symlink that dangles can, so it is refused.
+ */
+async function isInsideAddon(dir: string, target: string): Promise<boolean> {
+  try {
+    const base = await realpath(dir);
+    const real = await realpath(target);
+    return real === base || real.startsWith(base + sep);
+  } catch {
+    return lstat(target).then(
+      () => false,
+      () => true,
+    );
+  }
+}
+
 function duMegabytes(dir: string): Promise<number | undefined> {
   return new Promise((done) => {
     execFile('du', ['-sk', dir], (error, stdout) => {
@@ -59,11 +89,13 @@ export class CustomAddons {
     private readonly runner: ScriptRunner,
   ) {}
 
+  /** The marker, or undefined when it is missing, unreadable or not the shape this class writes. */
   private async readMarker(name: string): Promise<Marker | undefined> {
     try {
-      return JSON.parse(
+      const parsed: unknown = JSON.parse(
         await readFile(join(customAddonDir(this.dataRoot, name), MARKER), 'utf8'),
-      ) as Marker;
+      );
+      return isMarker(parsed) ? parsed : undefined;
     } catch {
       return undefined;
     }
@@ -171,8 +203,10 @@ export class CustomAddons {
     for (const entry of pathEntries) {
       const folder = resolve(dir, entry);
       const inside = folder === resolve(dir) || folder.startsWith(resolve(dir) + sep);
+      // A symlink that leads out of the add-on is not a program folder of it.
       const isFolder =
         inside &&
+        (await isInsideAddon(dir, folder)) &&
         (await stat(folder).then(
           (s) => s.isDirectory(),
           () => false,
@@ -207,7 +241,11 @@ export class CustomAddons {
       for (const entry of marker.pathEntries) {
         // The marker is ours, but a hand-edited one must still not point outside the add-on.
         const folder = resolve(dir, entry);
-        if (folder === resolve(dir) || folder.startsWith(resolve(dir) + sep)) out.push(folder);
+        if (
+          (folder === resolve(dir) || folder.startsWith(resolve(dir) + sep)) &&
+          (await isInsideAddon(dir, folder))
+        )
+          out.push(folder);
       }
     }
     return out;

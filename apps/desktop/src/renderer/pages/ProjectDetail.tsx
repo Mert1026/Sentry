@@ -18,6 +18,7 @@ import {
   History,
   Tag,
   Brain,
+  KeyRound,
 } from 'lucide-react';
 import { CopyId } from '../components/CopyId.js';
 import { InfoTile } from '../components/InfoTile.js';
@@ -35,7 +36,10 @@ import { useProjectProfile } from '../lib/use-project-profile.js';
 import { ToolchainNeedsPanel } from '../components/ToolchainNeedsPanel.js';
 import { ToolchainRequestsPanel } from '../components/ToolchainRequestsPanel.js';
 import { useToolchainNeeds } from '../lib/use-toolchain-needs.js';
-import { RevisionFindingsPanel } from '../components/RevisionFindingsPanel.js';
+import {
+  RevisionFindingsPanel,
+  type PanelExportRequest,
+} from '../components/RevisionFindingsPanel.js';
 import { useFindingsByRevision } from '../lib/use-findings-by-revision.js';
 import { retestStartOptions } from '../lib/retest-options.js';
 import {
@@ -43,7 +47,10 @@ import {
   ProjectSectionPanel,
   type ProjectSection,
 } from '../components/ProjectSections.js';
+import { RunNotes } from '../components/RunNotes.js';
 import { RunOptionToggle } from '../components/RunOptionToggle.js';
+import { useNoteLimit } from '../lib/use-note-limit.js';
+import { EMPTY_RUN_NOTES, notesToOptions, type RunNotesDraft } from '../lib/run-notes.js';
 import { InfoPopover } from '../components/InfoPopover.js';
 import { BlockingOverlay } from '../components/BlockingOverlay.js';
 import './project-detail.css';
@@ -53,6 +60,7 @@ const AGENT_ORDER = [
   'stack_deepseek_main',
   'stack_glm_main',
   'stack_chatgpt_main',
+  'stack_claude_main',
 ];
 
 function shortModel(modelId: string | undefined): string {
@@ -114,6 +122,11 @@ export function ProjectDetail(): React.JSX.Element {
   const [targetPaths, setTargetPaths] = React.useState('');
   const [webAccess, setWebAccess] = React.useState(false);
   const [toolDownloads, setToolDownloads] = React.useState(false);
+  // Each agent also searches the project for hard-coded secrets; turning it off makes a run shorter.
+  const [secretsCheck, setSecretsCheck] = React.useState(true);
+  // Notes for the agents. Never remembered: every new run starts with an empty draft.
+  const [notes, setNotes] = React.useState<RunNotesDraft>(EMPTY_RUN_NOTES);
+  const noteLimit = useNoteLimit();
   const [selectedRevisionId, setSelectedRevisionId] = React.useState<string | undefined>(undefined);
   const detail = useQuery({
     queryKey: ['project', projectId],
@@ -161,7 +174,8 @@ export function ProjectDetail(): React.JSX.Element {
         s.id === 'stack_opencode_main' ||
         s.id === 'stack_deepseek_main' ||
         s.id === 'stack_glm_main' ||
-        s.id === 'stack_chatgpt_main',
+        s.id === 'stack_chatgpt_main' ||
+        s.id === 'stack_claude_main',
     )
     .sort((a, b) => AGENT_ORDER.indexOf(a.id) - AGENT_ORDER.indexOf(b.id));
   const [selectedStacks, setSelectedStacks] = React.useState<string[] | undefined>(undefined);
@@ -205,13 +219,16 @@ export function ProjectDetail(): React.JSX.Element {
     ...(effectiveStacks.length === 0 ? {} : { agentStackIds: effectiveStacks }),
     ...(webAccess ? { webAccess: true } : {}),
     ...(toolDownloads ? { toolDownloads: true } : {}),
+    ...(secretsCheck ? {} : { secretsCheck: false }),
     ...(useProfile ? { useProfile: true } : {}),
     ...(depth === 'fast' ? { depth: 'fast' } : {}),
+    ...notesToOptions(notes, effectiveStacks, noteLimit),
   });
   const onStarted = (operation: unknown): void => {
     const runId = (operation as { runId?: string }).runId;
     if (runId !== undefined) navigate('/runs/' + runId);
     setConfirmStart(undefined);
+    setNotes(EMPTY_RUN_NOTES);
     void queryClient.invalidateQueries({ queryKey: ['project-runs', projectId] });
   };
   const onStartError = (e: unknown): void => setError(e instanceof Error ? e.message : String(e));
@@ -225,6 +242,23 @@ export function ProjectDetail(): React.JSX.Element {
       sentryApi().runs.start(projectId as string, startOptions('targeted') as never),
     onSuccess: onStarted,
     onError: onStartError,
+  });
+  // Save picked findings as one file (Markdown, JSON or plain text).
+  const [exportNote, setExportNote] = React.useState<string | undefined>(undefined);
+  const exportFindings = useMutation({
+    mutationFn: (request: PanelExportRequest) =>
+      sentryApi().projects.saveFindingsExport(projectId as string, request),
+    onMutate: () => setExportNote(undefined),
+    onSuccess: (result) =>
+      setExportNote(
+        result.status === 'saved'
+          ? 'Saved ' +
+              result.findingCount +
+              (result.findingCount === 1 ? ' finding' : ' findings') +
+              ' to ' +
+              result.path
+          : undefined,
+      ),
   });
   // Re-test findings picked in "Findings by revision" on the CURRENT revision, whatever "Run revision" says.
   const startRetest = useMutation({
@@ -384,8 +418,7 @@ export function ProjectDetail(): React.JSX.Element {
       ) : null}
       {record?.managedCopy.state === 'locked_for_run' ? (
         <div className="inline-notice tone-warning" role="status">
-          Project is in use by {record?.managedCopy.lockedByQARunId ?? 'an active run'}. Update
-          cannot start until the run finishes.
+          {`Project is in use by ${record?.managedCopy.lockedByQARunId ?? 'an active run'}. Update cannot start until the run finishes.`}
         </div>
       ) : null}
       <div className="project-summary" aria-label="Project overview">
@@ -528,12 +561,14 @@ export function ProjectDetail(): React.JSX.Element {
                   <InfoPopover title="Run depth">
                     <p>
                       Full plans up to 8 checks (about one per 25 minutes of the run time limit, 6
-                      for the default 3 hours). Fast plans at most 3, so a run is shorter. Both use
-                      the same time limit and the same extra passes after the checks: a second pass
-                      on undecided checks, a deepening round and a hazard sweep. A Fast run covers
-                      less of the project, so it can find fewer problems.
+                      for the default 3 hours) and then makes extra passes: a second pass on
+                      undecided checks, a deepening round and a hazard sweep. Fast plans at most 2
+                      checks and skips the deepening round and the hazard sweep, so it is much
+                      shorter; a second pass on undecided checks still runs. Every run also checks
+                      for hard-coded secrets. A Fast run covers less of the project, so it can find
+                      fewer problems.
                     </p>
-                    <p>The time limit is set in Settings → Runtime.</p>
+                    <p>The time limit is set in Settings → Application.</p>
                   </InfoPopover>
                 </div>
                 <div>
@@ -671,6 +706,15 @@ export function ProjectDetail(): React.JSX.Element {
                 </p>
               ) : null}
             </div>
+            <RunNotes
+              agents={selectedProfileAgents.map((stack) => ({
+                id: stack.id,
+                displayName: stack.displayName,
+              }))}
+              value={notes}
+              onChange={setNotes}
+              limit={noteLimit}
+            />
             <div className="project-form-section project-options-module">
               <div className="project-info-title">
                 <h3 className="project-form-heading">Run options</h3>
@@ -710,39 +754,6 @@ export function ProjectDetail(): React.JSX.Element {
                       Open project setup <ArrowRight size={15} aria-hidden="true" />
                     </button>
                   }
-                  details={
-                    useProfile ? (
-                      <div aria-live="polite">
-                        <strong>Selected agents</strong>
-                        {olderRevision ? (
-                          <p>
-                            Profile compatibility with this revision is checked when the run starts.
-                          </p>
-                        ) : null}
-                        <ul>
-                          {selectedProfileAgents.map((stack) => {
-                            const agent = profileAgents.find(
-                              (item) => item.agentStackId === stack.id,
-                            );
-                            const status =
-                              agent?.state === 'none' || agent === undefined
-                                ? 'No profile'
-                                : olderRevision
-                                  ? 'Checked at run time'
-                                  : agent.state === 'fresh'
-                                    ? 'Profile will be used'
-                                    : 'Profile needs rebuilding';
-                            return (
-                              <li key={stack.id}>
-                                <span>{stack.displayName}</span>
-                                <span>{status}</span>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      </div>
-                    ) : undefined
-                  }
                   description={
                     !profileStatusKnown
                       ? 'Profile status is unavailable or still loading. Open Setup to check the agents’ profiles.'
@@ -761,9 +772,43 @@ export function ProjectDetail(): React.JSX.Element {
                   icon={Download}
                   checked={toolDownloads}
                   onChange={setToolDownloads}
-                  description="Allow OpenCode and Claude Code to download missing compilers and SDKs from supported official vendor sites during this run. These downloads are temporary and are discarded afterwards. For tools you expect to reuse, install a managed toolchain through Settings → Toolchains. Package registry access is handled separately."
+                  description="Allow OpenCode and Claude Code to download missing compilers and SDKs from supported official vendor sites during this run. These downloads are temporary and are discarded afterwards. For tools you expect to reuse, install a managed toolchain through Settings → Toolchains. Package registry access is handled separately. DeepSeek has no network limit, so for DeepSeek this only changes its instructions and is not enforced."
+                />
+                <RunOptionToggle
+                  label="Check for secrets"
+                  icon={KeyRound}
+                  checked={secretsCheck}
+                  onChange={setSecretsCheck}
+                  description="Each agent also searches the project files for hard-coded passwords, API keys, tokens and private keys, and its box on the run page shows a light with what it found. This adds about a minute or two per agent. Turn it off for the shortest run: no search is made and no secrets light is shown."
                 />
               </div>
+              {useProfile ? (
+                <div className="run-option-details" aria-live="polite">
+                  <strong>Selected agents</strong>
+                  {olderRevision ? (
+                    <p>Profile compatibility with this revision is checked when the run starts.</p>
+                  ) : null}
+                  <ul>
+                    {selectedProfileAgents.map((stack) => {
+                      const agent = profileAgents.find((item) => item.agentStackId === stack.id);
+                      const status =
+                        agent?.state === 'none' || agent === undefined
+                          ? 'No profile'
+                          : olderRevision
+                            ? 'Checked at run time'
+                            : agent.state === 'fresh'
+                              ? 'Profile will be used'
+                              : 'Profile needs rebuilding';
+                      return (
+                        <li key={stack.id}>
+                          <span>{stack.displayName}</span>
+                          <span>{status}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ) : null}
               <div className="project-options-help">
                 <InfoPopover title="Packages & toolchains" showLabel>
                   Package installs from registries are always allowed during a run. Managed
@@ -811,6 +856,12 @@ export function ProjectDetail(): React.JSX.Element {
             onRetest={(findings, who) => startRetest.mutate({ findings, who })}
             retesting={startRetest.isPending}
             retestError={startRetest.error instanceof Error ? startRetest.error.message : undefined}
+            onExport={(request) => exportFindings.mutate(request)}
+            exporting={exportFindings.isPending}
+            exportNote={exportNote}
+            exportError={
+              exportFindings.error instanceof Error ? exportFindings.error.message : undefined
+            }
           />
         </PageSection>
       </ProjectSectionPanel>

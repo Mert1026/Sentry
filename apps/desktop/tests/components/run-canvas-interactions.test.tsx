@@ -145,3 +145,44 @@ describe('controlled graph lifecycle', () => {
     expect(flow.props.fitViewOptions?.duration).toBe(0);
   });
 });
+
+describe('the legend dropdown', () => {
+  const open = (): void => fireEvent.click(screen.getByRole('button', { name: /^Legend:/ }));
+
+  it('opens inside the canvas, not inside the toolbar, so the canvas limits its height', () => {
+    render(<RunCanvas {...props} />);
+    open();
+    const legend = screen.getByRole('region', { name: 'Legend' });
+    expect(legend.closest('.canvas-legend-layer')).not.toBeNull();
+    expect(legend.closest('.canvas-toolbar')).toBeNull();
+    expect(legend.closest('.canvas-host')).not.toBeNull();
+  });
+
+  it('is closed until the button is pressed', () => {
+    render(<RunCanvas {...props} />);
+    expect(screen.queryByRole('region', { name: 'Legend' })).toBeNull();
+    expect(screen.getByRole('button', { name: /^Legend:/ }).getAttribute('aria-expanded')).toBe(
+      'false',
+    );
+    open();
+    expect(screen.getByRole('region', { name: 'Legend' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^Legend:/ }).getAttribute('aria-expanded')).toBe(
+      'true',
+    );
+  });
+
+  it('closes with the button, with Escape and with a click elsewhere, not with a click inside it', () => {
+    render(<RunCanvas {...props} />);
+    open();
+    fireEvent.mouseDown(screen.getByRole('region', { name: 'Legend' }));
+    expect(screen.getByRole('region', { name: 'Legend' })).toBeTruthy();
+    open();
+    expect(screen.queryByRole('region', { name: 'Legend' })).toBeNull();
+    open();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('region', { name: 'Legend' })).toBeNull();
+    open();
+    fireEvent.mouseDown(document.body);
+    expect(screen.queryByRole('region', { name: 'Legend' })).toBeNull();
+  });
+});

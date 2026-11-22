@@ -33,10 +33,16 @@ export function emitHumanSuccess(response: CliSuccessEnvelope, io: CliIo): void 
           'Real agent execution: yes (OpenCode, DeepSeek, GLM, ChatGPT)',
           'Re-test earlier findings: yes (run start --retest)',
           'Findings by revision: yes (project findings)',
+          'Findings export: yes (project export-findings)',
           'Project profile: yes (project profile, project profile-build)',
           'Toolchains: yes (toolchain status|install|remove)',
+          'Target suggestions: yes (project suggest-targets)',
+          'Toolchain needs: yes (project toolchain-needs|toolchain-selection|toolchain-assess)',
+          'Custom add-ons: yes (toolchain custom status|remove)',
+          'Notes for the agents: yes (run start --instructions, --agent-note)',
           'Run depth: yes (run start --depth fast|full)',
-          'Settings: yes (settings show|effort|run-limit)',
+          'Settings: yes (settings show|effort|run-limit|note-limit)',
+          'Models: yes (models list, models update)',
           'Run cancellation: yes',
           'Run result export: yes (run result)',
           'Async run start: yes (default; pass --wait to observe)',
@@ -155,7 +161,15 @@ export function emitHumanSuccess(response: CliSuccessEnvelope, io: CliIo): void 
     case 'toolchain.status':
     case 'toolchain.install':
     case 'toolchain.remove':
+    case 'toolchain.custom-status':
+    case 'project.suggest-targets':
+    case 'project.toolchain-needs':
+    case 'project.toolchain-selection':
+    case 'project.toolchain-assess':
       io.stdout(JSON.stringify(response.data, null, 2));
+      return;
+    case 'toolchain.custom-remove':
+      io.stdout('Removed the custom add-on ' + response.data.name);
       return;
     case 'project.findings':
       io.stdout(formatFindingsByRevision(response.data.revisions));
@@ -171,6 +185,9 @@ export function emitHumanSuccess(response: CliSuccessEnvelope, io: CliIo): void 
           'Run time limit: ' +
             describeRunLimit(response.data.runTimeLimit.ms) +
             (response.data.runTimeLimit.isDefault ? ' (the default)' : ''),
+          ...(response.data.noteLimit === undefined
+            ? []
+            : ['Note limit: ' + describeNoteLimit(response.data.noteLimit)]),
         ].join('\n'),
       );
       return;
@@ -182,6 +199,37 @@ export function emitHumanSuccess(response: CliSuccessEnvelope, io: CliIo): void 
         'Run time limit: ' +
           describeRunLimit(response.data.ms) +
           (response.data.isDefault ? ' (the default)' : ''),
+      );
+      return;
+    case 'settings.set-note-limit':
+      io.stdout('Note limit: ' + describeNoteLimit(response.data));
+      return;
+    case 'models.list':
+      io.stdout(formatCatalog(response.data));
+      return;
+    case 'models.update': {
+      const added = Object.entries(response.data.added).flatMap(([provider, ids]) =>
+        ids.map((id) => '  ' + provider + '  ' + id),
+      );
+      io.stdout(
+        [
+          'Model list updated from ' + response.data.catalog.source,
+          added.length === 0 ? 'No new models.' : 'New models:',
+          ...added,
+        ].join('\n'),
+      );
+      return;
+    }
+    case 'project.export-findings':
+      io.stdout(
+        'Exported ' +
+          response.data.findingCount +
+          (response.data.findingCount === 1 ? ' finding' : ' findings') +
+          ' as ' +
+          response.data.format +
+          ' to ' +
+          response.data.out +
+          (response.data.files.length > 1 ? ' (' + response.data.files.length + ' files)' : ''),
       );
       return;
     case 'run.export':
@@ -283,4 +331,48 @@ export function describeRunLimit(ms: number): string {
   if (hours === 0) return minutes + (minutes === 1 ? ' minute' : ' minutes');
   if (minutes === 0) return hours + (hours === 1 ? ' hour' : ' hours');
   return hours + ' h ' + minutes + ' min';
+}
+
+function describeNoteLimit(limit: {
+  readonly chars: number;
+  readonly isDefault: boolean;
+  readonly unlimited: boolean;
+}): string {
+  return limit.unlimited
+    ? 'no limit'
+    : limit.chars.toLocaleString('en-US') +
+        ' characters' +
+        (limit.isDefault ? ' (the default)' : '');
+}
+
+function formatCatalog(catalog: {
+  readonly fetchedAt: string;
+  readonly source: string;
+  readonly providers: Readonly<
+    Record<
+      string,
+      ReadonlyArray<{
+        id: string;
+        name: string;
+        releasedAt?: string | undefined;
+        context?: number | undefined;
+      }>
+    >
+  >;
+}): string {
+  const lines = ['Model list from ' + catalog.source + ', updated ' + catalog.fetchedAt];
+  for (const [provider, models] of Object.entries(catalog.providers)) {
+    lines.push('', provider + ' (' + models.length + ')');
+    for (const model of models)
+      lines.push(
+        '  ' +
+          model.id +
+          (model.name === model.id ? '' : '  ' + model.name) +
+          (model.context === undefined
+            ? ''
+            : '  ' + Math.round(model.context / 1000) + 'k context') +
+          (model.releasedAt === undefined ? '' : '  ' + model.releasedAt.slice(0, 10)),
+      );
+  }
+  return lines.join('\n');
 }

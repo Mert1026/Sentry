@@ -54,6 +54,8 @@ export const ExecutionSafeguardsSchema = z
     toolDownloads: z.boolean().optional(),
     /** How deep the run investigates: fast plans fewer checks. Omitted means full. */
     depth: z.enum(['fast', 'full']).optional(),
+    /** Recorded only when the run turned the "Secrets in code" check off; omitted means it ran. */
+    secretsCheck: z.literal(false).optional(),
   })
   .strict();
 export type ExecutionSafeguards = z.infer<typeof ExecutionSafeguardsSchema>;

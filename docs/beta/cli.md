@@ -102,36 +102,107 @@ connection never cancels a run; cancel explicitly with `run cancel`.
 ```text
 capabilities [--json]
 project list/add/show/update/delete/revisions/doctor
-project findings | profile | profile-build
-settings show | effort | run-limit
-agent list | agent doctor opencode|deepseek|glm|chatgpt
+project findings | export-findings | profile | profile-build
+settings show | effort | run-limit | note-limit
+models list | update
+agent list | agent doctor opencode|deepseek|glm|chatgpt|claude
 run start/list/show/status/cancel/result/export
 toolchain status | install | remove
 ```
 
-### Settings: reasoning effort and the run time limit
+### Settings: reasoning effort, the run time limit and the note limit
 
 ```text
 sentry cli settings show
-sentry cli settings effort <opencode|deepseek|glm|chatgpt> <level|default>
+sentry cli settings effort <opencode|deepseek|glm|chatgpt|claude> <level|default>
 sentry cli settings run-limit <default|3h|6h|none|90m|12h>
+sentry cli settings note-limit <default|5k|20k|none|12000>
 ```
 
-These read and change the same two settings as Desktop (Settings → Providers → Reasoning effort and
-Settings → Runtime → Run time limit); a change made here shows up in Desktop at once and the other way
+These read and change the same settings as Desktop (Settings → Providers → Reasoning effort and
+Settings → Application → Run time limit and Note length limit); a change made here shows up in Desktop at once and the other way
 round. `settings show` lists each agent's reasoning effort (`default` when none is saved) and the
-default run time limit with `isDefault`.
+default run time limit with `isDefault`, and the note limit (`noteLimit`: `chars`, `isDefault`, `unlimited`).
 
 - `settings effort` takes the levels that agent's tool accepts: OpenCode and ChatGPT `low`, `medium`,
   `high`; GLM `low`, `medium`, `high`, `xhigh`, `max`; DeepSeek `off`, `low`, `high`, `max`.
   `default` removes the setting. Any other level is refused with `INVALID_ARGUMENT`.
 - `settings run-limit` takes `3h` (the default, same as `default`), `6h`, `none` (the longest window,
   7 days) or a custom window from `10m` to `168h`, such as `90m` or `12h`.
-- Only these two settings can be changed this way. Credentials, models and every other setting stay
+- `settings note-limit` sets how long a note for the agents may be (`run start --instructions` and
+  `--agent-note`, and the notes fields in Desktop): `default` or `5k` (5,000 characters, the default), `20k`,
+  `none` (no limit, up to one million characters) or a number from 500 to 200,000 such as `12000` or `12k`. A
+  note longer than the saved limit is refused when the run starts, with `INVALID_ARGUMENT`.
+- Only these three settings can be changed this way. Credentials, models and every other setting stay
   in Desktop; the broker refuses them (`settings:set` accepts nothing else).
 - `run list` and `run status` report each run's `depth` (`fast` or `full`) and `timeLimitMs`, and
   `run list` and `project findings` mark fast runs with `FAST`.
-- `capabilities` reports `features.settings: true` and `features.runDepth: true`.
+- `capabilities` reports `features.settings: true`, `features.models: true` and `features.runDepth: true`.
+
+### Models: the list the model picker uses
+
+```text
+sentry cli models list [--agent opencode|deepseek|glm|chatgpt|claude] [--json]
+sentry cli models update [--json]
+```
+
+`models list` prints the model list Desktop's model picker shows (Settings → Providers): for each provider the
+exact model ids, names, context size and release date. `--agent` keeps only that agent's provider. `models
+update` fetches the public model catalog (models.dev) now, stores it and reports the model ids that were not in
+the list before (`added`). The list is only a help for choosing: an id that is in no list can still be saved in
+Desktop as a custom model id, and a model is still chosen in Desktop, not from the command line.
+
+### Secrets check
+
+`run start ... --instructions "text"` sends one note to every agent, as the **Notes for the agents** box
+does in the app; `--agent-note opencode="text"` (repeatable, one per agent that is in `--agents`) gives a
+single agent a note of its own on top of it, and an agent never sees another agent's note. Up to 5000
+characters each. The notes are saved with the run and appear in findings exports as "User description /
+note". A re-test run takes none.
+
+`run start ... --no-secrets` turns off each agent's "Secrets in code" check for that run: no search
+is made, no secrets light is shown, and the run records `secretsCheck: false` in its safeguards.
+Left out, every ordinary production run includes the check (it adds about a minute or two per
+agent). It does not apply to `--retest` runs, which never have it. `--depth fast --no-secrets` is the
+shortest run.
+
+### Exporting findings
+
+```text
+sentry cli project export-findings proj_ID --format markdown --revision rev_ID --out report.md
+sentry cli project export-findings proj_ID --format json --run run_ID --out findings.json
+sentry cli project export-findings proj_ID --format text --findings run_ID:find_ID,... --out findings.txt
+```
+
+- Choose exactly one of `--findings <run-id>:<finding-id>,...` (up to 500), `--run <run-id>` or
+  `--revision <rev-id>,...` (up to 50; simulation runs are left out).
+- Every format writes one file to `--out`: `markdown` (.md, a readable report), `json` (.json,
+  structured data with every finding's severity, location, steps and evidence) or `text` (.txt,
+  plain text with no markup).
+- The files are built from what the agents reported, with no AI. The output is deterministic: the
+  same findings give the same files, ordered by severity. Review each one before acting on it.
+- `capabilities` reports `features.findingsExport: true`.
+
+### Target suggestions, toolchain needs and custom add-ons
+
+```text
+sentry cli project suggest-targets proj_ID
+sentry cli project toolchain-needs proj_ID
+sentry cli project toolchain-selection proj_ID
+sentry cli project toolchain-assess proj_ID [--agents opencode,deepseek,glm,chatgpt,claude]
+sentry cli toolchain custom status
+sentry cli toolchain custom remove NAME --yes
+```
+
+- `suggest-targets` lists the paths Sentry suggests for a targeted run (`run start --mode targeted --paths ...`).
+- `toolchain-needs` shows what the toolchain-needs analysis found, and `toolchain-selection` which toolchains a
+  run on the project would be given. Both only read.
+- `toolchain-assess` asks the agents which toolchains the project needs, like the **Setup** tab's button. It uses
+  provider budget, so it takes `--agents` like `profile-build`.
+- `toolchain custom status` lists the custom add-ons, and `toolchain custom remove` deletes one (`--yes` is
+  required). Installing a custom add-on is only possible in the app: it runs a shell command the caller
+  supplies, so Desktop does not accept it from the CLI.
+- `capabilities` reports `features.suggestTargets`, `toolchainNeeds`, `customAddons` and `runNotes`.
 
 ### Re-testing earlier findings, profiles, toolchains
 
@@ -310,7 +381,7 @@ The CLI contract version stays 1; all new fields are additive and optional.
 window for that run and propagates canonically:
 CLI parser → frontend → Desktop `runs:start` → WSL `runs.start` →
 RunCoordinator execution safeguards. Omitted uses the default chosen in
-Settings → Runtime (3 hours, 6 hours, No limit or a custom value); with nothing
+Settings → Application (3 hours, 6 hours, No limit or a custom value); with nothing
 chosen that is **3 hours**. The window is a ceiling, not a target: a run ends
 when its work is done. It also decides which extra passes still have time (a
 second pass needs 40% of the window left, deepening 50% and the hazard sweep
@@ -322,10 +393,12 @@ second pass needs 40% of the window left, deepening 50% and the hazard sweep
 
 `run start --depth fast|full` chooses how many checks the agents plan. **Full**
 (the default, and what runs did before) plans about one check per 25 minutes of the
-time window, up to 8 (6 in the default 3-hour window); **fast** plans at most 3.
-Both use the same time window and the same extra passes (second pass, deepening
-and hazard sweep), so a fast run is shorter but not minimal: in one measured
-run the first pass was about 60% of the time and the extra passes about 35%.
+time window, up to 8 (6 in the default 3-hour window); **fast** plans at most 2.
+Full also makes extra passes after its checks (second pass on undecided checks,
+deepening and hazard sweep). Fast skips the deepening round and the hazard sweep
+(its second pass still runs), so it is much shorter: in one measured fast run
+those two extras were about 55% of a 36-minute run. Every run also adds a
+"Secrets in code" check for each agent.
 The depth is recorded on the run and shown next to it in Desktop. `--depth`
 does not apply to `--retest` runs, which have their own fixed checks.
 `capabilities` reports `features.runDepth: true` when the broker supports it.

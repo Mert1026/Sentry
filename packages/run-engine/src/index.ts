@@ -4,8 +4,10 @@ import {
   PROFILE_CONTEXT_KEY,
   RETEST_CONTEXT_KEY,
   retestContextEntry,
+  SECRETS_CHECK_CONTEXT_KEY,
   type RetestItem,
 } from '@qa/evidence-pipeline';
+import { redactEventSecrets } from './secret-redaction.js';
 import { ProjectProfileBuilder, profileState } from './profile-builder.js';
 import {
   createWorkspacePreparer,
@@ -31,6 +33,7 @@ import {
   HarnessRunRequestSchema,
   QARunSchema,
   RETEST_MAX_FINDINGS,
+  RUN_NOTE_MAX_CHARS,
   RunActivitySchema,
   RunRetestSchema,
   TargetSpecSchema,
@@ -81,15 +84,46 @@ export interface TargetedScope {
   readonly userInstructions?: string;
 }
 
+/**
+ * What one agent is told as the user's instructions: the run-wide text (the user's note for everyone,
+ * plus any scope text), then that agent's own note. `null` when there is nothing to say. An agent only
+ * ever gets its own note, never another agent's.
+ */
+export function instructionsForAgent(
+  configuration: QARun['configuration'],
+  agentStackId: string,
+  createdAt: string,
+): { message: string; createdAt: string } | null {
+  const shared = configuration.instructions;
+  const own = (configuration.userNotes?.agents as Record<string, string> | undefined)?.[
+    agentStackId
+  ];
+  if (own === undefined) return shared ?? null;
+  const message =
+    (shared === undefined ? '' : shared.message + ' ') + 'USER NOTE FOR THIS AGENT: ' + own;
+  return {
+    message,
+    createdAt: shared?.createdAt ?? configuration.userNotes?.createdAt ?? createdAt,
+  };
+}
+
 export interface RunOptions {
   readonly agentStackIds?: readonly AgentStackId[];
   readonly executionKind: 'simulation' | 'production';
+  /** One note for every agent of the run. */
   readonly instructions?: string;
+  /**
+   * A note for single agents, by agent stack id. An agent with its own note gets the run-wide one
+   * first and then its own; an agent never sees another agent's note.
+   */
+  readonly agentInstructions?: Readonly<Record<string, string>>;
   readonly runTimeoutMs?: number;
   /** Opt in to general web access for agents; package installs are always allowed. Omitted means off. */
   readonly webAccess?: boolean;
   /** Opt in to the official download hosts of language toolchains and SDKs. Omitted means off. */
   readonly toolDownloads?: boolean;
+  /** false turns off the per-agent "Secrets in code" check; omitted or true keeps it. */
+  readonly secretsCheck?: boolean;
   /** How deep the run investigates: "fast" plans fewer checks, "full" (or omitted) is the usual depth. */
   readonly depth?: 'fast' | 'full';
   /** Phase 7 (§8-§13): TARGETED QA. Same independent agent architecture
@@ -182,15 +216,40 @@ export interface RunStatus {
   };
 }
 
-class RunTimeoutError extends Error {}
+class RunTimeoutError extends Error {
+  /** 'stall': the agent went silent. 'budget': a configured deadline or cap was reached. */
+  constructor(
+    message: string,
+    readonly kind: 'stall' | 'budget' = 'budget',
+  ) {
+    super(message);
+  }
+}
 
 /** Stall watchdog: an agent that emits no event for this long is wedged,
  *  however generous the run fuse is. Deliberately independent of
  *  runTimeoutMs — raising the fuse must never raise the silence window. */
 export const STALL_SILENCE_MS = 900_000;
 
-export function silenceWindowMs(runTimeoutMs: number): number {
-  return Math.min(runTimeoutMs, STALL_SILENCE_MS);
+/**
+ * Once every other agent of the run has finished, a silent agent is the only thing the run is waiting
+ * for, so it gets a third of the usual silence window (5 minutes instead of 15). One wedged agent
+ * then cannot hold a run that is otherwise done for a quarter of an hour or more.
+ */
+export const STALL_TAIL_DIVISOR = 3;
+
+export function silenceWindowMs(runTimeoutMs: number, onlyAgentLeft = false): number {
+  const window = Math.min(runTimeoutMs, STALL_SILENCE_MS);
+  return onlyAgentLeft ? Math.max(1, Math.round(window / STALL_TAIL_DIVISOR)) : window;
+}
+
+/** "no events for 5 minutes", "no events for 90 s": the silence in words a person reads. */
+function describeSilence(ms: number): string {
+  return ms >= 120_000
+    ? Math.round(ms / 60_000) + ' minutes'
+    : ms >= 10_000
+      ? Math.round(ms / 1000) + ' s'
+      : ms + ' ms';
 }
 
 export const CANCELLATION_POLL_INTERVAL_MS = 500;
@@ -220,6 +279,8 @@ export class RunCoordinator {
    *  instance only. Never persisted; the DB cancellation request bridges
    *  processes to this map. */
   private readonly activeAdapters = new Map<AgentRunId, HarnessAdapter>();
+  /** How many agents each running run has and how many have finished (used for the silence window). */
+  private readonly agentProgress = new Map<QARunId, { total: number; settled: number }>();
 
   constructor(
     private readonly dataRoot: string,
@@ -280,6 +341,26 @@ export class RunCoordinator {
       return registration;
     });
     if (selected.length === 0) throw new Error('At least one agent stack must be selected');
+    const agentNotes = Object.entries(options.agentInstructions ?? {}).filter(
+      ([, text]) => text.trim().length > 0,
+    );
+    for (const [stackId, text] of agentNotes) {
+      if (!selected.some((item) => item.stack.id === stackId))
+        throw new RunEngineError(
+          'INVALID_TARGET',
+          'A note was written for ' + stackId + ', which is not one of the selected agents.',
+        );
+      if (text.length > RUN_NOTE_MAX_CHARS)
+        throw new RunEngineError(
+          'INVALID_TARGET',
+          'The note for ' + stackId + ' is longer than ' + RUN_NOTE_MAX_CHARS + ' characters.',
+        );
+    }
+    if (retest !== undefined && (options.instructions !== undefined || agentNotes.length > 0))
+      throw new RunEngineError(
+        'INVALID_TARGET',
+        'A re-test takes no notes: it only re-checks the findings you chose.',
+      );
     // Phase 7 TARGETED validation (before any mutation): mode/target must
     // agree, and target paths must be project-relative (TargetSpecSchema
     // rejects absolute/.. entries; snapshot existence is checked after
@@ -398,6 +479,15 @@ export class RunCoordinator {
           ...(options.instructions === undefined
             ? {}
             : { instructions: { message: options.instructions, createdAt } }),
+          ...(options.instructions === undefined && agentNotes.length === 0
+            ? {}
+            : {
+                userNotes: {
+                  createdAt,
+                  ...(options.instructions === undefined ? {} : { shared: options.instructions }),
+                  ...(agentNotes.length === 0 ? {} : { agents: Object.fromEntries(agentNotes) }),
+                },
+              }),
           policy: { id: 'qa-standard', version: 1 },
           executionSafeguards: {
             runTimeoutMs:
@@ -407,6 +497,7 @@ export class RunCoordinator {
                 : SENTRY_SIMULATION_RUN_TIMEOUT_MS),
             ...(options.webAccess === true ? { webAccess: true } : {}),
             ...(options.toolDownloads === true ? { toolDownloads: true } : {}),
+            ...(options.secretsCheck === false ? { secretsCheck: false as const } : {}),
             // A retest has its own fixed checks, so depth does not apply to it.
             ...(options.depth === undefined || retest !== undefined
               ? {}
@@ -517,6 +608,9 @@ export class RunCoordinator {
             : { executionSafeguards: run.configuration.executionSafeguards }),
           profileUsage,
           ...(run.configuration.retest === undefined ? {} : { retest: run.configuration.retest }),
+          ...(run.configuration.userNotes === undefined
+            ? {}
+            : { userNotes: run.configuration.userNotes }),
           ...(instructionMessage === undefined
             ? {}
             : { instructions: { message: instructionMessage, createdAt } }),
@@ -566,6 +660,7 @@ export class RunCoordinator {
       }
       // Final micro-fix §14: execution starts at first worker launch.
       executionStarted = true;
+      this.agentProgress.set(runId, { total: selected.length, settled: 0 });
       const workers =
         preAgentCancel !== undefined && preAgentCancel.completedAt === undefined
           ? []
@@ -598,7 +693,11 @@ export class RunCoordinator {
                   },
                   snapshot,
                   projectContext: context,
-                  runInstructions: run.configuration.instructions ?? null,
+                  runInstructions: instructionsForAgent(
+                    run.configuration,
+                    registration.stack.id,
+                    createdAt,
+                  ),
                   qaPolicy: run.configuration.policy,
                   ...(retest === undefined
                     ? {}
@@ -607,6 +706,12 @@ export class RunCoordinator {
                           retest.itemsFor(registration.stack.id),
                         ),
                       }),
+                  // Every agent of an ordinary production QA run also checks for hard-coded secrets.
+                  ...(options.executionKind === 'production' &&
+                  retest === undefined &&
+                  options.secretsCheck !== false
+                    ? { [SECRETS_CHECK_CONTEXT_KEY]: true }
+                    : {}),
                 },
                 ...(options.onHarnessRequest === undefined
                   ? {}
@@ -617,6 +722,7 @@ export class RunCoordinator {
               }),
             );
       await Promise.allSettled(workers);
+      this.agentProgress.delete(runId);
       // Owner-driven finalization: after workers settle, reconcile the durable
       // cancellation request. Requested-or-cancelled terminalizes the parent as
       // cancelled, never via the normal aggregate outcome.
@@ -1003,7 +1109,8 @@ export class RunCoordinator {
             (input.run.executionKind === 'simulation'
               ? 'SIMULATED QA. '
               : 'REAL QA. Independently inspect the supplied snapshot. ') +
-            (input.run.configuration.instructions?.message ?? 'No additional user instructions.'),
+            (instructionsForAgent(input.run.configuration, stack.id, '')?.message ??
+              'No additional user instructions.'),
           policyId: input.run.configuration.policy.id,
           policyVersion: input.run.configuration.policy.version,
           context: {
@@ -1034,7 +1141,9 @@ export class RunCoordinator {
         adapter,
         request,
         timeoutMs,
-        async (event) => {
+        async (rawEvent) => {
+          // Known secret formats an agent wrote by mistake are replaced before anything is stored.
+          const event = redactEventSecrets(rawEvent);
           handlingEvent = event.type;
           this.requireRuntimeLease();
           validator.accept(event);
@@ -1130,7 +1239,9 @@ export class RunCoordinator {
                 ? typed.code
                 : 'WORKER_DISCONNECTED',
           message: timedOut
-            ? 'Agent exceeded run budget (' + cause.message + ').'
+            ? cause.kind === 'stall'
+              ? 'Agent stopped responding (' + cause.message + ').'
+              : 'Agent exceeded run budget (' + cause.message + ').'
             : zodFailure
               ? summarizeValidationFailure(cause, handlingEvent)
               : protocolViolation
@@ -1173,6 +1284,9 @@ export class RunCoordinator {
       }
     } finally {
       this.activeAdapters.delete(agentRunId);
+      // This agent is done producing events: the others' silence window may shorten (see silenceWindowMs).
+      const progress = this.agentProgress.get(input.run.id);
+      if (progress !== undefined) progress.settled += 1;
       try {
         try {
           await adapter?.dispose();
@@ -1349,9 +1463,18 @@ export class RunCoordinator {
     // A run emitting real work never trips; a wedged transport does.
     const startedAt = Date.now();
     const absoluteMaxMs = timeoutMs * 3;
-    const silenceMs = silenceWindowMs(timeoutMs);
     const hardDeadline = depthPolicy(request.task.context)?.deadlineAt;
     let lastEventAt = startedAt;
+    // How long until the next look. With peers it is at most 5 s, so an agent notices soon after the
+    // last of them finishes that its own window has become the shorter one.
+    const nextDelayMs = (): number => {
+      const progress = this.agentProgress.get(request.qaRunId);
+      const cap = progress !== undefined && progress.total > 1 ? 5_000 : 30_000;
+      return Math.max(
+        1,
+        Math.min(cap, timeoutMs, hardDeadline === undefined ? Infinity : hardDeadline - Date.now()),
+      );
+    };
     const timeout = new Promise<never>((_resolve, reject) => {
       const check = (): void => {
         const now = Date.now();
@@ -1368,34 +1491,26 @@ export class RunCoordinator {
           );
           return;
         }
+        // Every other agent finished: this one is all the run is waiting for, so it gets less patience.
+        const progress = this.agentProgress.get(request.qaRunId);
+        const onlyAgentLeft =
+          progress !== undefined && progress.total > 1 && progress.settled >= progress.total - 1;
+        const silenceMs = silenceWindowMs(timeoutMs, onlyAgentLeft);
         if (now - lastEventAt >= silenceMs) {
-          reject(new RunTimeoutError('no events for ' + String(silenceMs) + ' ms'));
+          reject(
+            new RunTimeoutError(
+              'no events for ' +
+                describeSilence(silenceMs) +
+                (onlyAgentLeft ? ', and every other agent had already finished' : ''),
+              'stall',
+            ),
+          );
           return;
         }
-        timer = setTimeout(
-          check,
-          Math.max(
-            1,
-            Math.min(
-              30_000,
-              timeoutMs,
-              hardDeadline === undefined ? Infinity : hardDeadline - Date.now(),
-            ),
-          ),
-        );
+        timer = setTimeout(check, nextDelayMs());
         (timer as unknown as { unref: () => void }).unref?.();
       };
-      timer = setTimeout(
-        check,
-        Math.max(
-          1,
-          Math.min(
-            30_000,
-            timeoutMs,
-            hardDeadline === undefined ? Infinity : hardDeadline - Date.now(),
-          ),
-        ),
-      );
+      timer = setTimeout(check, nextDelayMs());
       (timer as unknown as { unref: () => void }).unref?.();
     });
     try {
@@ -1932,3 +2047,7 @@ export * from './exporters.js';
 export * from './sandbox.js';
 export * from './simulation.js';
 export * from './findings-by-revision.js';
+
+export * from './secret-redaction.js';
+
+export * from './finding-export.js';

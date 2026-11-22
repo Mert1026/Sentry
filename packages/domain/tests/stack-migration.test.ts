@@ -5,6 +5,8 @@ import { AgentRunSchema, AgentStackDefinitionSchema } from '@qa/schemas';
 import {
   AGENT_STACKS,
   CHATGPT_QA_STACK,
+  CLAUDE_QA_STACK,
+  GLM_QA_STACK,
   INITIAL_AGENT_STACKS,
   OPENCODE_QA_STACK,
 } from '../src/index.js';
@@ -26,15 +28,25 @@ describe('agent stack migration (muse → opencode)', () => {
     ]);
   });
 
-  it('offers ChatGPT as a fourth runnable stack on the OpenCode harness against OpenAI', () => {
+  it('offers ChatGPT as a runnable stack on the OpenCode harness against OpenAI', () => {
     expect(AGENT_STACKS.map((stack) => stack.id)).toEqual([
       'stack_opencode_main',
       'stack_deepseek_main',
       'stack_glm_main',
       'stack_chatgpt_main',
+      'stack_claude_main',
     ]);
     expect(CHATGPT_QA_STACK.harness.adapterId).toBe('opencode');
     expect(CHATGPT_QA_STACK.model.provider).toBe('openai');
+  });
+
+  it('offers Claude as a fifth stack on its own Claude Code harness, apart from GLM', () => {
+    expect(CLAUDE_QA_STACK.id).toBe('stack_claude_main');
+    expect(CLAUDE_QA_STACK.harness.adapterId).toBe('claude');
+    expect(CLAUDE_QA_STACK.model.provider).toBe('anthropic');
+    // GLM keeps the original Claude Code adapter and the Z.AI provider.
+    expect(GLM_QA_STACK.harness.adapterId).toBe('claude-code');
+    expect(GLM_QA_STACK.model.provider).toBe('zai');
   });
 
   it('separates harness, provider, and model on the OpenCode stack', () => {

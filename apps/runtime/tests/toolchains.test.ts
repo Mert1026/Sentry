@@ -1,8 +1,8 @@
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { toolchainDir } from '@qa/shared';
+import { TOOLCHAIN_PACKS, toolchainDir } from '@qa/shared';
 import {
   ToolchainManager,
   pickGoArchive,
@@ -146,5 +146,40 @@ describe('toolchain manager', () => {
       JSON.parse(await readFile(join(toolchainDir(root, 'java', '17'), '.installed.json'), 'utf8'))
         .packId,
     ).toBe('java');
+  });
+});
+
+describe('a toolchain marker that is not what the install wrote', () => {
+  it('is not counted as installed', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'sentry-marker-'));
+    const pack = TOOLCHAIN_PACKS[0]!;
+    const version = pack.versions[0]!;
+    const dir = toolchainDir(root, pack.id, version);
+    await mkdir(dir, { recursive: true });
+    const manager = new ToolchainManager(root, async () => ({ code: 0, output: '' }));
+    const listed = async (): Promise<boolean> =>
+      (await manager.installed()).some(
+        (item) => item.packId === pack.id && item.version === version,
+      );
+    try {
+      for (const content of [
+        '{}',
+        '[]',
+        'null',
+        '"text"',
+        '{',
+        JSON.stringify({ packId: 'other', version, installedAt: 't' }),
+      ]) {
+        await writeFile(join(dir, '.installed.json'), content);
+        expect(await listed(), content).toBe(false);
+      }
+      await writeFile(
+        join(dir, '.installed.json'),
+        JSON.stringify({ packId: pack.id, version, installedAt: '2026-01-01T00:00:00.000Z' }),
+      );
+      expect(await listed()).toBe(true);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });

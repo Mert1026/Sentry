@@ -1,3 +1,4 @@
+import { isSecretsCheck } from './secrets-check.js';
 import type { SentryAgentReportV2 } from '@qa/schemas';
 import { DEPENDENCY_INSTALL_COMMAND } from '@qa/shared';
 import { investigationDeadline } from './phase-budget.js';
@@ -31,8 +32,11 @@ export const DEPTH_PREPARATION_GUIDANCE =
 export const MINUTES_PER_PLANNED_CHECK = 25;
 export const MAX_PLANNED_CHECKS = 8;
 export const MIN_PLANNED_CHECKS = 2;
-/** A fast run plans at most this many checks. The extra passes after them are unchanged. */
-export const FAST_MAX_PLANNED_CHECKS = 3;
+/**
+ * A fast run plans at most this many checks (the host's Secrets check comes on top) and skips the
+ * deepening round and the hazard sweep. Its second pass on undecided checks is unchanged.
+ */
+export const FAST_MAX_PLANNED_CHECKS = 2;
 
 /**
  * How many checks to plan for this run. A slow model on a deep project cannot
@@ -186,6 +190,13 @@ function withoutInlineScript(command: string): string {
   if (end >= command.length) return command;
   if (quote === '"' && /`|\$\(/.test(command.slice(start + 1, end))) return command;
   return head[0] + 'script' + command.slice(end + 1);
+}
+
+/** A shell command that ran and exited 0, whatever it was. Enough for a read-only search. */
+function isSuccessfulCommand(op: ObservedOperation): boolean {
+  return (
+    op.exitCode === 0 && typeof op.commandText === 'string' && op.commandText.trim().length > 0
+  );
 }
 
 /** One operation certifies executable proof: ran, succeeded, unambiguous. */
@@ -612,10 +623,13 @@ export function groundCoverage(
     // Every cited key must exist in the host ledger (no invented citations), and at least
     // one must certify executable proof. Context the agent also cited (a source read, an
     // early probe that failed on a fixture error) neither adds to nor removes that proof.
+    // The Secrets check is a read-only search, so a command that ran and succeeded is its proof
+    // (a grep is not an "executable reproduction", and none is wanted here).
+    const proofOf = isSecretsCheck(check.name) ? isSuccessfulCommand : isExecutableProofOperation;
     const executable =
       proof.length > 0 &&
       proof.every((op) => op !== undefined) &&
-      proof.some((op) => op !== undefined && isExecutableProofOperation(op));
+      proof.some((op) => op !== undefined && proofOf(op));
     if (check.coverage === 'complete' && executable) return check;
     downgraded = true;
     // Name the cause so a downgrade can be diagnosed from the report alone.

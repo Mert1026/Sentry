@@ -2,6 +2,7 @@ import React from 'react';
 import { InfoPopover } from '../components/InfoPopover.js';
 import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Download } from 'lucide-react';
 import { sentryApi } from '../lib/sentry-api.js';
 import { PageHeader, PageSection } from '../components/ui/PageHeader.js';
 import { StatusPill } from '../components/ui/StatusPill.js';
@@ -10,6 +11,8 @@ import { SwitchButton } from '../components/SwitchButton.js';
 import { DEVELOPER_MODE_KEY, isDeveloperModeEnabled } from '../lib/developer-mode.js';
 import { useAppPreferences, type AppLanguage, type ThemeMode } from '../lib/app-preferences.js';
 import { useI18n } from '../lib/i18n.js';
+import { RunTimeLimitCard } from '../components/RunTimeLimitCard.js';
+import { NoteLimitCard } from '../components/NoteLimitCard.js';
 
 const ROW_STYLE: React.CSSProperties = {
   display: 'flex',
@@ -60,6 +63,21 @@ export function ApplicationSettingsContent(): React.JSX.Element {
       }
     | undefined;
   const cliActive = cliData?.started ?? prefs.cliEnabledPref;
+
+  const [savedReference, setSavedReference] = React.useState<string | undefined>(undefined);
+  const [referenceError, setReferenceError] = React.useState<string | undefined>(undefined);
+  const saveReference = useMutation({
+    mutationFn: () => sentryApi().app.saveCliReference(),
+    onSuccess: (result) => {
+      setReferenceError(undefined);
+      // A cancelled dialog is a normal outcome: nothing to report.
+      setSavedReference(result.status === 'saved' ? result.path : undefined);
+    },
+    onError: (err) => {
+      setSavedReference(undefined);
+      setReferenceError(err instanceof Error ? err.message : String(err));
+    },
+  });
 
   const toggleCli = useMutation({
     mutationFn: async (nextEnabled: boolean) => {
@@ -187,6 +205,39 @@ export function ApplicationSettingsContent(): React.JSX.Element {
         <div style={ROW_STYLE}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {t('CLI command reference')}
+            </div>
+          </div>
+          <button
+            className="compact"
+            disabled={saveReference.isPending}
+            onClick={() => saveReference.mutate()}
+            title={t('Save a Markdown file with every CLI command and what it does')}
+          >
+            <Download size={14} aria-hidden="true" /> {t('Download CLI commands (.md)')}
+          </button>
+          <InfoPopover title={t('CLI command reference')}>
+            {t(
+              'A Markdown file with every `sentry cli` command, its options and what it does: projects, runs, settings, models, exports and toolchains. Keep it next to your scripts, or give it to a coding assistant so it knows how to drive Sentry.',
+            )}
+          </InfoPopover>
+        </div>
+        {savedReference !== undefined ? (
+          <p className="metadata" style={{ marginTop: 8, marginBottom: 0 }} role="status">
+            {t('Saved to') + ' ' + savedReference}
+          </p>
+        ) : null}
+        {referenceError !== undefined ? (
+          <p className="error-box" style={{ marginTop: 8, marginBottom: 0 }} role="alert">
+            {referenceError}
+          </p>
+        ) : null}
+      </div>
+
+      <div className="card">
+        <div style={ROW_STYLE}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               {t('Workspace Motion & Animations')}
             </div>
           </div>
@@ -299,6 +350,12 @@ export function ApplicationSettings(): React.JSX.Element {
       />
       <PageSection title={t('Application')}>
         <ApplicationSettingsContent />
+      </PageSection>
+      <PageSection title={t('Runs')}>
+        <div className="settings-stack">
+          <RunTimeLimitCard />
+          <NoteLimitCard />
+        </div>
       </PageSection>
     </div>
   );

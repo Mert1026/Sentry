@@ -54,6 +54,8 @@ const api: SentryDesktopApi & {
       invoke('projects:toolchain-selection', { projectId }),
     findingsByRevision: (projectId: string) =>
       invoke('projects:findings-by-revision', { projectId }),
+    saveFindingsExport: (projectId: string, request: import('@qa/schemas').FindingExportRequest) =>
+      invoke('projects:save-findings-export', { projectId, ...request }),
     assessToolchains: (projectId: string, agentStackIds?: string[]) =>
       invoke(
         'projects:assess-toolchains',
@@ -92,6 +94,10 @@ const api: SentryDesktopApi & {
         input?.agentStackIds === undefined ? {} : { agentStackIds: input.agentStackIds },
       ),
   },
+  models: {
+    catalog: () => invoke('models:catalog', {}),
+    refresh: () => invoke('models:refresh', {}),
+  },
   toolchains: {
     status: () => invoke('toolchains:status', {}),
     install: (packId: string, version: string) => invoke('toolchains:install', { packId, version }),
@@ -107,6 +113,13 @@ const api: SentryDesktopApi & {
     accountCancelLogin: () => invoke('openai:account-cancel-login', {}),
     accountLogout: () => invoke('openai:account-logout', {}),
   },
+  claude: {
+    accountStatus: () => invoke('claude:account-status', {}),
+    accountLogin: () => invoke('claude:account-login', {}),
+    accountSubmitCode: (code: string) => invoke('claude:account-submit-code', { code }),
+    accountCancelLogin: () => invoke('claude:account-cancel-login', {}),
+    accountLogout: () => invoke('claude:account-logout', {}),
+  },
   system: {
     info: () => invoke('system:info', {}),
     activeRuns: () => invoke('system:active-runs', {}),
@@ -117,6 +130,7 @@ const api: SentryDesktopApi & {
   },
   app: {
     setLanguage: (language: 'en' | 'bg') => invoke('app:set-language', { language }),
+    saveCliReference: () => invoke('app:save-cli-reference', {}),
   },
   runtime: {
     status: () => invoke('runtime:status', {}),

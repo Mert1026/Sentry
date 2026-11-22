@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { classifyOpenCodeTurnFailure } from '../src/index.js';
+import { isProviderSafetyRefusal } from '../src/errors.js';
 
 const CONTEXT = { provider: 'opencode-go', model: 'muse-spark-1.3-contributor' };
 
@@ -50,5 +51,28 @@ describe('provider error classification', () => {
   it('leaves unknown failures as START_FAILED', () => {
     const failure = classifyOpenCodeTurnFailure({ detail: 'weird local failure', ...CONTEXT });
     expect(failure.code).toBe('OPENCODE_START_FAILED');
+  });
+
+  it("labels a provider safety-filter refusal as PROVIDER_REFUSED and keeps the provider's explanation", () => {
+    const detail = JSON.stringify({
+      name: 'APIError',
+      data: {
+        message:
+          'This content was flagged for possible cybersecurity risk. If this seems wrong, try rephrasing your request. If you are doing authorized security work, apply for permissive access via https://platform.openai.com/settings.',
+      },
+    });
+    const failure = classifyOpenCodeTurnFailure({ detail, ...CONTEXT });
+    expect(failure.code).toBe('OPENCODE_PROVIDER_REFUSED');
+    expect(failure.retryable).toBe(false);
+    expect(failure.message).toContain('safety filter');
+    expect(failure.message).toContain('retrying does not help');
+    expect(failure.message).toContain(
+      'apply for permissive access via https://platform.openai.com',
+    );
+    // The per-check refusal hook keys on this wording, so the new message must still match it.
+    expect(isProviderSafetyRefusal(new Error(failure.message))).toBe(true);
+    // It is not mistaken for a credential problem or an outage.
+    expect(failure.message).not.toContain('rejected the credential');
+    expect(failure.message).not.toContain('Provider marked');
   });
 });

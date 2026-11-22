@@ -8,6 +8,7 @@
   "include": ["src"],
   "references": [
     { "path": "../../packages/domain" },
+    { "path": "../../packages/harness-claude" },
     { "path": "../../packages/harness-claude-code" },
     { "path": "../../packages/harness-deepseek" },
     { "path": "../../packages/harness-opencode" },

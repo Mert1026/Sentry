@@ -4,6 +4,7 @@ import React from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Providers } from '../../src/renderer/pages/Providers.js';
+import { EFFORT_LABELS } from '../../src/renderer/lib/agent-effort.js';
 
 interface Status {
   name: string;
@@ -54,6 +55,51 @@ function mount(status: ReturnType<typeof vi.fn>, save = vi.fn()) {
   };
 }
 
+/** Opens the model picker of a field and chooses the model with this exact id. */
+function choose(trigger: HTMLElement, id: string): void {
+  fireEvent.click(trigger);
+  const list = within(trigger.closest('.model-picker') as HTMLElement).getByRole('listbox');
+  const option = within(list)
+    .getAllByRole('option')
+    .find((candidate) => candidate.querySelector('.model-row-id')?.textContent === id);
+  if (option === undefined) throw new Error('No option with the id ' + id);
+  fireEvent.click(option);
+}
+
+/** The labels a custom drop-down offers, with the list opened and closed again. */
+function labelsOf(trigger: HTMLElement): string[] {
+  fireEvent.click(trigger);
+  const labels = within(trigger.closest('.model-picker') as HTMLElement)
+    .getAllByRole('option')
+    .map((option) => option.querySelector('.model-row-name')?.textContent ?? '');
+  fireEvent.click(trigger);
+  return labels;
+}
+
+/** Opens a custom drop-down and chooses the entry with this label. */
+function pick(trigger: HTMLElement, label: string): void {
+  fireEvent.click(trigger);
+  const option = within(trigger.closest('.model-picker') as HTMLElement)
+    .getAllByRole('option')
+    .find((candidate) => candidate.querySelector('.model-row-name')?.textContent === label);
+  if (option === undefined) throw new Error('No entry labelled ' + label);
+  fireEvent.click(option);
+}
+
+/** The label the effort drop-down shows for a level ('' is the default). */
+const effortLabel = (value: string): string =>
+  value === '' ? 'Default (provider setting)' : (EFFORT_LABELS[value] as string);
+
+/** The ids a field's picker offers, with the list opened and closed again. */
+function offered(trigger: HTMLElement): string[] {
+  fireEvent.click(trigger);
+  const ids = within(trigger.closest('.model-picker') as HTMLElement)
+    .getAllByRole('option')
+    .map((option) => option.querySelector('.model-row-id')?.textContent ?? '');
+  fireEvent.click(trigger);
+  return ids;
+}
+
 const bothKeys = (providerHint: string, modelHint = 'kimi-k3'): Status[] => [
   statusRow('SENTRY_OPENCODE_PROVIDER', providerHint, providerHint !== ''),
   statusRow('SENTRY_OPENCODE_MODEL', modelHint),
@@ -78,16 +124,11 @@ describe('ChatGPT reasoning effort', () => {
   it('offers Default, Low, Medium and High and shows the saved choice', async () => {
     const s = mount(vi.fn().mockResolvedValue(rows('high')));
     const card = () => within(screen.getByRole('region', { name: 'ChatGPT provider settings' }));
-    const select = (await waitFor(() =>
-      card().getByLabelText('Value for SENTRY_CHATGPT_REASONING'),
-    )) as HTMLSelectElement;
-    await waitFor(() => expect(select.value).toBe('high'));
-    expect(Array.from(select.querySelectorAll('option')).map((option) => option.value)).toEqual([
-      '',
-      'low',
-      'medium',
-      'high',
-    ]);
+    const select = await waitFor(() =>
+      card().getByRole('button', { name: 'Value for SENTRY_CHATGPT_REASONING' }),
+    );
+    await waitFor(() => expect(select.textContent).toContain(effortLabel('high')));
+    expect(labelsOf(select)).toEqual(['', 'low', 'medium', 'high'].map(effortLabel));
     expect(s.client).toBeDefined();
   });
 
@@ -116,55 +157,50 @@ describe('ChatGPT reasoning effort', () => {
         </MemoryRouter>
       </QueryClientProvider>,
     );
-    const select = (await screen.findByLabelText(
-      'Value for SENTRY_CHATGPT_REASONING',
-    )) as HTMLSelectElement;
-    await waitFor(() => expect(select.value).toBe('low'));
-    fireEvent.change(select, { target: { value: 'high' } });
+    const select = await screen.findByRole('button', {
+      name: 'Value for SENTRY_CHATGPT_REASONING',
+    });
+    await waitFor(() => expect(select.textContent).toContain(effortLabel('low')));
+    pick(select, effortLabel('high'));
     await waitFor(() => expect(save).toHaveBeenCalledWith('SENTRY_CHATGPT_REASONING', 'high'));
-    fireEvent.change(select, { target: { value: '' } });
+    pick(select, effortLabel(''));
     await waitFor(() => expect(clearKey).toHaveBeenCalledWith('SENTRY_CHATGPT_REASONING'));
   });
 });
 
 describe('Providers model controls', () => {
-  it('shows a Go subscription dropdown and switches to a manual input for pay-as-you-go modes', async () => {
+  it('shows a Go subscription picker and switches to a manual input for pay-as-you-go modes', async () => {
     const query = vi.fn().mockResolvedValue(bothKeys('opencode-go'));
     const s = mount(query);
-    await waitFor(() =>
-      expect(
-        (s.openCodeCard().getByLabelText('Value for SENTRY_OPENCODE_MODEL') as HTMLElement).tagName,
-      ).toBe('SELECT'),
-    );
-    const modelSelect = s
+    const trigger = await s
       .openCodeCard()
-      .getByLabelText('Value for SENTRY_OPENCODE_MODEL') as HTMLSelectElement;
-    expect(modelSelect.tagName).toBe('SELECT');
-    expect(modelSelect.value).toBe('kimi-k3');
-    expect(within(modelSelect).getByRole('option', { name: 'glm-5.3-flash' })).toBeTruthy();
+      .findByRole('button', { name: 'Value for SENTRY_OPENCODE_MODEL' });
+    // The picker shows the saved model, and its list holds the Go models.
+    expect(trigger.textContent).toContain('kimi-k3');
+    expect(offered(trigger)).toContain('glm-5.3-flash');
 
     const providerSelect = s
       .openCodeCard()
-      .getByLabelText('Value for SENTRY_OPENCODE_PROVIDER') as HTMLSelectElement;
-    fireEvent.change(providerSelect, { target: { value: 'opencode' } });
+      .getByRole('button', { name: 'Value for SENTRY_OPENCODE_PROVIDER' });
+    pick(providerSelect, 'OpenCode Zen — pay-as-you-go (uses the OpenCode API key)');
     const manual = s
       .openCodeCard()
       .getByLabelText('Value for SENTRY_OPENCODE_MODEL') as HTMLInputElement;
     expect(manual.tagName).toBe('INPUT');
-    // No model dropdown in pay-as-you-go modes: only the manual text input.
+    // No model picker in pay-as-you-go modes: only the manual text input.
     expect(manual.id).toBe('provider-SENTRY_OPENCODE_MODEL');
 
-    fireEvent.change(providerSelect, { target: { value: 'openrouter' } });
+    pick(providerSelect, 'OpenRouter — pay-as-you-go (uses the OpenRouter API key)');
     expect(
       (s.openCodeCard().getByLabelText('Value for SENTRY_OPENCODE_MODEL') as HTMLElement).tagName,
     ).toBe('INPUT');
 
-    fireEvent.change(providerSelect, { target: { value: 'opencode-go' } });
-    const back = s
-      .openCodeCard()
-      .getByLabelText('Value for SENTRY_OPENCODE_MODEL') as HTMLSelectElement;
-    expect(back.tagName).toBe('SELECT');
-    expect(within(back).getByRole('option', { name: 'gpt-6-luna' })).toBeTruthy();
+    pick(
+      providerSelect,
+      'OpenCode Go / Go Plus — monthly subscription (uses the OpenCode API key)',
+    );
+    const back = s.openCodeCard().getByRole('button', { name: 'Value for SENTRY_OPENCODE_MODEL' });
+    expect(offered(back)).toContain('gpt-6-luna');
     // Switching modes is local draft state: nothing is saved implicitly.
     expect(query).toHaveBeenCalledOnce();
   });
@@ -179,18 +215,26 @@ describe('Providers model controls', () => {
     const deepseekSelect = (await s
       .deepSeekCard()
       .findByLabelText('Value for SENTRY_DEEPSEEK_MODEL')) as HTMLSelectElement;
-    fireEvent.change(deepseekSelect, { target: { value: 'deepseek-v4-pro' } });
-    fireEvent.click(within(deepseekSelect.parentElement!).getByRole('button', { name: 'Save' }));
+    choose(deepseekSelect, 'deepseek-v4-pro');
+    fireEvent.click(
+      within(deepseekSelect.closest('.model-picker')!.parentElement!).getByRole('button', {
+        name: 'Save',
+      }),
+    );
     await waitFor(() =>
       expect(save).toHaveBeenCalledWith('SENTRY_DEEPSEEK_MODEL', 'deepseek-v4-pro'),
     );
 
-    fireEvent.change(deepseekSelect, { target: { value: 'deepseek-v4-flash' } });
+    choose(deepseekSelect, 'deepseek-v4-flash');
     expect(s.deepSeekCard().getByText(/is a legacy alias/)).toBeTruthy();
 
-    const glmSelect = s.glmCard().getByLabelText('Value for SENTRY_GLM_MODEL') as HTMLSelectElement;
-    fireEvent.change(glmSelect, { target: { value: 'glm-5.3-flash' } });
-    fireEvent.click(within(glmSelect.parentElement!).getByRole('button', { name: 'Save' }));
+    const glmSelect = s.glmCard().getByRole('button', { name: 'Value for SENTRY_GLM_MODEL' });
+    choose(glmSelect, 'glm-5.3-flash');
+    fireEvent.click(
+      within(glmSelect.closest('.model-picker')!.parentElement!).getByRole('button', {
+        name: 'Save',
+      }),
+    );
     await waitFor(() => expect(save).toHaveBeenCalledWith('SENTRY_GLM_MODEL', 'glm-5.3-flash'));
   });
 
@@ -206,13 +250,12 @@ describe('Providers model controls', () => {
     const save = vi.fn();
     const s = mount(query, save);
 
-    // Wait for the Go dropdown (its options render only in dropdown mode).
-    await s.openCodeCard().findByRole('option', { name: 'kimi-k3' });
-    const modelSelect = s
+    // Wait for the Go picker (it only exists in the Go mode).
+    const modelTrigger = await s
       .openCodeCard()
-      .getByLabelText('Value for SENTRY_OPENCODE_MODEL') as HTMLSelectElement;
+      .findByRole('button', { name: 'Value for SENTRY_OPENCODE_MODEL' });
     // Provider prefix is understood for display; the saved id is untouched.
-    expect(modelSelect.value).toBe('kimi-k3');
+    expect(modelTrigger.textContent).toContain('kimi-k3');
     expect(s.openCodeCard().queryByText(/not in the current list/)).toBeNull();
 
     expect(s.deepSeekCard().getByText(/is a legacy alias/)).toBeTruthy();
@@ -278,8 +321,12 @@ describe('Providers model controls', () => {
     const modelSelect = (await s
       .deepSeekCard()
       .findByLabelText('Value for SENTRY_DEEPSEEK_MODEL')) as HTMLSelectElement;
-    fireEvent.change(modelSelect, { target: { value: 'deepseek-v4-pro' } });
-    fireEvent.click(within(modelSelect.parentElement!).getByRole('button', { name: 'Save' }));
+    choose(modelSelect, 'deepseek-v4-pro');
+    fireEvent.click(
+      within(modelSelect.closest('.model-picker')!.parentElement!).getByRole('button', {
+        name: 'Save',
+      }),
+    );
     await waitFor(() =>
       expect(save).toHaveBeenCalledWith('SENTRY_DEEPSEEK_MODEL', 'deepseek-v4-pro'),
     );
@@ -300,8 +347,12 @@ describe('Providers model controls', () => {
     const modelSelect = (await s
       .deepSeekCard()
       .findByLabelText('Value for SENTRY_DEEPSEEK_MODEL')) as HTMLSelectElement;
-    fireEvent.change(modelSelect, { target: { value: 'deepseek-v4-pro' } });
-    fireEvent.click(within(modelSelect.parentElement!).getByRole('button', { name: 'Save' }));
+    choose(modelSelect, 'deepseek-v4-pro');
+    fireEvent.click(
+      within(modelSelect.closest('.model-picker')!.parentElement!).getByRole('button', {
+        name: 'Save',
+      }),
+    );
     await waitFor(() =>
       expect(save).toHaveBeenCalledWith('SENTRY_DEEPSEEK_MODEL', 'deepseek-v4-pro'),
     );
@@ -351,8 +402,12 @@ describe('Providers model controls', () => {
     const modelSelect = (await s
       .deepSeekCard()
       .findByLabelText('Value for SENTRY_DEEPSEEK_MODEL')) as HTMLSelectElement;
-    fireEvent.change(modelSelect, { target: { value: 'deepseek-flash' } });
-    fireEvent.click(within(modelSelect.parentElement!).getByRole('button', { name: 'Save' }));
+    choose(modelSelect, 'deepseek-flash');
+    fireEvent.click(
+      within(modelSelect.closest('.model-picker')!.parentElement!).getByRole('button', {
+        name: 'Save',
+      }),
+    );
     await waitFor(() =>
       expect(screen.getByRole('alert').textContent).toContain('could not be stored'),
     );
@@ -374,13 +429,16 @@ describe('Providers model controls', () => {
     const modelSelect = (await s
       .deepSeekCard()
       .findByLabelText('Value for SENTRY_DEEPSEEK_MODEL')) as HTMLSelectElement;
-    const saveButton = within(modelSelect.parentElement!).getByRole('button', {
-      name: 'Save',
-    }) as HTMLButtonElement;
+    const saveButton = within(modelSelect.closest('.model-picker')!.parentElement!).getByRole(
+      'button',
+      {
+        name: 'Save',
+      },
+    ) as HTMLButtonElement;
     // The saved model is shown, but with no unsaved draft Save stays dimmed.
     expect(saveButton.disabled).toBe(true);
 
-    fireEvent.change(modelSelect, { target: { value: 'deepseek-v4-pro' } });
+    choose(modelSelect, 'deepseek-v4-pro');
     expect(saveButton.disabled).toBe(false);
     fireEvent.click(saveButton);
     await waitFor(() =>
@@ -404,8 +462,12 @@ describe('Providers model controls', () => {
     const modelSelect = (await s
       .deepSeekCard()
       .findByLabelText('Value for SENTRY_DEEPSEEK_MODEL')) as HTMLSelectElement;
-    fireEvent.change(modelSelect, { target: { value: 'deepseek-flash' } });
-    fireEvent.click(within(modelSelect.parentElement!).getByRole('button', { name: 'Save' }));
+    choose(modelSelect, 'deepseek-flash');
+    fireEvent.click(
+      within(modelSelect.closest('.model-picker')!.parentElement!).getByRole('button', {
+        name: 'Save',
+      }),
+    );
     await waitFor(() => expect(screen.getByRole('status').textContent).toContain('Saved'));
     expect(
       (s.deepSeekCard().getByLabelText('Value for DEEPSEEK_API_KEY') as HTMLInputElement).value,
@@ -466,15 +528,13 @@ describe('Reasoning effort for every agent', () => {
         </QueryClientProvider>,
       );
       const region = within(screen.getByRole('region', { name: `${card} provider settings` }));
-      const select = (await region.findByLabelText(`Value for ${setting}`)) as HTMLSelectElement;
-      await waitFor(() => expect(select.value).toBe(options[1]));
-      expect(Array.from(select.querySelectorAll('option')).map((option) => option.value)).toEqual(
-        options,
-      );
+      const select = await region.findByRole('button', { name: `Value for ${setting}` });
+      await waitFor(() => expect(select.textContent).toContain(effortLabel(options[1] as string)));
+      expect(labelsOf(select)).toEqual(options.map(effortLabel));
       const other = options[options.length - 1] as string;
-      fireEvent.change(select, { target: { value: other } });
+      pick(select, effortLabel(other));
       await waitFor(() => expect(save).toHaveBeenCalledWith(setting, other));
-      fireEvent.change(select, { target: { value: '' } });
+      pick(select, effortLabel(''));
       await waitFor(() => expect(clearKey).toHaveBeenCalledWith(setting));
     });
   }

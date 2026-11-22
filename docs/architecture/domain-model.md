@@ -73,7 +73,9 @@ graph plus expandable child steps. `RunExportManifest` references implemented
 human `.log` and structured `.json` artifacts generated from persisted state.
 
 `AgentUsage` stores optional input, output, and cached-input token counts, turns,
-and duration. Monetary data is absent. Aggregate tokens/turns are summed;
+and duration. Input is the whole prompt (new tokens plus cache reads and writes), the
+cached-input figure is the cached part of it, and output includes reasoning tokens, so
+the counts mean the same for every agent. Monetary data is absent. Aggregate tokens/turns are summed;
 summed worker duration is named `aggregateAgentExecutionMs` and is never confused
 with QARun wall-clock time derived from run timestamps.
 

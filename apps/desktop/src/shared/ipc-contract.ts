@@ -21,6 +21,8 @@ export const IPC_CHANNELS = [
   'projects:toolchain-needs',
   'projects:assess-toolchains',
   'projects:findings-by-revision',
+  'projects:export-findings',
+  'projects:save-findings-export',
   'projects:toolchain-selection',
   'runs:list',
   'runs:get',
@@ -42,6 +44,8 @@ export const IPC_CHANNELS = [
   'settings:set',
   'production:readiness',
   'system:info',
+  'models:catalog',
+  'models:refresh',
   'toolchains:status',
   'toolchains:install',
   'toolchains:remove',
@@ -52,6 +56,11 @@ export const IPC_CHANNELS = [
   'openai:account-login',
   'openai:account-cancel-login',
   'openai:account-logout',
+  'claude:account-status',
+  'claude:account-login',
+  'claude:account-submit-code',
+  'claude:account-cancel-login',
+  'claude:account-logout',
   'system:active-runs',
   'runtime:status',
   'runtime:distros',
@@ -60,6 +69,7 @@ export const IPC_CHANNELS = [
   'cli:status',
   'cli:set-enabled',
   'app:set-language',
+  'app:save-cli-reference',
 ] as const;
 
 export type IpcChannel = (typeof IPC_CHANNELS)[number];
@@ -217,6 +227,36 @@ export interface OpenAiAccountStatus {
   readonly version: string;
 }
 
+export interface ClaudeAccountStatus {
+  readonly signedIn: boolean;
+  readonly login: 'idle' | 'waiting' | 'done' | 'failed';
+  /** Sign-in link while a login is waiting. */
+  readonly loginUrl?: string;
+  readonly error?: string;
+}
+
+/** One model a provider offers, from the public model catalog. */
+export interface CatalogModel {
+  readonly id: string;
+  readonly name: string;
+  readonly releasedAt?: string;
+  readonly context?: number;
+  readonly deprecated?: boolean;
+}
+
+/** The models each agent's provider offers, as of the last update of the list. */
+export interface ModelCatalog {
+  readonly fetchedAt: string;
+  readonly source: string;
+  readonly providers: Readonly<Record<string, readonly CatalogModel[]>>;
+}
+
+export interface ModelCatalogRefresh {
+  readonly catalog: ModelCatalog;
+  /** Model ids that were not in the previous copy, per provider. */
+  readonly added: Readonly<Record<string, readonly string[]>>;
+}
+
 export interface CustomAddonStatus {
   readonly name: string;
   readonly command: string;
@@ -274,6 +314,18 @@ export interface SentryDesktopApi {
     toolchainNeeds(projectId: string): Promise<ToolchainNeedsStatus>;
     /** Every revision with runs, newest first: each agent's runs and raw findings, kept apart. */
     findingsByRevision(projectId: string): Promise<FindingsByRevision>;
+    /**
+     * Save the selected findings as one file: opens the native Save As dialog, then writes a Markdown
+     * (.md), JSON (.json) or plain text (.txt) report. The renderer only names the findings and the
+     * format; the destination always comes from the dialog.
+     */
+    saveFindingsExport(
+      projectId: string,
+      request: import('@qa/schemas').FindingExportRequest,
+    ): Promise<
+      | { status: 'saved'; path: string; files: number; findingCount: number }
+      | { status: 'cancelled' }
+    >;
     /** Asks the agents (all, or the listed stacks) what they need; returns at once. */
     assessToolchains(
       projectId: string,
@@ -295,10 +347,14 @@ export interface SentryDesktopApi {
         mode: 'full' | 'targeted';
         includePaths?: string[];
         instructions?: string;
+        /** A note for single agents, by agent stack id (the agent gets the shared note first). */
+        agentInstructions?: Record<string, string>;
         agentStackIds?: string[];
         revisionId?: string;
         webAccess?: boolean;
         toolDownloads?: boolean;
+        /** false turns off the per-agent secrets check; omitted keeps it. */
+        secretsCheck?: boolean;
         /** How deep the run investigates; fast plans fewer checks. Omitted means full. */
         depth?: 'fast' | 'full';
         useProfile?: boolean;
@@ -316,10 +372,14 @@ export interface SentryDesktopApi {
         mode: 'full' | 'targeted';
         includePaths?: string[];
         instructions?: string;
+        /** A note for single agents, by agent stack id (the agent gets the shared note first). */
+        agentInstructions?: Record<string, string>;
         agentStackIds?: string[];
         revisionId?: string;
         webAccess?: boolean;
         toolDownloads?: boolean;
+        /** false turns off the per-agent secrets check; omitted keeps it. */
+        secretsCheck?: boolean;
         /** How deep the run investigates; fast plans fewer checks. Omitted means full. */
         depth?: 'fast' | 'full';
         useProfile?: boolean;
@@ -401,6 +461,12 @@ export interface SentryDesktopApi {
     selectDistro(distro: string): Promise<{ saved: string; restartRequired: boolean }>;
     reclaimSpace(): Promise<WslSpaceResult>;
   };
+  readonly models: {
+    /** The list from the last update, or null before the first one. */
+    catalog(): Promise<ModelCatalog | null>;
+    /** Fetches the public model catalog and keeps it. */
+    refresh(): Promise<ModelCatalogRefresh>;
+  };
   readonly toolchains: {
     status(): Promise<ToolchainPackStatus[]>;
     install(packId: string, version: string): Promise<{ started: boolean }>;
@@ -418,6 +484,15 @@ export interface SentryDesktopApi {
     accountStatus(): Promise<OpenAiAccountStatus>;
     /** Starts the ChatGPT sign-in; resolves with the link to open in a browser. */
     accountLogin(): Promise<{ url: string }>;
+    accountCancelLogin(): Promise<{ cancelled: true }>;
+    accountLogout(): Promise<{ signedOut: true }>;
+  };
+  readonly claude: {
+    accountStatus(): Promise<ClaudeAccountStatus>;
+    /** Starts the Claude account sign-in; resolves with the link to open in a browser. */
+    accountLogin(): Promise<{ url: string }>;
+    /** Gives the code shown after signing in to the waiting sign-in. */
+    accountSubmitCode(code: string): Promise<{ signedIn: true }>;
     accountCancelLogin(): Promise<{ cancelled: true }>;
     accountLogout(): Promise<{ signedOut: true }>;
   };
@@ -449,5 +524,11 @@ export interface SentryDesktopApi {
      * Best-effort: the renderer selection applies regardless of the write.
      */
     setLanguage(language: 'en' | 'bg'): Promise<{ saved: boolean; language: 'en' | 'bg' }>;
+    /**
+     * Native Save As for the CLI command reference (a Markdown file with every `sentry cli` command and what it
+     * does). The text is compiled into the app and the destination comes from the dialog; a cancelled dialog
+     * resolves { status: 'cancelled' }, never an error.
+     */
+    saveCliReference(): Promise<{ status: 'saved'; path: string } | { status: 'cancelled' }>;
   };
 }

@@ -104,6 +104,7 @@ export const REPORT_ENVELOPE_SCHEMA =
   '"locations":[{"relativePath":string,"lineStart"?:number,"lineEnd"?:number,"symbol"?:string}][at least one],' +
   '"evidenceKeys":string[at least one],"reproductionSteps":string[] (always include, [] allowed),' +
   '"rootCause"?:string,"recommendedFix"?:string}],"limitations":string[]}. ' +
+  'Give lineStart for every finding location you read in source; omit it only when the finding has no single line. ' +
   'Every evidence relativePath and findings[].locations[].relativePath MUST identify an existing regular file inside the workspace; ' +
   'never a directory, glob, or missing path. If investigation identified only a directory, cite a concrete file actually inspected inside it, ' +
   'or omit unsupported evidence and findings rather than inventing a path.';

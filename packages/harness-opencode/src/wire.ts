@@ -207,13 +207,23 @@ function sumUsageInto(
     a === undefined ? b : b === undefined ? a : a + b;
   const cached =
     tokens.cache === undefined ? undefined : add(tokens.cache.read, tokens.cache.write);
+  // OpenCode reports uncached input, cache reads and writes, and output and reasoning apart. Keep the
+  // whole prompt as input (cachedInputTokens is the cached part of it) and count reasoning as output.
+  const prompt =
+    tokens.input === undefined && cached === undefined
+      ? undefined
+      : (tokens.input ?? 0) + (cached ?? 0);
+  const generated =
+    tokens.output === undefined && tokens.reasoning === undefined
+      ? undefined
+      : (tokens.output ?? 0) + (tokens.reasoning ?? 0);
   const merged: AgentUsage = {
-    ...(total?.inputTokens === undefined && tokens.input === undefined
+    ...(total?.inputTokens === undefined && prompt === undefined
       ? {}
-      : { inputTokens: add(total?.inputTokens, tokens.input) }),
-    ...(total?.outputTokens === undefined && tokens.output === undefined
+      : { inputTokens: add(total?.inputTokens, prompt) }),
+    ...(total?.outputTokens === undefined && generated === undefined
       ? {}
-      : { outputTokens: add(total?.outputTokens, tokens.output) }),
+      : { outputTokens: add(total?.outputTokens, generated) }),
     ...(total?.cachedInputTokens === undefined && cached === undefined
       ? {}
       : { cachedInputTokens: add(total?.cachedInputTokens, cached) }),

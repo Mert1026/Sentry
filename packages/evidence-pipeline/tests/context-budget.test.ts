@@ -50,6 +50,12 @@ describe('ContextBudget with a reported single-step prompt', () => {
     expect(budget.shouldRotate()).toBe(true);
   });
 
+  it('leaves cached tokens out of the upper bound now that input counts the whole prompt', () => {
+    const budget = new ContextBudget(272_000);
+    budget.observeTurn({ inputTokens: 900_000, cachedInputTokens: 800_000 });
+    expect(budget.peakTokens).toBe(100_000);
+  });
+
   it('keeps the older upper bound when the adapter reports no single-step figure', () => {
     const budget = new ContextBudget(272_000);
     budget.observeTurn({ inputTokens: 250_000 });

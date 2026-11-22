@@ -141,6 +141,13 @@ export const BINARY_DOWNLOAD_SKIP_ENVIRONMENT: Readonly<Record<string, string>> 
  */
 export const NON_INTERACTIVE_ENVIRONMENT: Readonly<Record<string, string>> = {
   CI: 'true',
+  // Nothing can answer a question, so a command that asks one waits until the stall watchdog
+  // kills the agent (run_01M7JYY8WE: `unzip` asked "replace ...? [y]es, [n]o" for five minutes).
+  // These make the common tools take their default answer instead of prompting.
+  DEBIAN_FRONTEND: 'noninteractive',
+  GIT_TERMINAL_PROMPT: '0',
+  PIP_NO_INPUT: '1',
+  UNZIP: '-o',
 };
 
 export function dependencyCacheEnvironment(workspacePath: string): Record<string, string> {
@@ -178,6 +185,28 @@ export interface AgentNetworkPromptOptions {
   readonly toolDownloads?: boolean;
   /** False for harnesses without web tools (they must never be told to use them). */
   readonly webToolsAvailable?: boolean;
+  /** Absolute path of the Sentry-managed headless browser launcher, when installed. */
+  readonly browserLauncher?: string;
+  /** Extra lines about the agent's own sandbox, added to its investigation prompt. */
+  readonly sandboxNotes?: readonly string[];
+}
+
+/**
+ * Claude Code's sandbox write-protects some paths by mounting an empty character device over them,
+ * so names that are not in the project show up in the workspace as unreadable device nodes. An
+ * agent that is not told reports them as unreadable files, secrets-check gaps and an inconsistent
+ * workspace (run_01M7NNTB12 and run_01M7NNYVQ9), and spends commands listing them.
+ */
+export const CLAUDE_SANDBOX_PLACEHOLDER_NOTE =
+  'Sandbox placeholders: this sandbox write-protects some paths by putting an empty stand-in over them, so names that are not in the project show up in the workspace. Two kinds: (1) character devices (`ls -l` starts with `c`) named `scripts`, `.github`, `.vscode`, `.idea`, `.mcp.json`, `.ripgreprc` or a shell dotfile such as `.bashrc`, `.profile`, `.zshrc`; (2) zero-byte regular files named like env files (`.env*`), package-manager configuration (`.npmrc`, `.yarnrc*`, `bunfig.toml`, `.gitmodules`) or package files and lockfiles (`package.json`, `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`) that the snapshot manifest does not list. None of these is a project file. Leave them out of file counts, do not read or search them, and do not report them as unreadable files, empty files, secrets-check gaps, a missing package.json or an inconsistent workspace. A file or directory with one of these names that the snapshot manifest does list is real: read it normally.';
+
+/** How to use the Sentry-managed headless browser. Also appended to the follow-up passes. */
+export function browserPromptLine(launcher: string): string {
+  return (
+    'A headless browser is already installed for QA: do not download or install another one. In a Node ESM script run with `node probe.mjs`, `import { launchBrowser } from ' +
+    JSON.stringify(launcher) +
+    '`, then `const browser = await launchBrowser(); const page = await browser.newPage();` and use the Puppeteer page API (`page.setViewport`, `page.goto("file:///absolute/path/index.html")`, `page.evaluate`, `page.keyboard`, `browser.close()`). Use it for anything that needs a real page: layout and overflow at narrow widths, tab and focus order, link targets, menus, forms. Load pages from file:// or a local server you start inside the workspace. Prefer a real browser measurement over re-implementing the logic by hand; a check that rests only on a hand-built replica stays inconclusive.'
+  );
 }
 
 /** Identical network guidance for every agent's investigation prompt. */
@@ -187,10 +216,13 @@ export function agentNetworkPromptLines(options: AgentNetworkPromptOptions): str
     'Install ONCE per run: when the operation receipt already shows a successful install (exit 0) in this workspace, do not repeat it for later checks; the dependencies are still there.',
     'Build outputs (dist) are not part of the workspace. Before importing a package or running a suite that needs its build, build just what the probe needs, once (for example `pnpm --filter <package>... build`). A missing build is a setup step to do, never a reason to leave a check unproven.',
     options.toolDownloads === true
-      ? 'Shell network access reaches package registries and the official download hosts of language toolchains (for example static.rust-lang.org, dot.net, go.dev, astral.sh, api.adoptium.net). You may install a missing toolchain or SDK from those hosts into this workspace; other hosts stay blocked and you must never work around that. If an install fails, record the exact failure as a limitation, continue statically, and never claim a check passed that could not run.'
+      ? 'Shell network access reaches package registries and the official download hosts of language toolchains (for example static.rust-lang.org, dot.net, go.dev, astral.sh, api.adoptium.net). You may install a missing toolchain or SDK from those hosts into this workspace; other hosts stay blocked and you must never work around that. SDK archives are large (tens of megabytes) and the download can take a minute or two: use a generous timeout (for example `curl -fL --retry 3 --retry-delay 2 --max-time 600`), and when a download times out or fails, retry it once before treating it as unavailable. Download and unpack it once, in its own command, before the check that needs it. If an install still fails, record the exact failure as a limitation, continue statically, and never claim a check passed that could not run.'
       : 'Shell network access reaches package registries only. Never work around that restriction. If an install fails, record the exact failure as a limitation, continue statically, and never claim a check passed that could not run.',
     'Never run scripts that publish, deploy or contact production systems.',
+    'Shell commands run without a terminal and nothing can answer a question: a command that stops to ask one waits until the run is cut off. Pass the non-interactive flag for every command that can prompt (for example `unzip -o`, `apt-get -y`, `cp -f`, `rm -f`, `mv -f`, `ssh -o BatchMode=yes`, `npx --yes`), and never start an editor, a pager or an interactive shell.',
   ];
+  if (options.browserLauncher !== undefined) lines.push(browserPromptLine(options.browserLauncher));
+  lines.push(...(options.sandboxNotes ?? []));
   if (options.webAccess && options.webToolsAvailable !== false)
     lines.push(
       'Web access is enabled for this run: you may use web fetch/search for documentation, changelogs and security advisories, and must cite what you used. Never send source code, secrets or workspace contents to a website.',

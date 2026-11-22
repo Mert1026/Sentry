@@ -2,8 +2,6 @@ import React from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  ChevronsLeft,
-  ChevronsRight,
   FolderKanban,
   LayoutDashboard,
   ServerCog,
@@ -189,12 +187,13 @@ export function AppShell(): React.JSX.Element {
           )}
         </nav>
         <button
-          className="icon-btn ghost collapse-btn"
+          type="button"
+          className="sidebar-handle"
           onClick={toggleSidebar}
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
-          {collapsed ? <ChevronsRight size={16} /> : <ChevronsLeft size={16} />}
+          <span className="sidebar-handle-grip" aria-hidden="true" />
         </button>
         <div className="active-strip" aria-live="polite">
           {count > 0 ? (

@@ -1,10 +1,15 @@
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { ProjectProfile, ToolchainNeeds } from '@qa/schemas';
 import { createProjectId, createProjectRevisionId } from '@qa/shared';
-import { ProjectProfileStore, ToolchainNeedsStore, projectDataPaths } from '../src/index.js';
+import {
+  ProjectProfileStore,
+  ToolchainNeedsStore,
+  assertNoPathOverlap,
+  projectDataPaths,
+} from '../src/index.js';
 
 const roots: string[] = [];
 const dataRoot = async (): Promise<string> => {
@@ -120,5 +125,61 @@ describe('ToolchainNeedsStore', () => {
     await mkdir(join(projectDataPaths(root, projectId).root, 'toolchain-needs'), {
       recursive: true,
     });
+  });
+});
+
+describe('a project id names one project folder', () => {
+  it('refuses an absolute path, a traversal, a dot and an empty id', async () => {
+    const root = await dataRoot();
+    for (const id of [join(root, 'sibling'), '../../sibling', '.', '..', ''])
+      expect(() => projectDataPaths(root, id as never), JSON.stringify(id)).toThrow(/PATH_ESCAPE/);
+  });
+
+  it('does not delete a file outside the data root when remove gets a hostile id', async () => {
+    const base = await dataRoot();
+    const root = join(base, 'data');
+    await mkdir(root, { recursive: true });
+    const sibling = join(base, 'sibling');
+    await mkdir(join(sibling, 'profiles'), { recursive: true });
+    const outside = join(sibling, 'profiles', 'stack_opencode_main.json');
+    await writeFile(outside, 'OUTSIDE');
+    const store = new ProjectProfileStore(root);
+    for (const id of [sibling, '../sibling'])
+      await expect(store.remove(id as never, 'stack_opencode_main' as never)).rejects.toThrow(
+        /PATH_ESCAPE/,
+      );
+    expect(await readFile(outside, 'utf8')).toBe('OUTSIDE');
+  });
+});
+
+describe('assertNoPathOverlap follows a link however many folders are still missing', () => {
+  it('rejects a data root under a link to the source, with one and with two new folders', async () => {
+    const base = await dataRoot();
+    const source = join(base, 'src');
+    await mkdir(source);
+    const area = join(base, 'area');
+    await mkdir(area);
+    try {
+      await symlink(source, join(area, 'srclink'), 'junction');
+    } catch {
+      return; // links need privileges on Windows; covered on Linux CI
+    }
+    for (const destination of [
+      join(area, 'srclink', 'new1'),
+      join(area, 'srclink', 'new1', 'new2'),
+      join(area, 'srclink', 'new1', 'new2', 'new3'),
+    ])
+      await expect(assertNoPathOverlap(source, destination), destination).rejects.toThrow(
+        /PROJECT_PATH_OVERLAP/,
+      );
+  });
+
+  it('accepts a data root that is apart from the source, whatever is missing', async () => {
+    const base = await dataRoot();
+    const source = join(base, 'src');
+    await mkdir(source);
+    await expect(
+      assertNoPathOverlap(source, join(base, 'data', 'a', 'b')),
+    ).resolves.toBeUndefined();
   });
 });

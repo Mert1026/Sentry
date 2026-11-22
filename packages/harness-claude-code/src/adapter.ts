@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import {
   createFindingId,
@@ -19,10 +19,12 @@ import {
   describePlanRejection,
   describeSchemaIssues,
   parseAgentEffort,
+  CLAUDE_SANDBOX_PLACEHOLDER_NOTE,
 } from '@qa/shared';
 import {
   limitPhase,
   investigateChecks,
+  listHazardCandidates,
   scanHazardFiles,
   reportAttemptDeadline,
   PhaseDeadlineReached,
@@ -61,8 +63,11 @@ import {
   downgradeUngroundedFindings,
   buildGroundingRepairPrompt,
   isGroundingRepairableError,
+  browserNetworkOption,
   type EvidencePipelineContext,
   type ObservedOperation,
+  unreportedInvestigationMessages,
+  type UnreportedInvestigation,
 } from '@qa/evidence-pipeline';
 import {
   FindingSchema,
@@ -97,6 +102,7 @@ import { buildClaudeChildEnvironment } from './environment.js';
 import { SystemdIsolatedClaudeProcessLauncher, type ClaudeProcessLauncher } from './launcher.js';
 import { ClaudeCodeHarnessError } from './errors.js';
 import { redactDiagnostic, redactStructured, secretValues } from './redaction.js';
+import { claimEphemeralHome, releaseEphemeralHome } from './ephemeral-home.js';
 import {
   buildClaudeSettings,
   CLAUDE_CODE_TESTED_VERSION,
@@ -354,7 +360,43 @@ export function isSandboxBootstrapFailureText(text: string): boolean {
     return true;
   if (/^[\t ]*sandbox[\t ]+unavailable\b/im.test(head)) return true;
   if (/^[\t ]*bubblewrap\b[^\r\n]*(permission denied|failed)/im.test(head)) return true;
+  // The sandbox helper that applies the seccomp filter creates a nested user namespace; where the system
+  // restricts that it fails before the command runs ("apply-seccomp: write /proc/self/setgroups ...").
+  if (/^[\t ]*apply-seccomp:/im.test(head)) return true;
   return false;
+}
+
+/**
+ * A plain-language next step for a sandbox bootstrap failure, or nothing when the first diagnostic line
+ * says no more than that the sandbox could not start. Most often it is a system setting that blocks the
+ * nested user namespaces the sandbox needs.
+ */
+export function sandboxRepairHint(firstLine: string): string {
+  if (/nested userns|userns|setgroups|uid_map|CAP_SYS_ADMIN/i.test(firstLine))
+    return (
+      ' This system most likely blocks the nested user namespaces the Claude Code sandbox needs ' +
+      '(a security setting such as kernel.apparmor_restrict_unprivileged_userns on Ubuntu 24.04). ' +
+      'Run "sentry doctor", and see "GLM sandbox starts but commands fail" in docs/beta/troubleshooting.md. ' +
+      'The other agents are not affected.'
+    );
+  return '';
+}
+
+/** The first diagnostic line of a failed tool result, skipping a leading "Exit code N", redacted and bounded. */
+function sandboxLine(
+  rawResultText: string,
+  secrets: Parameters<typeof redactDiagnostic>[1],
+): string {
+  const lines = redactDiagnostic(rawResultText, secrets)
+    .split(/\r?\n/)
+    .filter((line) => line.trim().length > 0);
+  // The result can arrive as "Exit code 1 <diagnostic>" on one line or on two: drop that prefix either way.
+  const first = (
+    lines.find((line) => !/^\s*exit code \d+\s*$/i.test(line)) ??
+    lines[0] ??
+    ''
+  ).replace(/^\s*exit code \d+\s*[:-]?\s*/i, '');
+  return first.slice(0, 200);
 }
 
 /** Extract a shell command from Bash tool input, if the tool is Bash-like. */
@@ -382,6 +424,8 @@ export class ClaudeCodeHarnessAdapter implements HarnessAdapter {
   private closePromise: Promise<void> | undefined;
   private cancelled = false;
   private readonly toolNotes = new ObservedToolNotes();
+  /** What the agent concluded per check, kept in case the report that follows fails (see unreported.ts). */
+  private unreportedInvestigation: UnreportedInvestigation | undefined;
   private readonly operationIds = new Map<string, OperationId>();
   private readonly pendingToolUses = new Map<
     string,
@@ -931,8 +975,9 @@ export class ClaudeCodeHarnessAdapter implements HarnessAdapter {
             new ClaudeCodeHarnessError(
               'GLM_SANDBOX_UNAVAILABLE',
               'Claude Code sandbox failed to initialize (' +
-                redactDiagnostic(rawResultText, this.secrets).split(/\r?\n/)[0]!.slice(0, 200) +
-                '); the shell command never executed. Repair the sandbox instead of retrying model turns.',
+                sandboxLine(rawResultText, this.secrets) +
+                '); the shell command never executed. Repair the sandbox instead of retrying model turns.' +
+                sandboxRepairHint(sandboxLine(rawResultText, this.secrets)),
             ),
             { partialEvents: [...out] },
           );
@@ -1028,7 +1073,11 @@ export class ClaudeCodeHarnessAdapter implements HarnessAdapter {
           cacheCreate !== undefined
         ) {
           turnUsage.usage = {
-            ...(inputTokens === undefined ? {} : { inputTokens }),
+            // Anthropic's input_tokens leaves out cached tokens; the figure kept here is the whole prompt
+            // (uncached + cache reads + cache writes) so it reads like every other agent's.
+            ...(inputTokens === undefined && cacheRead === undefined && cacheCreate === undefined
+              ? {}
+              : { inputTokens: (inputTokens ?? 0) + (cacheRead ?? 0) + (cacheCreate ?? 0) }),
             ...(outputTokens === undefined ? {} : { outputTokens }),
             ...(cacheRead === undefined && cacheCreate === undefined
               ? {}
@@ -1355,6 +1404,8 @@ export class ClaudeCodeHarnessAdapter implements HarnessAdapter {
 
   async *run(request: HarnessRunRequest): AsyncIterable<HarnessEvent> {
     yield event(request.agentRunId, { type: 'run.started' });
+    // The hazard sweep may only look at files that existed before the agent started working.
+    const originalSource = await listHazardCandidates(request.workspace.runtimePath);
     if (depthPolicy(request.task.context) !== undefined) {
       yield event(request.agentRunId, {
         type: 'agent.message',
@@ -1472,9 +1523,8 @@ export class ClaudeCodeHarnessAdapter implements HarnessAdapter {
         type: 'warning',
         code: 'GLM_WINDOWS_PROFILES_HIDDEN',
         message: (
-          'Host Windows profiles detected (' +
-          profileBlockers.join(', ') +
-          ') but hidden from the Claude worker namespace by mount isolation; ' +
+          profileBlockers.length +
+          ' host Windows profile(s) detected but hidden from the Claude worker namespace by mount isolation; ' +
           'no host repair needed.'
         ).slice(0, 500),
       });
@@ -1496,6 +1546,7 @@ export class ClaudeCodeHarnessAdapter implements HarnessAdapter {
     const settingsPath = join(configDir, 'sentry-settings.json');
     let session: ClaudeSessionView | undefined;
     try {
+      await claimEphemeralHome(claudeHome);
       await mkdir(ephemeralClaudeDir, { recursive: true });
       await mkdir(configDir, { recursive: true });
       await writeFile(
@@ -1707,6 +1758,8 @@ export class ClaudeCodeHarnessAdapter implements HarnessAdapter {
         network: {
           webAccess: webAccessEnabled(request.executionSafeguards),
           toolDownloads: toolDownloadsEnabled(request.executionSafeguards),
+          ...browserNetworkOption(),
+          sandboxNotes: [CLAUDE_SANDBOX_PLACEHOLDER_NOTE],
         },
         event: (body) => event(request.agentRunId, body),
         streamTurn: (turnText) =>
@@ -1724,7 +1777,7 @@ export class ClaudeCodeHarnessAdapter implements HarnessAdapter {
           ) + '\n',
         startReportContext,
         cancelled: () => this.cancelled,
-        hazardFiles: () => scanHazardFiles(request.workspace.runtimePath),
+        hazardFiles: () => scanHazardFiles(request.workspace.runtimePath, 40, originalSource),
         isTurnTimeout: (cause) => cause instanceof ClaudeTurnTimeoutError,
         // A spawn failure (E2BIG, EAGAIN, ...) after banked operations, or a
         // sandbox that died mid-run after commands already executed (a
@@ -1739,6 +1792,11 @@ export class ClaudeCodeHarnessAdapter implements HarnessAdapter {
       });
       conclusionBlock = renderCheckConclusions(planResult, investigation.checkConclusions);
       const { blockedChecks, unprovenChecks, redRetryChecks } = investigation;
+      // From here until the report is accepted, a failure would lose these conclusions: keep them.
+      this.unreportedInvestigation = {
+        plan: planResult,
+        conclusions: investigation.checkConclusions,
+      };
       const investigationUsage = investigation.usage;
       const investigationTurns = investigation.steps;
 
@@ -2128,6 +2186,12 @@ export class ClaudeCodeHarnessAdapter implements HarnessAdapter {
                   );
                 return this.classifyTurnFailure(cause, 'run');
               })();
+      // A failed report must not erase an investigation that finished: keep what each check concluded.
+      for (const message of unreportedInvestigationMessages(
+        this.unreportedInvestigation,
+        typed.code,
+      ))
+        yield event(request.agentRunId, { type: 'agent.message', message });
       yield event(request.agentRunId, {
         type: 'run.failed',
         failure: {
@@ -2141,7 +2205,7 @@ export class ClaudeCodeHarnessAdapter implements HarnessAdapter {
       // transcripts, plugins, skills, hooks, MCP config, memory, settings.
       // Only canonical observable data already persisted by the
       // coordinator survives.
-      await rm(claudeHome, { recursive: true, force: true }).catch(() => undefined);
+      await releaseEphemeralHome(claudeHome);
     }
   }
 

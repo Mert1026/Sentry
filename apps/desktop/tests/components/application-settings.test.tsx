@@ -68,6 +68,36 @@ describe('Application settings & localization', () => {
     expect(toggle.getAttribute('aria-checked')).toBe(before);
   });
 
+  it('downloads the CLI command reference from a button, and says where it was saved', async () => {
+    const saveCliReference = vi
+      .fn()
+      .mockResolvedValueOnce({ status: 'cancelled' })
+      .mockResolvedValueOnce({ status: 'saved', path: '/home/me/sentry-cli-commands.md' });
+    mountSettings('/settings/application');
+    (window as unknown as { sentry: { app: unknown } }).sentry.app = { saveCliReference };
+    const button = await screen.findByRole('button', { name: /Download CLI commands \(\.md\)/ });
+    fireEvent.click(button);
+    await waitFor(() => expect(saveCliReference).toHaveBeenCalledTimes(1));
+    // A cancelled dialog is silent.
+    expect(screen.queryByText(/Saved to/)).toBeNull();
+    fireEvent.click(button);
+    expect(await screen.findByText('Saved to /home/me/sentry-cli-commands.md')).toBeTruthy();
+  });
+
+  it('shows a failed save as an error', async () => {
+    const saveCliReference = vi.fn().mockRejectedValue(new Error('disk full'));
+    mountSettings('/settings/application');
+    (window as unknown as { sentry: { app: unknown } }).sentry.app = { saveCliReference };
+    fireEvent.click(await screen.findByRole('button', { name: /Download CLI commands/ }));
+    expect((await screen.findByRole('alert')).textContent).toContain('disk full');
+  });
+
+  it('holds the run time limit and the note length limit', async () => {
+    mountSettings('/settings/application');
+    expect(await screen.findByRole('group', { name: 'Run time limit' })).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'Note length limit' })).toBeTruthy();
+  });
+
   it('defaults to English and translates static and dynamic UI strings to Bulgarian', () => {
     expect(translateText('Dashboard')).toBe('Dashboard');
     expect(translateText('Dashboard', 'bg')).toBe('Табло');

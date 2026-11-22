@@ -49,14 +49,24 @@ export const CLI_COMMANDS = [
   'doctor.config',
   'project.doctor',
   'project.findings',
+  'project.export-findings',
   'project.profile',
   'project.profile-build',
   'toolchain.status',
   'toolchain.install',
   'toolchain.remove',
+  'toolchain.custom-status',
+  'toolchain.custom-remove',
+  'project.suggest-targets',
+  'project.toolchain-needs',
+  'project.toolchain-selection',
+  'project.toolchain-assess',
   'settings.show',
   'settings.set-effort',
   'settings.set-run-limit',
+  'settings.set-note-limit',
+  'models.list',
+  'models.update',
 ] as const;
 export const CliCommandSchema = z.enum(CLI_COMMANDS);
 export type CliCommand = z.infer<typeof CliCommandSchema>;
@@ -101,6 +111,7 @@ export const CLI_ERROR_CODES = [
   'OPENCODE_PROTOCOL_INVALID',
   'OPENCODE_VERSION_MISMATCH',
   'OPENCODE_UPSTREAM_FAILED',
+  'OPENCODE_PROVIDER_REFUSED',
   'MUSE_BINARY_NOT_FOUND',
   'MUSE_STACK_UNAVAILABLE',
   'MUSE_MODEL_NOT_CONFIGURED',
@@ -387,7 +398,7 @@ export type AgentListResult = z.infer<typeof AgentListResultSchema>;
 export const AgentDoctorResultSchema = z
   .object({
     // 'muse' retained historically: old envelopes still validate.
-    agent: z.enum(['muse', 'opencode', 'deepseek', 'glm', 'chatgpt']),
+    agent: z.enum(['muse', 'opencode', 'deepseek', 'glm', 'chatgpt', 'claude']),
     status: z.enum(['healthy', 'degraded', 'unavailable']),
     checks: z.array(
       z
@@ -559,10 +570,16 @@ export const CapabilitiesResultSchema = z
         // Additive: present when the broker serves these (older consumers ignore them).
         retest: z.literal(true).optional(),
         findingsByRevision: z.literal(true).optional(),
+        findingsExport: z.literal(true).optional(),
         runDepth: z.literal(true).optional(),
         settings: z.literal(true).optional(),
+        models: z.literal(true).optional(),
         projectProfile: z.literal(true).optional(),
         toolchains: z.literal(true).optional(),
+        suggestTargets: z.literal(true).optional(),
+        toolchainNeeds: z.literal(true).optional(),
+        customAddons: z.literal(true).optional(),
+        runNotes: z.literal(true).optional(),
       })
       .strict(),
     // Additive Phase 4 extension: stable stack identities with their
@@ -610,11 +627,42 @@ export const ProjectFindingsResultSchema = z
     revisions: z.array(z.unknown()),
   })
   .strict();
+/** What `project export-findings` wrote: one file, or a folder of files. */
+export const ProjectExportFindingsResultSchema = z
+  .object({
+    projectId: z.string().min(1).max(200),
+    format: z.enum(['markdown', 'json', 'text']),
+    findingCount: z.number().int().min(0),
+    out: z.string().min(1).max(2000),
+    files: z.array(z.string().min(1).max(2000)).max(1000),
+  })
+  .strict();
 /** Per-agent project profile state (none / fresh / stale) and notes. */
 export const ProjectProfileResultSchema = z
   .object({ projectId: z.string().min(1).max(200), profile: z.unknown() })
   .strict();
 export const ToolchainStatusResultSchema = z.object({ toolchains: z.unknown() }).strict();
+/** Paths Sentry suggests for a targeted run. */
+export const ProjectSuggestTargetsResultSchema = z
+  .object({ projectId: z.string().min(1).max(200), suggestions: z.unknown() })
+  .strict();
+/** What the project's toolchain-needs analysis found so far. */
+export const ProjectToolchainNeedsResultSchema = z
+  .object({ projectId: z.string().min(1).max(200), needs: z.unknown() })
+  .strict();
+/** Which toolchains a run on this project would be given. */
+export const ProjectToolchainSelectionResultSchema = z
+  .object({ projectId: z.string().min(1).max(200), selection: z.unknown() })
+  .strict();
+/** The agents' answer to "which toolchains does this project need?" (uses provider budget). */
+export const ProjectToolchainAssessResultSchema = z
+  .object({ projectId: z.string().min(1).max(200), assessment: z.unknown() })
+  .strict();
+/** The custom add-ons (programs installed with the person's own shell command). */
+export const ToolchainCustomStatusResultSchema = z.object({ addons: z.unknown() }).strict();
+export const ToolchainCustomRemoveResultSchema = z
+  .object({ name: z.string().min(1).max(60), result: z.unknown() })
+  .strict();
 export const ToolchainChangeResultSchema = z
   .object({
     packId: z.string().min(1).max(40),
@@ -624,6 +672,9 @@ export const ToolchainChangeResultSchema = z
   .strict();
 
 /** The reasoning effort chosen for each agent and the default run time limit. */
+const NoteLimitSchema = z
+  .object({ chars: NonNegativeIntSchema, isDefault: z.boolean(), unlimited: z.boolean() })
+  .strict();
 export const SettingsShowResultSchema = z
   .object({
     reasoningEffort: z
@@ -632,19 +683,47 @@ export const SettingsShowResultSchema = z
         deepseek: z.string().min(1).max(20),
         glm: z.string().min(1).max(20),
         chatgpt: z.string().min(1).max(20),
+        claude: z.string().min(1).max(20),
       })
       .strict(),
     runTimeLimit: z.object({ ms: NonNegativeIntSchema, isDefault: z.boolean() }).strict(),
+    noteLimit: NoteLimitSchema.optional(),
   })
   .strict();
 export const SettingsSetEffortResultSchema = z
   .object({
-    agent: z.enum(['opencode', 'deepseek', 'glm', 'chatgpt']),
+    agent: z.enum(['opencode', 'deepseek', 'glm', 'chatgpt', 'claude']),
     reasoningEffort: z.string().min(1).max(20),
   })
   .strict();
 export const SettingsSetRunLimitResultSchema = z
   .object({ ms: NonNegativeIntSchema, isDefault: z.boolean() })
+  .strict();
+
+export const SettingsSetNoteLimitResultSchema = NoteLimitSchema;
+
+const CatalogModelSchema = z
+  .object({
+    id: z.string().min(1).max(300),
+    name: z.string().min(1).max(300),
+    releasedAt: z.string().max(40).optional(),
+    context: NonNegativeIntSchema.optional(),
+    deprecated: z.boolean().optional(),
+  })
+  .strict();
+const ModelCatalogSchema = z
+  .object({
+    fetchedAt: z.string().max(40),
+    source: z.string().max(300),
+    providers: z.record(z.string().max(100), z.array(CatalogModelSchema)),
+  })
+  .strict();
+export const ModelsListResultSchema = ModelCatalogSchema;
+export const ModelsUpdateResultSchema = z
+  .object({
+    catalog: ModelCatalogSchema,
+    added: z.record(z.string().max(100), z.array(z.string().max(300))),
+  })
   .strict();
 
 export const CliResultSchemas = {
@@ -670,14 +749,24 @@ export const CliResultSchemas = {
   'doctor.config': DoctorConfigResultSchema,
   'project.doctor': ProjectDoctorResultSchema,
   'project.findings': ProjectFindingsResultSchema,
+  'project.export-findings': ProjectExportFindingsResultSchema,
   'project.profile': ProjectProfileResultSchema,
   'project.profile-build': ProjectProfileResultSchema,
   'toolchain.status': ToolchainStatusResultSchema,
   'toolchain.install': ToolchainChangeResultSchema,
   'toolchain.remove': ToolchainChangeResultSchema,
+  'toolchain.custom-status': ToolchainCustomStatusResultSchema,
+  'toolchain.custom-remove': ToolchainCustomRemoveResultSchema,
+  'project.suggest-targets': ProjectSuggestTargetsResultSchema,
+  'project.toolchain-needs': ProjectToolchainNeedsResultSchema,
+  'project.toolchain-selection': ProjectToolchainSelectionResultSchema,
+  'project.toolchain-assess': ProjectToolchainAssessResultSchema,
   'settings.show': SettingsShowResultSchema,
   'settings.set-effort': SettingsSetEffortResultSchema,
   'settings.set-run-limit': SettingsSetRunLimitResultSchema,
+  'settings.set-note-limit': SettingsSetNoteLimitResultSchema,
+  'models.list': ModelsListResultSchema,
+  'models.update': ModelsUpdateResultSchema,
 } as const;
 
 function successEnvelope<C extends CliCommand>(

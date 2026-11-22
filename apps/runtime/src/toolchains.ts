@@ -1,5 +1,5 @@
 import { execFile, spawn } from 'node:child_process';
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   TOOLCHAIN_PACKS,
@@ -243,13 +243,30 @@ export class ToolchainManager {
     const checks = TOOLCHAIN_PACKS.flatMap((pack) =>
       pack.versions.map(async (version): Promise<InstalledToolchain | undefined> => {
         try {
-          const marker = JSON.parse(
+          const parsed: unknown = JSON.parse(
             await readFile(join(toolchainDir(this.dataRoot, pack.id, version), MARKER), 'utf8'),
-          ) as { installedAt?: string; verification?: string };
+          );
+          // Only the marker the install writes counts: an object naming this pack and version, with its
+          // fields the right type (every install since the first has written all three).
+          if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed))
+            return undefined;
+          const marker = parsed as {
+            packId?: unknown;
+            version?: unknown;
+            installedAt?: unknown;
+            verification?: unknown;
+          };
+          if (
+            marker.packId !== pack.id ||
+            marker.version !== version ||
+            typeof marker.installedAt !== 'string' ||
+            (marker.verification !== undefined && typeof marker.verification !== 'string')
+          )
+            return undefined;
           return {
             packId: pack.id,
             version,
-            installedAt: marker.installedAt ?? '',
+            installedAt: marker.installedAt,
             ...(marker.verification === undefined ? {} : { verification: marker.verification }),
           };
         } catch {
@@ -437,7 +454,25 @@ export class ToolchainManager {
   /** What an agent shell needs to use the installed toolchains, or undefined when none are installed. */
   async setup(workspace?: string): Promise<ToolchainSetup | undefined> {
     const { path, env } = await this.environment(workspace);
-    return path.length === 0 ? undefined : { binds: [toolchainsRoot(this.dataRoot)], path, env };
+    // The managed headless browser is mounted read-only too: the OpenCode tool shell hides the
+    // whole data root, so without this bind its folder does not exist inside the shell.
+    const browser = await this.browserRoot();
+    const binds = [
+      ...(path.length === 0 ? [] : [toolchainsRoot(this.dataRoot)]),
+      ...(browser === undefined ? [] : [browser]),
+    ];
+    return binds.length === 0 ? undefined : { binds, path, env };
+  }
+
+  /** The managed browser folder once its installer finished (`browser.json` is written last). */
+  private async browserRoot(): Promise<string | undefined> {
+    const root = join(this.dataRoot, 'tools', 'browser');
+    try {
+      await access(join(root, 'browser.json'));
+      return root;
+    } catch {
+      return undefined;
+    }
   }
 
   /**

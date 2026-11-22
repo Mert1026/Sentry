@@ -15,7 +15,8 @@ export type OpenCodeHarnessErrorCode =
   | 'OPENCODE_SESSION_MISMATCH'
   | 'OPENCODE_PROTOCOL_INVALID'
   | 'OPENCODE_VERSION_MISMATCH'
-  | 'OPENCODE_UPSTREAM_FAILED';
+  | 'OPENCODE_UPSTREAM_FAILED'
+  | 'OPENCODE_PROVIDER_REFUSED';
 
 /**
  * True when OpenCode reports that the model provider declined the content itself (a safety or

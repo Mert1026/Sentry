@@ -771,6 +771,75 @@ describe('cli frontend over the desktop broker', () => {
     }
   });
 
+  it('reads one note for everyone and notes for single agents, and refuses unclear ones', () => {
+    const base = ['run', 'start', PROJECT_ID, '--mode', 'full', '--agents', 'opencode,deepseek'];
+    expect(
+      parseCommand([
+        ...base,
+        '--instructions',
+        'Focus on login.',
+        '--agent-note',
+        'opencode=Check the parser.',
+        '--agent-note',
+        'deepseek=Look at the cache = fast path',
+      ]),
+    ).toMatchObject({
+      command: 'run.start',
+      instructions: 'Focus on login.',
+      agentNotes: {
+        opencode: 'Check the parser.',
+        deepseek: 'Look at the cache = fast path',
+      },
+    });
+    expect(parseCommand(base)).not.toHaveProperty('agentNotes');
+    expect(() => parseCommand([...base, '--agent-note', 'nonsense'])).toThrow(/<agent>=<note>/);
+    expect(() => parseCommand([...base, '--agent-note', 'opencode='])).toThrow(/<agent>=<note>/);
+    expect(() => parseCommand([...base, '--agent-note', 'gpt=hi'])).toThrow(/<agent>=<note>/);
+    expect(() => parseCommand([...base, '--agent-note', 'glm=hi'])).toThrow(/not in --agents/);
+    expect(() =>
+      parseCommand([...base, '--agent-note', 'opencode=a', '--agent-note', 'opencode=b']),
+    ).toThrow(/twice/);
+    // The saved limit (5,000 by default) is checked by Desktop; the parser only holds the outer bound.
+    expect(() =>
+      parseCommand([...base, '--agent-note', 'opencode=' + 'x'.repeat(5001)]),
+    ).not.toThrow();
+    expect(() =>
+      parseCommand([...base, '--agent-note', 'opencode=' + 'x'.repeat(1_000_001)]),
+    ).toThrow(/at most 1000000/);
+    expect(() => parseCommand([...base, '--agent-note'])).toThrow(/requires/);
+  });
+
+  it('sends the notes to Desktop under the agents’ stack ids', async () => {
+    const broker = await startFakeBroker((command) => {
+      if (command === 'runs:start') return { operationId: 'dop_test', runId: RUN_ID };
+      throw new Error('unexpected ' + command);
+    });
+    try {
+      await executeFrontendCommand(
+        parseCommand([
+          'run',
+          'start',
+          PROJECT_ID,
+          '--mode',
+          'full',
+          '--agents',
+          'opencode,deepseek',
+          '--instructions',
+          'Focus on login.',
+          '--agent-note',
+          'deepseek=Only for DeepSeek',
+        ]),
+        { createClient: () => clientFor(broker) },
+      );
+      expect(broker.seen.find((call) => call.command === 'runs:start')?.payload).toMatchObject({
+        instructions: 'Focus on login.',
+        agentInstructions: { stack_deepseek_main: 'Only for DeepSeek' },
+      });
+    } finally {
+      await broker.close();
+    }
+  });
+
   it('rejects malformed re-test and agent arguments', () => {
     expect(() => parseCommand(['run', 'start', PROJECT_ID, '--retest', 'nonsense'])).toThrow(
       /<run-id>:<finding-id>/,
@@ -783,7 +852,7 @@ describe('cli frontend over the desktop broker', () => {
     ).toThrow(/Unknown agent/);
     expect(() =>
       parseCommand(['run', 'start', PROJECT_ID, '--retest', 'a:b', '--paths', 'src']),
-    ).toThrow(/no --instructions or --paths/);
+    ).toThrow(/no --instructions, --agent-note or --paths/);
     expect(parseCommand(['agent', 'doctor', 'chatgpt'])).toEqual({
       command: 'agent.doctor',
       agent: 'chatgpt',
@@ -959,13 +1028,154 @@ describe('settings and run depth through the CLI', () => {
     }
   });
 
+  it('parses the note limit in the words and numbers Desktop knows', () => {
+    const parse = (text: string) =>
+      (parseCommand(['settings', 'note-limit', text]) as { value: string }).value;
+    expect(parse('default')).toBe('default');
+    expect(parse('5k')).toBe('default');
+    expect(parse('5000')).toBe('default');
+    expect(parse('20k')).toBe('20000');
+    expect(parse('12,000')).toBe('12000');
+    expect(parse('NONE')).toBe('none');
+    expect(parse('500')).toBe('500');
+    for (const bad of ['499', '200001', '1m', 'lots', '-5', '']) {
+      expect(() => parseCommand(['settings', 'note-limit', bad]), bad).toThrow(/note limit|Usage/);
+    }
+    expect(() => parseCommand(['settings', 'note-limit'])).toThrow(/Usage/);
+  });
+
+  it('shows and changes the note limit through the same settings channels', async () => {
+    const broker = await startFakeBroker((command, payload) => {
+      if (command === 'providers:status')
+        return [{ name: 'SENTRY_NOTE_LIMIT_CHARS', configured: true, hint: '20000' }];
+      if (command === 'settings:set') {
+        const body = payload as { setting: string; value: string };
+        if (body.setting !== 'note-limit') throw new Error('unexpected ' + body.setting);
+        const chars =
+          body.value === 'default' ? 5000 : body.value === 'none' ? 1_000_000 : Number(body.value);
+        return { chars, isDefault: chars === 5000, unlimited: chars === 1_000_000 };
+      }
+      throw new Error('unexpected ' + command);
+    });
+    try {
+      const run = (args: string[]) =>
+        executeFrontendCommand(parseCommand(args), { createClient: () => clientFor(broker) });
+      expect(await run(['settings', 'show'])).toMatchObject({
+        data: { noteLimit: { chars: 20000, isDefault: false, unlimited: false } },
+      });
+      expect(await run(['settings', 'note-limit', 'none'])).toMatchObject({
+        command: 'settings.set-note-limit',
+        data: { chars: 1_000_000, unlimited: true },
+      });
+      expect(await run(['settings', 'note-limit', '12k'])).toMatchObject({
+        data: { chars: 12000, isDefault: false, unlimited: false },
+      });
+      expect(await run(['settings', 'note-limit', 'default'])).toMatchObject({
+        data: { chars: 5000, isDefault: true },
+      });
+      expect(
+        broker.seen.filter((call) => call.command === 'settings:set').map((c) => c.payload),
+      ).toEqual([
+        { setting: 'note-limit', value: 'none' },
+        { setting: 'note-limit', value: '12000' },
+        { setting: 'note-limit', value: 'default' },
+      ]);
+    } finally {
+      await broker.close();
+    }
+  });
+
+  it('lists the model catalog, for one agent or all, and updates it', async () => {
+    const catalog = {
+      fetchedAt: '2026-11-20T09:20:00.000Z',
+      source: 'models.dev',
+      providers: {
+        deepseek: [{ id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro', context: 200000 }],
+        zai: [{ id: 'glm-5.3', name: 'GLM 5.3' }],
+        anthropic: [{ id: 'claude-opus-5-5', name: 'Claude Opus 5.5', releasedAt: '2026-05-01' }],
+      },
+    };
+    const broker = await startFakeBroker((command) => {
+      if (command === 'models:catalog') return catalog;
+      if (command === 'models:refresh')
+        return { catalog, added: { deepseek: ['deepseek-v4-pro'] } };
+      throw new Error('unexpected ' + command);
+    });
+    try {
+      const run = (args: string[]) =>
+        executeFrontendCommand(parseCommand(args), { createClient: () => clientFor(broker) });
+      const all = (await run(['models', 'list'])) as { data: { providers: object } };
+      expect(Object.keys(all.data.providers)).toEqual(['deepseek', 'zai', 'anthropic']);
+      const one = (await run(['models', 'list', '--agent', 'glm'])) as {
+        data: { providers: object };
+      };
+      expect(Object.keys(one.data.providers)).toEqual(['zai']);
+      expect(await run(['models', 'update'])).toMatchObject({
+        command: 'models.update',
+        data: { added: { deepseek: ['deepseek-v4-pro'] } },
+      });
+      expect(broker.seen.map((call) => call.command)).toEqual([
+        'models:catalog',
+        'models:catalog',
+        'models:refresh',
+      ]);
+    } finally {
+      await broker.close();
+    }
+    expect(() => parseCommand(['models', 'list', '--agent', 'bash'])).toThrow(/Unknown agent/);
+    expect(() => parseCommand(['models', 'list', 'extra'])).toThrow(/Usage/);
+    expect(() => parseCommand(['models', 'update', '--now'])).toThrow();
+  });
+
+  it('prints the note limit and the model list for people', () => {
+    const lines: string[] = [];
+    const io = { stdout: (text: string) => lines.push(text), stderr: () => undefined };
+    emitHumanSuccess(
+      {
+        schemaVersion: 1,
+        command: 'settings.set-note-limit',
+        ok: true,
+        data: { chars: 1_000_000, isDefault: false, unlimited: true },
+      } as never,
+      io,
+    );
+    emitHumanSuccess(
+      {
+        schemaVersion: 1,
+        command: 'settings.set-note-limit',
+        ok: true,
+        data: { chars: 5000, isDefault: true, unlimited: false },
+      } as never,
+      io,
+    );
+    emitHumanSuccess(
+      {
+        schemaVersion: 1,
+        command: 'models.list',
+        ok: true,
+        data: {
+          fetchedAt: '2026-11-20T09:20:00.000Z',
+          source: 'models.dev',
+          providers: { zai: [{ id: 'glm-5.3', name: 'GLM 5.3', context: 200000 }] },
+        },
+      } as never,
+      io,
+    );
+    expect(lines[0]).toBe('Note limit: no limit');
+    expect(lines[1]).toBe('Note limit: 5,000 characters (the default)');
+    expect(lines[2]).toContain('zai (1)');
+    expect(lines[2]).toContain('glm-5.3  GLM 5.3  200k context');
+  });
+
   it('says it supports settings and run depth', async () => {
     const broker = await startFakeBroker(() => ({}));
     try {
       const result = await executeFrontendCommand(parseCommand(['capabilities']), {
         createClient: () => clientFor(broker),
       });
-      expect(result).toMatchObject({ data: { features: { runDepth: true, settings: true } } });
+      expect(result).toMatchObject({
+        data: { features: { runDepth: true, settings: true, models: true } },
+      });
     } finally {
       await broker.close();
     }
@@ -1041,5 +1251,228 @@ describe('settings and run depth through the CLI', () => {
         },
       ]),
     ).toMatch(/run_fast {2}FAST[\s\S]*run run_full$/);
+  });
+});
+
+describe('turning the secrets check off from the CLI', () => {
+  const RUN_ID = 'run_01K7777777777777777777A8W1';
+
+  it('reads --no-secrets and sends secretsCheck:false only then', async () => {
+    expect(
+      parseCommand(['run', 'start', PROJECT_ID, '--mode', 'full', '--no-secrets']),
+    ).toMatchObject({
+      command: 'run.start',
+      secretsCheck: false,
+    });
+    expect(parseCommand(['run', 'start', PROJECT_ID, '--mode', 'full'])).not.toHaveProperty(
+      'secretsCheck',
+    );
+    const broker = await startFakeBroker((command) => {
+      if (command === 'runs:start') return { operationId: 'dop_1', runId: RUN_ID };
+      throw new Error('unexpected ' + command);
+    });
+    try {
+      const run = (args: string[]) =>
+        executeFrontendCommand(parseCommand(args), { createClient: () => clientFor(broker) });
+      await run(['run', 'start', PROJECT_ID, '--mode', 'full', '--no-secrets']);
+      expect(broker.seen.at(-1)?.payload).toMatchObject({ secretsCheck: false });
+      await run(['run', 'start', PROJECT_ID, '--mode', 'full']);
+      expect(broker.seen.at(-1)?.payload).not.toHaveProperty('secretsCheck');
+    } finally {
+      await broker.close();
+    }
+  });
+});
+
+describe('toolchain needs, target suggestions and custom add-ons through the CLI', () => {
+  it('reads the new commands and refuses unclear ones', () => {
+    for (const action of ['suggest-targets', 'toolchain-needs', 'toolchain-selection'] as const) {
+      expect(parseCommand(['project', action, PROJECT_ID])).toEqual({
+        command: 'project.' + action,
+        projectId: PROJECT_ID,
+      });
+      expect(() => parseCommand(['project', action])).toThrow(/Usage/);
+      expect(() => parseCommand(['project', action, PROJECT_ID, '--bogus'])).toThrow(
+        /Unknown option/,
+      );
+    }
+    expect(
+      parseCommand(['project', 'toolchain-assess', PROJECT_ID, '--agents', 'opencode,glm']),
+    ).toEqual({
+      command: 'project.toolchain-assess',
+      projectId: PROJECT_ID,
+      agents: ['opencode', 'glm'],
+    });
+    expect(parseCommand(['project', 'toolchain-assess', PROJECT_ID])).not.toHaveProperty('agents');
+    expect(() =>
+      parseCommand(['project', 'toolchain-assess', PROJECT_ID, '--agents', 'gpt']),
+    ).toThrow(/Unknown agent/);
+    expect(parseCommand(['toolchain', 'custom', 'status'])).toEqual({
+      command: 'toolchain.custom-status',
+    });
+    expect(parseCommand(['toolchain', 'custom', 'remove', 'mytool', '--yes'])).toEqual({
+      command: 'toolchain.custom-remove',
+      name: 'mytool',
+    });
+    expect(() => parseCommand(['toolchain', 'custom', 'remove', 'mytool'])).toThrow(/--yes/);
+    // Installing a custom add-on runs the caller's shell command, so it is not a CLI command.
+    expect(() => parseCommand(['toolchain', 'custom', 'install', 'mytool'])).toThrow(/Usage/);
+  });
+
+  it('calls the matching Desktop channel for each command', async () => {
+    const broker = await startFakeBroker((command) => ({ answeredBy: command }));
+    try {
+      const run = (args: string[]) =>
+        executeFrontendCommand(parseCommand(args), { createClient: () => clientFor(broker) });
+      expect(await run(['project', 'suggest-targets', PROJECT_ID])).toMatchObject({
+        command: 'project.suggest-targets',
+        data: { projectId: PROJECT_ID, suggestions: { answeredBy: 'projects:suggest-targets' } },
+      });
+      expect(await run(['project', 'toolchain-needs', PROJECT_ID])).toMatchObject({
+        data: { needs: { answeredBy: 'projects:toolchain-needs' } },
+      });
+      expect(await run(['project', 'toolchain-selection', PROJECT_ID])).toMatchObject({
+        data: { selection: { answeredBy: 'projects:toolchain-selection' } },
+      });
+      expect(
+        await run(['project', 'toolchain-assess', PROJECT_ID, '--agents', 'opencode,deepseek']),
+      ).toMatchObject({ data: { assessment: { answeredBy: 'projects:assess-toolchains' } } });
+      expect(broker.seen.at(-1)?.payload).toEqual({
+        projectId: PROJECT_ID,
+        agentStackIds: ['stack_opencode_main', 'stack_deepseek_main'],
+      });
+      expect(await run(['toolchain', 'custom', 'status'])).toMatchObject({
+        command: 'toolchain.custom-status',
+        data: { addons: { answeredBy: 'toolchains:custom-status' } },
+      });
+      expect(await run(['toolchain', 'custom', 'remove', 'mytool', '--yes'])).toMatchObject({
+        command: 'toolchain.custom-remove',
+        data: { name: 'mytool' },
+      });
+      expect(broker.seen.at(-1)).toMatchObject({
+        command: 'toolchains:custom-remove',
+        payload: { name: 'mytool' },
+      });
+      const channels = broker.seen.map((call) => call.command);
+      expect(channels).not.toContain('toolchains:custom-install');
+    } finally {
+      await broker.close();
+    }
+  });
+
+  it('says so in capabilities, so scripts can detect the commands', async () => {
+    const broker = await startFakeBroker(() => ({}));
+    try {
+      const result = await executeFrontendCommand(parseCommand(['capabilities']), {
+        createClient: () => clientFor(broker),
+      });
+      expect(result).toMatchObject({
+        data: {
+          features: {
+            suggestTargets: true,
+            toolchainNeeds: true,
+            customAddons: true,
+            runNotes: true,
+          },
+        },
+      });
+    } finally {
+      await broker.close();
+    }
+  });
+});
+
+describe('exporting findings through the CLI', () => {
+  const RUN_ID = 'run_01K7777777777777777777A8W1';
+  const FINDING_ID = 'find_01K7777777777777777777A8WA';
+  const REV_ID = 'rev_01K7777777777777777777779B';
+
+  it('reads the selection from the options and refuses unclear ones', () => {
+    const base = ['project', 'export-findings', PROJECT_ID, '--format', 'json', '--out', 'x'];
+    expect(parseCommand([...base, '--findings', RUN_ID + ':' + FINDING_ID])).toMatchObject({
+      command: 'project.export-findings',
+      format: 'json',
+      selection: { findings: [{ runId: RUN_ID, findingId: FINDING_ID }] },
+    });
+    expect(parseCommand([...base, '--run', RUN_ID])).toMatchObject({
+      selection: { runId: RUN_ID },
+    });
+    expect(parseCommand([...base, '--revision', REV_ID + ',rev_b'])).toMatchObject({
+      selection: { revisionIds: [REV_ID, 'rev_b'] },
+    });
+    expect(() => parseCommand(base)).toThrow(/exactly one/);
+    expect(() => parseCommand([...base, '--run', RUN_ID, '--revision', REV_ID])).toThrow(
+      /exactly one/,
+    );
+    expect(() => parseCommand([...base, '--findings', 'nonsense'])).toThrow(
+      /<run-id>:<finding-id>/,
+    );
+    expect(() =>
+      parseCommand(['project', 'export-findings', PROJECT_ID, '--run', RUN_ID, '--out', 'x']),
+    ).toThrow(/--format/);
+    expect(() =>
+      parseCommand(['project', 'export-findings', PROJECT_ID, '--run', RUN_ID, '--format', 'text']),
+    ).toThrow(/--out/);
+    expect(() =>
+      parseCommand([...base.slice(0, 4), 'html', '--out', 'x', '--run', RUN_ID]),
+    ).toThrow(/--format/);
+    for (const removed of ['sarif', 'github-issues']) {
+      expect(() =>
+        parseCommand([...base.slice(0, 4), removed, '--out', 'x', '--run', RUN_ID]),
+      ).toThrow(/markdown, json or text/);
+    }
+  });
+
+  it('writes the report as one file, whatever the format, and refuses anything else', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'sentry-cli-export-'));
+    const files: Array<{ path: string; content: string }> = [];
+    const broker = await startFakeBroker((command) => {
+      if (command !== 'projects:export-findings') throw new Error('unexpected ' + command);
+      return { findingCount: files.length, files };
+    });
+    try {
+      const run = (args: string[]) =>
+        executeFrontendCommand(parseCommand(args), { createClient: () => clientFor(broker) });
+      const common = ['project', 'export-findings', PROJECT_ID, '--run', RUN_ID];
+
+      files.push({ path: 'sentry-findings.md', content: '# Report\n' });
+      const single = join(dir, 'nested', 'report.md');
+      expect(await run([...common, '--format', 'markdown', '--out', single])).toMatchObject({
+        command: 'project.export-findings',
+        data: { out: single, files: [single], findingCount: 1 },
+      });
+      expect(await readFile(single, 'utf8')).toBe('# Report\n');
+      expect(broker.seen.at(-1)?.payload).toEqual({
+        projectId: PROJECT_ID,
+        format: 'markdown',
+        selection: { runId: RUN_ID },
+      });
+
+      for (const [format, name, content] of [
+        ['json', 'findings.json', '{"findings":[]}\n'],
+        ['text', 'findings.txt', 'body ✓\n'],
+      ] as const) {
+        files.length = 0;
+        files.push({ path: 'sentry-findings.' + (format === 'json' ? 'json' : 'txt'), content });
+        const target = join(dir, name);
+        await run([...common, '--format', format, '--out', target]);
+        expect(await readFile(target, 'utf8')).toBe(content);
+        expect(broker.seen.at(-1)?.payload).toMatchObject({ format });
+      }
+
+      // An export is one file: Desktop answering with several, or none, is refused.
+      files.length = 0;
+      files.push({ path: 'a.md', content: '1' }, { path: 'b.md', content: '2' });
+      await expect(
+        run([...common, '--format', 'markdown', '--out', join(dir, 'two.md')]),
+      ).rejects.toThrow(/more than one export file|no export files/);
+      files.length = 0;
+      await expect(
+        run([...common, '--format', 'markdown', '--out', join(dir, 'none.md')]),
+      ).rejects.toThrow(/no export files/);
+    } finally {
+      await broker.close();
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });

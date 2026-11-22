@@ -34,6 +34,7 @@ import {
   buildRecoveryReportContext,
   streamObservedWork,
   investigateChecks,
+  listHazardCandidates,
   scanHazardFiles,
   buildQaPlanningPrompt,
   applyBlockedChecks,
@@ -62,8 +63,11 @@ import {
   downgradeUngroundedFindings,
   buildGroundingRepairPrompt,
   isGroundingRepairableError,
+  browserNetworkOption,
   type EvidencePipelineContext,
   type ObservedOperation,
+  unreportedInvestigationMessages,
+  type UnreportedInvestigation,
 } from '@qa/evidence-pipeline';
 import {
   FindingSchema,
@@ -188,6 +192,8 @@ export interface OpenCodeHarnessAdapterOptions {
   readonly toolchains?: (workspace: string) => Promise<ToolchainSetup | undefined>;
   readonly shutdownTimeoutMs?: number;
   readonly turnTimeoutMs?: number;
+  /** Pause before the one automatic retry of a first turn that failed to start. Default 2000 ms. */
+  readonly startRetryDelayMs?: number;
   /** Provider context window in tokens for the configured model.
    *  Conservative 200k default (the configured OpenRouter model varies);
    *  rotation happens at the shared safety ratio before it is full. */
@@ -254,6 +260,25 @@ export function describeTurnUpstreamActivity(
   }
   if (parts.length === 0) return 'No upstream requests were relayed during the turn.';
   return 'Upstream requests relayed during the turn: ' + parts.join(', ') + '.';
+}
+
+/** A first turn that failed within this long, having reached no provider, counts as a failed start. */
+export const INSTANT_START_FAILURE_MS = 30_000;
+
+/**
+ * True for a turn that died at once, before any request reached the provider: the OpenCode server itself
+ * failed (for example "Unexpected server error" right after sign-in). Nothing was sent or billed, so one
+ * more try with a fresh server is safe. A turn that timed out, or that did reach the provider, is not this.
+ */
+export function isInstantStartFailure(cause: unknown, elapsedMs: number): boolean {
+  return (
+    cause instanceof OpenCodeHarnessError &&
+    !(cause instanceof OpenCodeTurnTimeoutError) &&
+    cause.code === 'OPENCODE_START_FAILED' &&
+    cause.retryable &&
+    elapsedMs < INSTANT_START_FAILURE_MS &&
+    /No upstream requests were relayed/i.test(cause.message)
+  );
 }
 
 export class OpenCodeTurnTimeoutError extends OpenCodeHarnessError {
@@ -391,6 +416,7 @@ export class OpenCodeHarnessAdapter implements HarnessAdapter {
   private readonly clientFactory: OpenCodeClientFactory;
   private readonly shutdownTimeoutMs: number;
   private readonly turnTimeoutMs: number;
+  private readonly startRetryDelayMs: number;
   private readonly secrets: readonly string[];
   private readonly sessions = new Map<string, OpenCodeRunEntry>();
   private readonly observedCommands = new Set<string>();
@@ -398,6 +424,8 @@ export class OpenCodeHarnessAdapter implements HarnessAdapter {
   /** Runs whose tool shell is the pipefail wrapper: a zero exit certifies every pipeline stage. */
   private readonly pipefailRuns = new Set<AgentRunId>();
   private readonly toolNotes = new ObservedToolNotes();
+  /** What the agent concluded per check, kept in case the report that follows fails (see unreported.ts). */
+  private unreportedInvestigation: UnreportedInvestigation | undefined;
   private operationCounter = 0;
   private cancelledRuns = new Set<string>();
   private readonly shutdownDiagnostics: HarnessDiagnostic[] = [];
@@ -408,6 +436,7 @@ export class OpenCodeHarnessAdapter implements HarnessAdapter {
     this.clientFactory = options.clientFactory ?? createProductionOpenCodeClient;
     this.shutdownTimeoutMs = options.shutdownTimeoutMs ?? 10_000;
     this.turnTimeoutMs = options.turnTimeoutMs ?? DEFAULT_OPENCODE_TURN_TIMEOUT_MS;
+    this.startRetryDelayMs = options.startRetryDelayMs ?? 2_000;
     const child = buildOpenCodeChildEnvironment({ source: this.hostEnvironment });
     this.baseEnvironment = child.environment;
     this.childEnvironmentReport = child;
@@ -829,10 +858,18 @@ export class OpenCodeHarnessAdapter implements HarnessAdapter {
       if (!(error instanceof OpenCodeHarnessError) || error.code !== 'OPENCODE_START_FAILED') {
         return error;
       }
+      const upstream = describeTurnUpstreamActivity(
+        relayBefore,
+        entry.proxy?.relayedRoutes() ?? {},
+      );
       const message =
         error.message +
         ' ' +
-        describeTurnUpstreamActivity(relayBefore, entry.proxy?.relayedRoutes() ?? {});
+        upstream +
+        // Nothing reached the provider, so the cause is local: say where to look.
+        (!(error instanceof OpenCodeTurnTimeoutError) && /No upstream requests/i.test(upstream)
+          ? ' The OpenCode server failed before contacting the provider: check the provider sign-in or API key in Settings → Providers, then start the run again.'
+          : '');
       if (error instanceof OpenCodeTurnTimeoutError) {
         const enriched = new OpenCodeTurnTimeoutError(phase, this.turnTimeoutMs);
         enriched.message = message;
@@ -973,6 +1010,8 @@ export class OpenCodeHarnessAdapter implements HarnessAdapter {
 
   async *run(request: HarnessRunRequest): AsyncIterable<HarnessEvent> {
     yield event(request.agentRunId, { type: 'run.started' });
+    // The hazard sweep may only look at files that existed before the agent started working.
+    const originalSource = await listHazardCandidates(request.workspace.runtimePath);
     if (depthPolicy(request.task.context) !== undefined) {
       yield event(request.agentRunId, {
         type: 'agent.message',
@@ -1163,14 +1202,41 @@ export class OpenCodeHarnessAdapter implements HarnessAdapter {
       let planningUsage: AgentUsage | undefined;
       let planningSteps = 0;
       for (let attempt = 1; attempt <= MAX_PLANNING_ATTEMPTS; attempt += 1) {
-        const planning = await this.runTurn(
-          entry,
-          planCorrection === undefined
-            ? buildQaPlanningPrompt(request)
-            : buildPlanningCorrectionIntro(planCorrection),
-          request.agentRunId,
-          'planning',
-        );
+        let planning: CollectedTurn | undefined;
+        for (let tries = 0; planning === undefined; tries += 1) {
+          const turnStartedAt = Date.now();
+          try {
+            planning = await this.runTurn(
+              entry,
+              planCorrection === undefined
+                ? buildQaPlanningPrompt(request)
+                : buildPlanningCorrectionIntro(planCorrection),
+              request.agentRunId,
+              'planning',
+            );
+          } catch (cause) {
+            if (!isInstantStartFailure(cause, Date.now() - turnStartedAt)) throw cause;
+            if (attempt > 1 || tries > 0) {
+              // The retry failed the same way (or this is not the first turn): report it plainly.
+              throw new OpenCodeHarnessError(
+                'OPENCODE_START_FAILED',
+                (cause as Error).message +
+                  (tries > 0 ? ' A second automatic attempt failed the same way.' : ''),
+                true,
+              );
+            }
+            yield event(request.agentRunId, {
+              type: 'warning',
+              code: 'OPENCODE_START_RETRY',
+              message:
+                'The first turn failed to start before reaching the provider (' +
+                redactDiagnostic((cause as Error).message, this.secrets).slice(0, 200) +
+                '); trying once more with a fresh OpenCode server.',
+            });
+            await new Promise((resolve) => setTimeout(resolve, this.startRetryDelayMs));
+            await freshClient();
+          }
+        }
         for (const emitted of planning.events) yield emitted;
         contextBudget.observeTurn(planning.usage, planning.contextTokens);
         planningSteps += planning.steps;
@@ -1252,6 +1318,7 @@ export class OpenCodeHarnessAdapter implements HarnessAdapter {
         network: {
           webAccess: webAccessEnabled(request.executionSafeguards),
           toolDownloads: toolDownloadsEnabled(request.executionSafeguards),
+          ...browserNetworkOption(),
         },
         event: (body) => event(request.agentRunId, body),
         streamTurn: (turnText) =>
@@ -1274,7 +1341,7 @@ export class OpenCodeHarnessAdapter implements HarnessAdapter {
         startReportContext,
         cancelled: () =>
           entry.controller.signal.aborted || this.cancelledRuns.has(request.agentRunId),
-        hazardFiles: () => scanHazardFiles(request.workspace.runtimePath),
+        hazardFiles: () => scanHazardFiles(request.workspace.runtimePath, 40, originalSource),
         isTurnTimeout: (cause) => cause instanceof OpenCodeTurnTimeoutError,
         // A turn on an aborted session reports a cancel failure even though nobody
         // cancelled the run (the loop rechecks `cancelled`). With banked work that is
@@ -1288,6 +1355,11 @@ export class OpenCodeHarnessAdapter implements HarnessAdapter {
       });
       conclusionBlock = renderCheckConclusions(planResult, investigation.checkConclusions);
       const { blockedChecks, unprovenChecks, redRetryChecks, checkConclusions } = investigation;
+      // From here until the report is accepted, a failure would lose these conclusions: keep them.
+      this.unreportedInvestigation = {
+        plan: planResult,
+        conclusions: investigation.checkConclusions,
+      };
       const investigationUsage = investigation.usage;
       const investigationSteps = investigation.steps;
 
@@ -1704,6 +1776,12 @@ export class OpenCodeHarnessAdapter implements HarnessAdapter {
                   redactDiagnostic(cause, this.secrets),
                   true,
                 );
+      // A failed report must not erase an investigation that finished: keep what each check concluded.
+      for (const message of unreportedInvestigationMessages(
+        this.unreportedInvestigation,
+        typed.code,
+      ))
+        yield event(request.agentRunId, { type: 'agent.message', message });
       yield event(request.agentRunId, {
         type: 'run.failed',
         failure: {

@@ -3,6 +3,13 @@ import { translateText } from '../lib/i18n.js';
 import { InfoPopover } from './InfoPopover.js';
 import { Link } from 'react-router-dom';
 import { StatusPill } from './ui/StatusPill.js';
+import { SeverityDisagreements } from './SeverityDisagreements.js';
+import {
+  severityDisagreements,
+  splitLocation,
+  type SeverityDisagreement,
+  type SeverityFinding,
+} from '../../shared/severity-disagreement.js';
 import type {
   FindingsByRevision,
   RevisionFindingsItem,
@@ -19,6 +26,19 @@ export const RETEST_LIMIT = 12;
 
 export type RetestWho = 'reporter' | 'all';
 export type RetestSelection = { runId: string; findingId: string };
+
+/** Most findings one export takes (the same limit the runtime applies). */
+export const EXPORT_LIMIT = 500;
+export type ExportFormat = 'markdown' | 'json' | 'text';
+export type PanelExportRequest = {
+  format: ExportFormat;
+  selection: { findings: RetestSelection[] } | { revisionIds: string[] };
+};
+const EXPORT_FORMATS: ReadonlyArray<{ value: ExportFormat; label: string }> = [
+  { value: 'markdown', label: 'Markdown (.md)' },
+  { value: 'json', label: 'JSON (.json)' },
+  { value: 'text', label: 'Plain text (.txt)' },
+];
 
 function formatWhen(iso: string): string {
   const date = new Date(iso);
@@ -53,6 +73,14 @@ const VERDICT: Record<
 
 const keyOf = (runId: string, findingId: string): string => runId + '|' + findingId;
 
+/** Re-testing takes findings of an older revision only; exporting takes any. */
+function canPickFor(
+  selected: RevisionFindingsItem | undefined,
+  data: FindingsByRevision | undefined,
+): boolean {
+  return selected !== undefined && selected.revisionId !== data?.currentRevisionId;
+}
+
 /**
  * The raw findings every agent reported, per run, for one revision of the project. A new
  * revision starts a fresh list and older revisions stay here to browse. Nothing is merged,
@@ -66,6 +94,10 @@ export function RevisionFindingsPanel({
   onRetest,
   retesting = false,
   retestError,
+  onExport,
+  exporting = false,
+  exportNote,
+  exportError,
 }: {
   stacks: readonly RevisionPanelStack[];
   data: FindingsByRevision | undefined;
@@ -73,21 +105,69 @@ export function RevisionFindingsPanel({
   onRetest?: (findings: RetestSelection[], who: RetestWho) => void;
   retesting?: boolean;
   retestError?: string | undefined;
+  onExport?: (request: PanelExportRequest) => void;
+  exporting?: boolean;
+  exportNote?: string | undefined;
+  exportError?: string | undefined;
 }): React.JSX.Element {
   const revisions = data?.revisions ?? [];
   const [chosen, setChosen] = React.useState<string | undefined>(undefined);
   const selected = revisions.find((r) => r.revisionId === chosen) ?? revisions[0];
   const [picked, setPicked] = React.useState<ReadonlyMap<string, RetestSelection>>(new Map());
   const [who, setWho] = React.useState<RetestWho>('reporter');
+  const [exportFormat, setExportFormat] = React.useState<ExportFormat>('markdown');
+  // Findings can be picked on any revision to export them; re-testing only takes older ones.
+  const selectable =
+    onExport !== undefined || (canPickFor(selected, data) && onRetest !== undefined);
+  const everyFinding: RetestSelection[] =
+    selected?.agents.flatMap((agent) =>
+      agent.runs.flatMap((run) =>
+        run.findings.map((item) => ({ runId: run.runId, findingId: item.id })),
+      ),
+    ) ?? [];
   const canPick = selected !== undefined && selected.revisionId !== data?.currentRevisionId;
   const name = (stackId: string): string =>
     stacks.find((stack) => stack.id === stackId)?.displayName ?? stackId;
+  // Per run: issues two or more agents reported with different severities. Retests are skipped:
+  // they judge earlier findings and add no ratings of their own.
+  const revisionDisagreements: Array<{
+    runId: string;
+    at: string;
+    items: SeverityDisagreement[];
+  }> = [];
+  const byRun = new Map<string, { at: string; findings: SeverityFinding[] }>();
+  for (const agent of selected?.agents ?? [])
+    for (const run of agent.runs) {
+      if (run.retest !== undefined) continue;
+      const entry = byRun.get(run.runId) ?? { at: run.at, findings: [] };
+      for (const item of run.findings)
+        entry.findings.push({
+          id: item.id,
+          agent: agent.agentStackId,
+          title: item.title,
+          severity: item.severity,
+          ...splitLocation(item.location),
+        });
+      byRun.set(run.runId, entry);
+    }
+  for (const [runId, entry] of byRun) {
+    const items = severityDisagreements(entry.findings);
+    if (items.length > 0) revisionDisagreements.push({ runId, at: entry.at, items });
+  }
   const toggle = (selection: RetestSelection): void => {
     const next = new Map(picked);
     const key = keyOf(selection.runId, selection.findingId);
     if (next.has(key)) next.delete(key);
     else next.set(key, selection);
     setPicked(next);
+  };
+  const exportPicked = (): void => {
+    if (onExport === undefined || picked.size === 0 || picked.size > EXPORT_LIMIT) return;
+    onExport({ format: exportFormat, selection: { findings: [...picked.values()] } });
+  };
+  const exportRevision = (): void => {
+    if (onExport === undefined || selected === undefined) return;
+    onExport({ format: exportFormat, selection: { revisionIds: [selected.revisionId] } });
   };
   const retest = (): void => {
     if (onRetest === undefined || picked.size === 0) return;
@@ -175,10 +255,105 @@ export function RevisionFindingsPanel({
               ) : null}
             </div>
           ) : null}
+          {onExport !== undefined && everyFinding.length > 0 ? (
+            <div
+              className="revision-export"
+              style={{
+                display: 'flex',
+                gap: 12,
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                margin: '10px 0',
+              }}
+            >
+              <InfoPopover title="Exporting findings">
+                Save the selected findings as one file. Markdown (.md) is a readable report, JSON
+                (.json) is structured data for scripts and other tools, and plain text (.txt) opens
+                in any editor. Everything is built from what the agents reported, with no AI
+                involved, nothing is sent anywhere and nothing is written into your project. These
+                are agent reports: review each one before acting on it.
+              </InfoPopover>
+              <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span>Export as</span>
+                <select
+                  value={exportFormat}
+                  onChange={(event) => setExportFormat(event.target.value as ExportFormat)}
+                  aria-label="Export as"
+                >
+                  {EXPORT_FORMATS.map((format) => (
+                    <option key={format.value} value={format.value}>
+                      {format.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                className="compact ghost"
+                disabled={picked.size === Math.min(everyFinding.length, EXPORT_LIMIT)}
+                onClick={() =>
+                  setPicked(
+                    new Map(
+                      everyFinding
+                        .slice(0, EXPORT_LIMIT)
+                        .map((item) => [keyOf(item.runId, item.findingId), item]),
+                    ),
+                  )
+                }
+              >
+                Select all
+              </button>
+              <button
+                className="compact ghost"
+                disabled={picked.size === 0}
+                onClick={() => setPicked(new Map())}
+              >
+                Clear
+              </button>
+              <button
+                className="primary compact"
+                disabled={picked.size === 0 || picked.size > EXPORT_LIMIT || exporting}
+                onClick={exportPicked}
+              >
+                {exporting ? 'Exporting…' : 'Export ' + picked.size + ' selected'}
+              </button>
+              <button
+                className="compact"
+                disabled={exporting || everyFinding.length > EXPORT_LIMIT}
+                onClick={exportRevision}
+              >
+                Export all in this revision
+              </button>
+              {everyFinding.length > EXPORT_LIMIT ? (
+                <span className="metadata">{'Pick at most ' + EXPORT_LIMIT + '.'}</span>
+              ) : null}
+            </div>
+          ) : null}
+          {exportNote !== undefined ? (
+            <p className="metadata" role="status">
+              {exportNote}
+            </p>
+          ) : null}
+          {exportError !== undefined ? (
+            <p className="error-box" role="alert">
+              {exportError}
+            </p>
+          ) : null}
           {retestError !== undefined ? (
             <p className="error-box" role="alert">
               {retestError}
             </p>
+          ) : null}
+          {revisionDisagreements.length > 0 ? (
+            <div style={{ margin: '8px 0' }}>
+              {revisionDisagreements.map((group) => (
+                <div key={group.runId}>
+                  <p className="metadata" style={{ margin: '4px 0' }}>
+                    {formatWhen(group.at)}
+                  </p>
+                  <SeverityDisagreements items={group.items} agentName={name} />
+                </div>
+              ))}
+            </div>
           ) : null}
           {selected.agents.map((agent) => {
             const total = agent.runs.reduce((sum, run) => sum + run.findings.length, 0);
@@ -249,18 +424,21 @@ export function RevisionFindingsPanel({
                         </p>
                       ) : null
                     ) : (
-                      <ul style={{ margin: '6px 0 0', paddingLeft: canPick ? 4 : 18 }}>
+                      <ul style={{ margin: '6px 0 0', paddingLeft: selectable ? 4 : 18 }}>
                         {run.findings.map((finding) => (
                           <li
                             key={finding.id}
-                            style={{ margin: '4px 0', listStyle: canPick ? 'none' : undefined }}
+                            style={{ margin: '4px 0', listStyle: selectable ? 'none' : undefined }}
                           >
-                            {canPick && onRetest !== undefined ? (
+                            {selectable ? (
                               <input
                                 type="checkbox"
                                 checked={picked.has(keyOf(run.runId, finding.id))}
                                 onChange={() => toggle({ runId: run.runId, findingId: finding.id })}
-                                aria-label={'Re-test: ' + finding.title}
+                                aria-label={
+                                  (onExport !== undefined ? 'Select: ' : 'Re-test: ') +
+                                  finding.title
+                                }
                                 style={{ marginRight: 8 }}
                               />
                             ) : null}

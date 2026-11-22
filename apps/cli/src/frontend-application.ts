@@ -4,7 +4,8 @@
 // runtime. This module owns NO database, NO leases, NO harnesses, and NO
 // provider secrets: it maps CLI arguments to broker commands and adapts
 // broker payloads into the stable CLI machine envelope.
-import { writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { dirname, resolve } from 'node:path';
 import {
   CLI_CONTRACT_VERSION,
   CliErrorCodeSchema,
@@ -17,9 +18,13 @@ import {
   AGENT_EFFORT_SETTING,
   CLI_IPC_PROTOCOL_VERSION,
   EFFORT_AGENTS,
+  NOTE_LIMIT_DEFAULT,
+  NOTE_LIMIT_SETTING,
+  NOTE_LIMIT_UNLIMITED,
   RUN_TIME_LIMIT_DEFAULT_MS,
   RUN_TIME_LIMIT_SETTING,
   parseAgentEffort,
+  parseNoteLimit,
   parseRunTimeLimit,
 } from '@qa/shared';
 import type { ParsedCliCommand } from './arguments.js';
@@ -36,19 +41,52 @@ export interface FrontendOptions {
   readonly createClient?: () => SentryDesktopClient;
 }
 
+/** The models each agent's provider offers, as the catalog names them. */
+const AGENT_CATALOG_PROVIDERS: Readonly<Record<string, readonly string[]>> = {
+  opencode: ['opencode-go', 'opencode'],
+  deepseek: ['deepseek'],
+  glm: ['zai', 'zai-coding-plan'],
+  chatgpt: ['openai'],
+  claude: ['anthropic'],
+};
+interface ModelCatalogData {
+  readonly fetchedAt: string;
+  readonly source: string;
+  readonly providers: Record<string, ReadonlyArray<Record<string, unknown>>>;
+}
+function filterCatalog(catalog: ModelCatalogData, agent: string | undefined): ModelCatalogData {
+  if (agent === undefined) return catalog;
+  const wanted = new Set(AGENT_CATALOG_PROVIDERS[agent] ?? []);
+  return {
+    ...catalog,
+    providers: Object.fromEntries(
+      Object.entries(catalog.providers).filter(([key]) => wanted.has(key)),
+    ),
+  };
+}
+function noteLimitResult(chars: number): { chars: number; isDefault: boolean; unlimited: boolean } {
+  return {
+    chars,
+    isDefault: chars === NOTE_LIMIT_DEFAULT,
+    unlimited: chars === NOTE_LIMIT_UNLIMITED,
+  };
+}
+
 const TERMINAL_RUN = new Set(['completed', 'partial', 'failed', 'cancelled']);
-const AGENT_NAMES = ['opencode', 'deepseek', 'glm', 'chatgpt'] as const;
+const AGENT_NAMES = ['opencode', 'deepseek', 'glm', 'chatgpt', 'claude'] as const;
 const MODEL_ENV: Record<string, string> = {
   opencode: 'SENTRY_OPENCODE_MODEL',
   deepseek: 'SENTRY_DEEPSEEK_MODEL',
   glm: 'SENTRY_GLM_MODEL',
   chatgpt: 'SENTRY_CHATGPT_MODEL',
+  claude: 'SENTRY_ANTHROPIC_MODEL',
 };
 const HARNESS_NAME: Record<string, string> = {
   opencode: 'opencode',
   deepseek: 'deepseek-harness',
   glm: 'claude-code',
   chatgpt: 'opencode',
+  claude: 'claude',
 };
 
 function success(command: CliSuccessEnvelope['command'], data: unknown): CliSuccessEnvelope {
@@ -307,15 +345,22 @@ export async function executeFrontendCommand(
           retest: true,
           runDepth: true,
           settings: true,
+          models: true,
           findingsByRevision: true,
+          findingsExport: true,
           projectProfile: true,
           toolchains: true,
+          suggestTargets: true,
+          toolchainNeeds: true,
+          customAddons: true,
+          runNotes: true,
         },
         agentStacks: [
           { id: 'opencode', displayName: 'OpenCode QA Agent', harness: 'opencode' },
           { id: 'deepseek', displayName: 'DeepSeek QA Agent', harness: 'deepseek-harness' },
           { id: 'glm', displayName: 'GLM QA Agent', harness: 'claude-code' },
           { id: 'chatgpt', displayName: 'ChatGPT QA Agent', harness: 'opencode' },
+          { id: 'claude', displayName: 'Claude QA Agent', harness: 'claude' },
         ],
         runResultExport: true,
         asyncRunStart: true,
@@ -426,6 +471,33 @@ export async function executeFrontendCommand(
         revisions: Array.isArray(found?.revisions) ? found.revisions : [],
       });
     }
+    if (input.command === 'project.export-findings') {
+      const exported = (await broker.request('projects:export-findings', {
+        projectId: input.projectId,
+        format: input.format,
+        selection: input.selection,
+      })) as {
+        files?: Array<{ path?: unknown; content?: unknown }>;
+        findingCount?: number;
+      };
+      const files = Array.isArray(exported.files) ? exported.files : [];
+      if (
+        files.length === 0 ||
+        files.some((f) => typeof f.path !== 'string' || typeof f.content !== 'string')
+      )
+        throw new DesktopProtocolError('DESKTOP_ERROR', 'Desktop returned no export files');
+      const written = await writeFindingsExport(
+        input.out,
+        files as Array<{ path: string; content: string }>,
+      );
+      return success(input.command, {
+        projectId: input.projectId,
+        format: input.format,
+        findingCount: exported.findingCount ?? 0,
+        out: input.out,
+        files: written,
+      });
+    }
     if (input.command === 'project.profile') {
       return success(input.command, {
         projectId: input.projectId,
@@ -441,6 +513,50 @@ export async function executeFrontendCommand(
             ? {}
             : { agentStackIds: input.agents.map((name) => stackIdForAgent(name)) }),
         }),
+      });
+    }
+    if (input.command === 'project.suggest-targets') {
+      return success(input.command, {
+        projectId: input.projectId,
+        suggestions: await broker.request('projects:suggest-targets', {
+          projectId: input.projectId,
+        }),
+      });
+    }
+    if (input.command === 'project.toolchain-needs') {
+      return success(input.command, {
+        projectId: input.projectId,
+        needs: await broker.request('projects:toolchain-needs', { projectId: input.projectId }),
+      });
+    }
+    if (input.command === 'project.toolchain-selection') {
+      return success(input.command, {
+        projectId: input.projectId,
+        selection: await broker.request('projects:toolchain-selection', {
+          projectId: input.projectId,
+        }),
+      });
+    }
+    if (input.command === 'project.toolchain-assess') {
+      return success(input.command, {
+        projectId: input.projectId,
+        assessment: await broker.request('projects:assess-toolchains', {
+          projectId: input.projectId,
+          ...(input.agents === undefined
+            ? {}
+            : { agentStackIds: input.agents.map((name) => stackIdForAgent(name)) }),
+        }),
+      });
+    }
+    if (input.command === 'toolchain.custom-status') {
+      return success(input.command, {
+        addons: await broker.request('toolchains:custom-status', {}),
+      });
+    }
+    if (input.command === 'toolchain.custom-remove') {
+      return success(input.command, {
+        name: input.name,
+        result: await broker.request('toolchains:custom-remove', { name: input.name }),
       });
     }
     if (input.command === 'settings.show') {
@@ -466,6 +582,7 @@ export async function executeFrontendCommand(
           ms: ms ?? RUN_TIME_LIMIT_DEFAULT_MS,
           isDefault: ms === undefined || ms === RUN_TIME_LIMIT_DEFAULT_MS,
         },
+        noteLimit: noteLimitResult(parseNoteLimit(saved(NOTE_LIMIT_SETTING))),
       });
     }
     if (input.command === 'settings.set-effort') {
@@ -488,6 +605,29 @@ export async function executeFrontendCommand(
         ms: result.ms ?? RUN_TIME_LIMIT_DEFAULT_MS,
         isDefault: result.isDefault === true,
       });
+    }
+    if (input.command === 'settings.set-note-limit') {
+      const result = (await broker.request('settings:set', {
+        setting: 'note-limit',
+        value: input.value,
+      })) as { chars?: number };
+      return success(
+        input.command,
+        noteLimitResult(
+          typeof result.chars === 'number' ? result.chars : parseNoteLimit(input.value),
+        ),
+      );
+    }
+    if (input.command === 'models.list') {
+      const catalog = (await broker.request('models:catalog', {})) as ModelCatalogData;
+      return success(input.command, filterCatalog(catalog, input.agent));
+    }
+    if (input.command === 'models.update') {
+      const result = (await broker.request('models:refresh', {})) as {
+        catalog: ModelCatalogData;
+        added?: Record<string, string[]>;
+      };
+      return success(input.command, { catalog: result.catalog, added: result.added ?? {} });
     }
     if (input.command === 'toolchain.status') {
       return success(input.command, { toolchains: await broker.request('toolchains:status', {}) });
@@ -545,6 +685,16 @@ export async function executeFrontendCommand(
                 .filter((value) => value.length > 0),
             }),
         ...(input.instructions === undefined ? {} : { instructions: input.instructions }),
+        ...(input.agentNotes === undefined
+          ? {}
+          : {
+              agentInstructions: Object.fromEntries(
+                Object.entries(input.agentNotes).map(([name, note]) => [
+                  stackIdForAgent(name),
+                  note,
+                ]),
+              ),
+            }),
         // A retest that leaves the agents to the findings sends none.
         ...(input.agents.length === 0
           ? {}
@@ -552,6 +702,7 @@ export async function executeFrontendCommand(
         ...(input.runTimeoutMs === undefined ? {} : { runTimeoutMs: input.runTimeoutMs }),
         ...(input.webAccess === true ? { webAccess: true } : {}),
         ...(input.toolDownloads === true ? { toolDownloads: true } : {}),
+        ...(input.secretsCheck === false ? { secretsCheck: false } : {}),
         ...(input.useProfile === true ? { useProfile: true } : {}),
         ...(input.depth === undefined ? {} : { depth: input.depth }),
         ...(input.revisionId === undefined ? {} : { revisionId: input.revisionId }),
@@ -687,4 +838,17 @@ export async function executeFrontendCommand(
     }
     devOnly(input.command);
   });
+}
+
+/** The export is one file: it goes to `out` exactly as built. */
+async function writeFindingsExport(
+  out: string,
+  files: ReadonlyArray<{ path: string; content: string }>,
+): Promise<string[]> {
+  const only = files[0];
+  if (files.length !== 1 || only === undefined)
+    throw new DesktopProtocolError('DESKTOP_ERROR', 'Desktop returned more than one export file');
+  await mkdir(dirname(resolve(out)), { recursive: true });
+  await writeFile(out, only.content, 'utf8');
+  return [out];
 }

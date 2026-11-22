@@ -170,6 +170,7 @@ describe('shared desktop command router', () => {
       'runtime:select-distro',
       'runs:export-save',
       'runs:export-reveal',
+      'app:save-cli-reference',
       'cli:set-enabled',
     ]) {
       expect(isCliAllowed(channel)).toBe(false);
@@ -191,6 +192,31 @@ describe('shared desktop command router', () => {
     expect(result).toEqual({ saved: true, language: 'bg' });
     expect(persisted).toEqual(['bg']);
     expect(h.seen).toHaveLength(0);
+  });
+
+  it('saves the CLI reference only through the native dialog, and never for an external client', async () => {
+    const h = await harness(true);
+    const requestSavePath = vi.fn().mockResolvedValue(null);
+    await expect(
+      dispatchDesktopCommand(h.service, 'app:save-cli-reference', {}, { requestSavePath }),
+    ).resolves.toEqual({ status: 'cancelled' });
+    expect(requestSavePath).toHaveBeenCalledWith(
+      expect.objectContaining({ suggestedFilename: 'sentry-cli-commands.md' }),
+    );
+    // No dialog hook: it fails closed instead of choosing a path itself.
+    await expect(
+      dispatchDesktopCommand(h.service, 'app:save-cli-reference', {}, {}),
+    ).rejects.toMatchObject({ code: 'DIALOG_UNAVAILABLE' });
+    // The renderer cannot pass a destination or text.
+    await expect(
+      dispatchDesktopCommand(
+        h.service,
+        'app:save-cli-reference',
+        { path: '/tmp/x.md', content: 'x' },
+        { requestSavePath },
+      ),
+    ).rejects.toThrow();
+    expect(isCliAllowed('app:save-cli-reference')).toBe(false);
   });
 
   it('rejects invalid languages and keeps them out of the external allowlist', async () => {
@@ -402,5 +428,159 @@ describe('settings:set for external clients', () => {
       .filter((status) => status.configured)
       .map((status) => status.name);
     expect(saved).not.toContain('OPENAI_API_KEY');
+  });
+});
+
+describe('the secrets check option', () => {
+  const projectId = 'proj_01K7777777777777777777A8W1';
+
+  it('passes secretsCheck:false to the runtime, sends nothing when it is left on, and refuses a non-boolean', async () => {
+    const h = await harness(true);
+    const start = (extra: Record<string, unknown>) =>
+      dispatchDesktopCommand(h.service, 'runs:start', { projectId, mode: 'full', ...extra }, {});
+    await start({ secretsCheck: false });
+    expect(h.seen.filter((c) => c.method === 'runs.start').at(-1)?.params).toMatchObject({
+      secretsCheck: false,
+    });
+    await start({ secretsCheck: true });
+    expect(h.seen.filter((c) => c.method === 'runs.start').at(-1)?.params).not.toHaveProperty(
+      'secretsCheck',
+    );
+    await start({});
+    expect(h.seen.filter((c) => c.method === 'runs.start').at(-1)?.params).not.toHaveProperty(
+      'secretsCheck',
+    );
+    for (const bad of ['no', 0, null])
+      await expect(start({ secretsCheck: bad }), String(bad)).rejects.toThrow();
+  });
+});
+
+describe('findings export channels', () => {
+  const projectId = 'proj_01K7777777777777777777A8W1';
+  const selection = {
+    findings: [
+      { runId: 'run_01K7777777777777777777A8W1', findingId: 'find_01K7777777777777777777A8WA' },
+    ],
+  };
+
+  it('lets external clients export findings, but not use the Save As channel', async () => {
+    const h = await harness(true);
+    expect(isCliAllowed('projects:export-findings')).toBe(true);
+    expect(isCliAllowed('projects:save-findings-export')).toBe(false);
+    await expect(
+      dispatchDesktopCommand(
+        h.service,
+        'projects:save-findings-export',
+        { projectId, format: 'markdown', selection },
+        {},
+        { external: true },
+      ),
+    ).rejects.toMatchObject({ code: 'CLI_COMMAND_FORBIDDEN' });
+    await dispatchDesktopCommand(
+      h.service,
+      'projects:export-findings',
+      { projectId, format: 'json', selection },
+      {},
+      { external: true },
+    );
+    const call = h.seen.find((c) => c.method === 'projects.exportFindings');
+    expect(call?.params).toEqual({ projectId, format: 'json', selection });
+  });
+
+  it('lets external clients read toolchain needs and manage add-ons, but never install a custom one', async () => {
+    const h = await harness(true);
+    for (const channel of [
+      'projects:suggest-targets',
+      'projects:toolchain-needs',
+      'projects:toolchain-selection',
+      'projects:assess-toolchains',
+      'toolchains:custom-status',
+      'toolchains:custom-remove',
+    ])
+      expect(isCliAllowed(channel), channel).toBe(true);
+    // A custom add-on is a shell command the caller supplies: only the app's own window may start one.
+    for (const channel of [
+      'toolchains:custom-install',
+      'providers:save',
+      'openai:account-login',
+      'claude:account-login',
+      'claude:account-submit-code',
+    ])
+      expect(isCliAllowed(channel), channel).toBe(false);
+    await expect(
+      dispatchDesktopCommand(
+        h.service,
+        'toolchains:custom-install',
+        { name: 'tool', command: 'curl https://example.com | sh' },
+        {},
+        { external: true },
+      ),
+    ).rejects.toMatchObject({ code: 'CLI_COMMAND_FORBIDDEN' });
+    await dispatchDesktopCommand(h.service, 'toolchains:custom-status', {}, {}, { external: true });
+    await dispatchDesktopCommand(
+      h.service,
+      'toolchains:custom-remove',
+      { name: 'tool' },
+      {},
+      { external: true },
+    );
+    await dispatchDesktopCommand(
+      h.service,
+      'projects:toolchain-needs',
+      { projectId },
+      {},
+      { external: true },
+    );
+    const methods = h.seen.map((call) => call.method);
+    expect(methods).toEqual(
+      expect.arrayContaining([
+        'toolchains.customStatus',
+        'toolchains.customRemove',
+        'projects.toolchainNeeds',
+      ]),
+    );
+    expect(methods).not.toContain('toolchains.customInstall');
+  });
+
+  it('accepts a run or revisions as the selection, and refuses anything else', async () => {
+    const h = await harness(true);
+    const run = (payload: unknown) =>
+      dispatchDesktopCommand(h.service, 'projects:export-findings', payload, {});
+    await run({
+      projectId,
+      format: 'markdown',
+      selection: { runId: 'run_01K7777777777777777777A8W1' },
+    });
+    await run({
+      projectId,
+      format: 'text',
+      selection: { revisionIds: ['rev_01K7777777777777777777779B'] },
+    });
+    for (const bad of [
+      { projectId, format: 'html', selection },
+      { projectId, format: 'markdown', selection: {} },
+      { projectId, format: 'markdown', selection: { findings: [] } },
+      { projectId, format: 'markdown', selection: { revisionIds: ['not-a-revision'] } },
+      {
+        projectId,
+        format: 'markdown',
+        selection: { runId: 'run_1', findings: selection.findings },
+      },
+      { projectId, format: 'markdown', selection, path: 'C:/Windows/x' },
+      { format: 'markdown', selection },
+    ])
+      await expect(run(bad), JSON.stringify(bad).slice(0, 60)).rejects.toThrow();
+  });
+
+  it('needs the native save dialog for the Save As channel', async () => {
+    const h = await harness(true);
+    await expect(
+      dispatchDesktopCommand(
+        h.service,
+        'projects:save-findings-export',
+        { projectId, format: 'markdown', selection },
+        {},
+      ),
+    ).rejects.toMatchObject({ code: 'DIALOG_UNAVAILABLE' });
   });
 });

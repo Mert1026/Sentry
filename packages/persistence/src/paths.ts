@@ -1,6 +1,6 @@
 import { lstatSync } from 'node:fs';
 import { lstat, realpath } from 'node:fs/promises';
-import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import type { AgentRunId, ProjectId, QARunId } from '@qa/shared';
 
 export interface ProjectDataPaths {
@@ -23,7 +23,11 @@ export interface RunDataPaths {
 }
 
 export function projectDataPaths(dataRoot: string, projectId: ProjectId): ProjectDataPaths {
-  const root = resolve(dataRoot, 'projects', projectId);
+  // The id names one folder under projects/. An absolute path, "..", "." or an empty id would point
+  // somewhere else, so it is refused here whatever the caller checked.
+  const projects = resolve(dataRoot, 'projects');
+  const root = resolveInside(projects, projectId);
+  if (root === projects) throw new Error('PATH_ESCAPE: project id does not name a project folder');
   return {
     root,
     workingCopy: resolve(root, 'working-copy'),
@@ -73,14 +77,19 @@ export function isPathInside(parent: string, child: string): boolean {
 
 export async function canonicalizePath(value: string): Promise<string> {
   const resolved = resolve(value);
-  try {
-    return await realpath(resolved);
-  } catch {
+  // Resolve the part that exists, however many components at the end are still missing, and put the
+  // missing ones back: a link in the existing part must be followed even when two or more folders are new.
+  const missing: string[] = [];
+  let current = resolved;
+  for (;;) {
     try {
-      const parent = await realpath(dirname(resolved));
-      return resolve(parent, resolved.slice(dirname(resolved).length + 1));
+      const real = await realpath(current);
+      return missing.length === 0 ? real : resolve(real, ...missing.reverse());
     } catch {
-      return resolved;
+      const parent = dirname(current);
+      if (parent === current) return resolved;
+      missing.push(basename(current));
+      current = parent;
     }
   }
 }

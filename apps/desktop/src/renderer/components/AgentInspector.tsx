@@ -15,9 +15,12 @@ import {
 } from 'lucide-react';
 import type { AgentNodeView, TimelineItem } from '../lib/types.js';
 import { retestRows, type RetestItemInfo } from '../lib/retest-results.js';
+import { SECRETS_LABEL } from '../lib/secrets-light.js';
 import {
   formatCount,
+  isPassedStage,
   projectTimeline,
+  stageHeadIndex,
   stageLabel,
   stageStateLabel,
   truncateMiddle,
@@ -56,6 +59,8 @@ export interface AgentInspectorData {
   readonly evidence?: readonly InspectorEvidence[];
   /** Present only for an agent of a retest run: the findings it was asked to re-test. */
   readonly retestItems?: readonly RetestItemInfo[];
+  /** What the user wrote to this agent before the run: the note for everyone and its own note. */
+  readonly userNote?: { readonly shared?: string; readonly own?: string };
 }
 
 export interface InspectorFinding {
@@ -175,7 +180,7 @@ export function AgentInspector({
       </div>
       <Tabs tabs={tabs} active={activeTab} onChange={setTab} label="Agent details" />
       <div style={{ minHeight: 0 }}>
-        {activeTab === 'overview' ? <OverviewTab view={view} /> : null}
+        {activeTab === 'overview' ? <OverviewTab view={view} userNote={data.userNote} /> : null}
         {activeTab === 'retest' && data.retestItems !== undefined ? (
           <RetestTab items={data.retestItems} events={data.events ?? []} />
         ) : null}
@@ -245,7 +250,52 @@ function RetestTab({
   );
 }
 
-function OverviewTab({ view }: { view: AgentNodeView }): React.JSX.Element {
+/**
+ * The agent's stages as a vertical timeline: a marker per stage joined by a line, the stage name, and a
+ * badge with its state. The count in the heading says how far the agent got.
+ */
+function StageTimeline({ stages }: { stages: AgentNodeView['stages'] }): React.JSX.Element {
+  // The position of the stage the agent's phase says it is in: how far along the line it is.
+  const reached = stageHeadIndex(stages) + 1;
+  return (
+    <section className="stage-timeline" aria-label="Stages">
+      <div className="stage-timeline-head">
+        <span className="metadata">Stages</span>
+        <span className="stage-timeline-count" title="Stages reached">
+          {reached + '/' + stages.length}
+        </span>
+      </div>
+      <ol className="stage-timeline-list">
+        {stages.map((stage, index) => (
+          <li
+            key={stage.id}
+            className="stage-step"
+            data-state={stage.state}
+            data-passed={isPassedStage(stages, index) ? 'true' : undefined}
+          >
+            <span className="stage-step-marker" aria-hidden="true">
+              {stage.state === 'observed' ? (
+                <Eye size={12} />
+              ) : (
+                <StatusIcon status={stage.state} size={12} />
+              )}
+            </span>
+            <span className="stage-step-label">{stage.label}</span>
+            <span className="stage-step-state">{stageStateLabel(stage.state)}</span>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+function OverviewTab({
+  view,
+  userNote,
+}: {
+  view: AgentNodeView;
+  userNote?: AgentInspectorData['userNote'];
+}): React.JSX.Element {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <dl className="kv">
@@ -260,6 +310,44 @@ function OverviewTab({ view }: { view: AgentNodeView }): React.JSX.Element {
         <dt>Stage</dt>
         <dd>{view.currentStage === 'working' ? 'Working' : stageLabel(view.currentStage)}</dd>
       </dl>
+      {userNote?.shared !== undefined || userNote?.own !== undefined ? (
+        <div className="user-note-card">
+          <div className="metadata">User description / note</div>
+          {userNote?.shared !== undefined ? (
+            <div>
+              <strong>For all agents</strong>
+              <p className="user-note-text wrap-anywhere">{userNote.shared}</p>
+            </div>
+          ) : null}
+          {userNote?.own !== undefined ? (
+            <div>
+              <strong>For this agent</strong>
+              <p className="user-note-text wrap-anywhere">{userNote.own}</p>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      {view.secrets !== undefined ? (
+        <div className={'secrets-card ' + view.secrets.state}>
+          <div className="metadata">Secrets in code</div>
+          <div className="secrets-card-state">
+            <span className={'secrets-light ' + view.secrets.state}>
+              <i aria-hidden="true" />
+            </span>
+            <strong>{SECRETS_LABEL[view.secrets.state]}</strong>
+          </div>
+          {view.secrets.explanation !== undefined ? (
+            <p className="wrap-anywhere" style={{ margin: '4px 0 0' }}>
+              {view.secrets.explanation}
+            </p>
+          ) : null}
+          <p className="faint" style={{ margin: '4px 0 0' }}>
+            This is what this agent reported after searching the project files. It names places and
+            kinds only; known secret formats are removed from agent text before it is stored. Treat
+            any secret it found as exposed and rotate it.
+          </p>
+        </div>
+      ) : null}
       <div>
         <div className="metadata">Current operation</div>
         <div className="wrap-anywhere">{view.currentOperation.title}</div>
@@ -269,36 +357,7 @@ function OverviewTab({ view }: { view: AgentNodeView }): React.JSX.Element {
           </div>
         ) : null}
       </div>
-      <div>
-        <div className="metadata" style={{ marginBottom: 4 }}>
-          Stages
-        </div>
-        <ul
-          style={{
-            listStyle: 'none',
-            padding: 0,
-            margin: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 2,
-          }}
-        >
-          {view.stages.map((stage) => (
-            <li key={stage.id} className="metadata">
-              <span className="stage-icon" aria-hidden="true">
-                {stage.state === 'observed' ? (
-                  <Eye size={12} />
-                ) : (
-                  <StatusIcon status={stage.state} size={12} />
-                )}
-              </span>{' '}
-              {stage.label}
-              {' — '}
-              {stageStateLabel(stage.state)}
-            </li>
-          ))}
-        </ul>
-      </div>
+      <StageTimeline stages={view.stages} />
       <div className="metric-grid">
         <div className="metric-card">
           <div className="metric-value">
@@ -456,7 +515,7 @@ function FindingsTab({
         <FindingCard key={finding.id} finding={finding} evidence={evidence} />
       ))}
       {visible.length === 0 ? (
-        <p className="muted">No {severity.toLowerCase()} findings from this agent.</p>
+        <p className="muted">{`No ${severity.toLowerCase()} findings from this agent.`}</p>
       ) : null}
     </div>
   );
@@ -531,7 +590,9 @@ function ActivityTab({
           </div>
         ))}
       </div>
-      {visible.length === 0 ? <p className="muted">No {filter.toLowerCase()} activity.</p> : null}
+      {visible.length === 0 ? (
+        <p className="muted">{`No ${filter.toLowerCase()} activity.`}</p>
+      ) : null}
       {selectedEvent !== undefined && events?.[selectedEvent] !== undefined ? (
         <EventDetail
           event={events[selectedEvent] as Record<string, unknown>}

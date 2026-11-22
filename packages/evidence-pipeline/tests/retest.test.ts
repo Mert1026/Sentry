@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   RETEST_CHECK_RULES,
   RETEST_CONTEXT_KEY,
+  SECRETS_CHECK_NAME,
   applyRetestPlan,
   buildInvestigationCompactionContext,
   buildQaCheckInvestigationPrompt,
@@ -51,6 +52,8 @@ describe('retest checks', () => {
     expect(replaced.other).toBe(1);
     expect(applyRetestPlan(plan, {})).toBe(plan);
     expect(applyRetestPlan(plan, undefined)).toBe(plan);
+    // A retest run gets no Secrets check, even when asked: its checks are exactly one per finding.
+    expect(replaced.plannedChecks).not.toContain(SECRETS_CHECK_NAME);
     expect(isRetestContext(context(items))).toBe(true);
     expect(isRetestContext(context([]))).toBe(false);
   });

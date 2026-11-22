@@ -63,6 +63,38 @@ function Ensure-SentryDeepSeek {
   return $false
 }
 
+# Headless browser agents use to exercise real pages. Never gates readiness:
+# without it agents behave as before and report browser checks as inconclusive.
+function Ensure-SentryBrowser {
+  param([string]$Distro)
+  Write-SentryInfo 'Preparing the Sentry-managed headless browser for QA agents (first time downloads about 350 MB; no sudo)...'
+  $r = Invoke-SentryWslFile -Distro $Distro -ScriptName 'install-browser.sh' -TimeoutSec 900
+  Write-SentryLog ('browser install exit=' + $r.ExitCode) 'setup'
+  $out = [string]$r.Stdout
+  foreach ($line in ($out -split "`n")) {
+    $t = $line.Trim()
+    if ($t.StartsWith('BROWSER_READY=')) { Write-SentryOk 'Headless browser for QA agents (managed)'; return $true }
+    if ($t.StartsWith('BROWSER_FAILED=')) {
+      Write-SentryWarn ('Headless browser could not be prepared (' + $t.Substring(15) + '). Agents run without a browser; browser checks stay inconclusive.')
+      return $false
+    }
+  }
+  Write-SentryWarn 'Headless browser could not be prepared. Agents run without a browser; browser checks stay inconclusive.'
+  return $false
+}
+
+# The Claude account sign-in runs `claude setup-token` under util-linux `script` (a terminal Claude Code
+# can read the pasted code from). Never gates readiness: the API key sign-in does not need it.
+function Test-SentryTerminalTool {
+  param([string]$Distro)
+  $r = Invoke-SentryWslFile -Distro $Distro -ScriptName 'check-terminal.sh' -TimeoutSec 60
+  $t = [string]$r.Stdout
+  if ($t.Contains('TERMINAL_OK')) { Write-SentryOk 'Terminal tool for the Claude account sign-in (script)'; return $true }
+  if ($t.Contains('TERMINAL_MISSING')) { Write-SentryWarn 'The script tool (util-linux) is missing in this distribution: the Claude account sign-in cannot run. The API key sign-in still works. Install util-linux (bsdutils on Ubuntu) and rerun sentry setup.'; return $false }
+  Write-SentryWarn 'The script tool did not provide a terminal: the Claude account sign-in may not run. The API key sign-in still works. Run sentry doctor for details.'
+  return $false
+}
+
 function Get-SentryManagedClaudePath {
   param([string]$CheckOutput)
   foreach ($line in (([string]$CheckOutput) -split "`n")) {

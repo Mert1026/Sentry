@@ -1,5 +1,5 @@
 import { mkdir, rm, writeFile } from 'node:fs/promises';
-import { basename, dirname, resolve } from 'node:path';
+import { basename, dirname, relative, resolve, sep } from 'node:path';
 import type { AgentRunId, ProjectId, QARunId, SnapshotId } from '@qa/shared';
 import type { HarnessWorkspace } from '@qa/schemas';
 import {
@@ -56,25 +56,32 @@ export class WorkspaceFactory {
     const sentryOwned = resolve(workspaceRoot, '.sentry-workspace');
     // The removal below must never follow a link planted in the data folder.
     await assertNoSymlinkBelow(this.dataRoot, workspaceRoot);
-    await rm(workspaceRoot, { recursive: true, force: true });
-    await copyTree(input.workingCopyPath, runtimePath, {
-      preferReflink: true,
-      symlinkPolicy: 'inert-unsafe',
-      blockedLinkMetadataRoot: resolve(sentryOwned, 'blocked-links'),
-      ...(input.signal === undefined ? {} : { signal: input.signal }),
-      ...(input.onProgress === undefined ? {} : { onProgress: input.onProgress }),
-    });
-    if (input.baseline !== undefined) {
-      await mkdir(sentryOwned, { recursive: true });
-      const files: Record<string, string> = {};
-      for (const [relativePath, hash] of input.baseline.fileHashByPath) {
-        files[relativePath] = hash;
+    try {
+      await rm(workspaceRoot, { recursive: true, force: true });
+      await copyTree(input.workingCopyPath, runtimePath, {
+        preferReflink: true,
+        symlinkPolicy: 'inert-unsafe',
+        blockedLinkMetadataRoot: resolve(sentryOwned, 'blocked-links'),
+        ...(input.signal === undefined ? {} : { signal: input.signal }),
+        ...(input.onProgress === undefined ? {} : { onProgress: input.onProgress }),
+      });
+      if (input.baseline !== undefined) {
+        await mkdir(sentryOwned, { recursive: true });
+        const files: Record<string, string> = {};
+        for (const [relativePath, hash] of input.baseline.fileHashByPath) {
+          files[relativePath] = hash;
+        }
+        await writeFile(
+          resolve(sentryOwned, BASELINE_HASHES_FILENAME),
+          JSON.stringify({ schemaVersion: 1, snapshotId: input.baseline.snapshotId, files }),
+          'utf8',
+        );
       }
-      await writeFile(
-        resolve(sentryOwned, BASELINE_HASHES_FILENAME),
-        JSON.stringify({ schemaVersion: 1, snapshotId: input.baseline.snapshotId, files }),
-        'utf8',
-      );
+    } catch (cause) {
+      // A copy that failed half way must not leave a partial workspace in the data folder: the caller only
+      // cleans up a workspace that was returned.
+      await rm(workspaceRoot, { recursive: true, force: true }).catch(() => undefined);
+      throw cause;
     }
     return { runtimePath, snapshotId: input.snapshotId, writable: true, isolated: true };
   }
@@ -86,6 +93,15 @@ export class WorkspaceFactory {
       const safePath = resolveInside(this.dataRoot, workspace.runtimePath);
       // An empty or root-level path resolves to the data folder itself; never delete that.
       if (safePath === resolve(this.dataRoot)) throw new Error('refusing to remove the data root');
+      // Only an agent workspace is removed: projects/<id>/runs/<run>/agents/<agent run>/workspace[/project].
+      const parts = relative(resolve(this.dataRoot), safePath).split(sep);
+      const isWorkspace =
+        (parts.length === 7 || (parts.length === 8 && parts[7] === 'project')) &&
+        parts[0] === 'projects' &&
+        parts[2] === 'runs' &&
+        parts[4] === 'agents' &&
+        parts[6] === 'workspace';
+      if (!isWorkspace) throw new Error('refusing to remove a path that is not an agent workspace');
       await assertNoSymlinkBelow(this.dataRoot, safePath);
       const cleanupPath =
         basename(safePath) === 'project' && basename(dirname(safePath)) === 'workspace'

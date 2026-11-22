@@ -12,13 +12,23 @@ import {
   AGENT_EFFORT_SETTING,
   EFFORT_AGENTS,
   RUN_TIME_LIMIT_DEFAULT_MS,
+  NOTE_LIMIT_CUSTOM_MAX,
+  NOTE_LIMIT_CUSTOM_MIN,
+  NOTE_LIMIT_DEFAULT,
+  NOTE_LIMIT_SETTING,
+  NOTE_LIMIT_UNLIMITED,
   RUN_TIME_LIMIT_SETTING,
   RUN_TIMEOUT_MS_MAX,
   RUN_TIMEOUT_MS_MIN,
   parseAgentEffort,
+  parseNoteLimit,
   parseRunTimeLimit,
 } from '@qa/shared';
-import type { AgentStackDefinition } from '@qa/schemas';
+import {
+  FindingExportRequestSchema,
+  type AgentStackDefinition,
+  type FindingExportResultDto,
+} from '@qa/schemas';
 import type { DesktopOperation, RunSnapshot } from '../../shared/ipc-contract.js';
 import { toSafeError } from '../desktop-command-router.js';
 import type { ProviderCredentialService } from './provider-credentials.js';
@@ -43,11 +53,15 @@ const StartRunOptions = z
       .regex(/^rev_[0-9A-HJKMNP-TV-Z]{26}$/)
       .optional(),
     includePaths: z.array(z.string().min(1).max(500)).max(100).optional(),
-    instructions: z.string().min(1).max(5000).optional(),
+    instructions: z.string().min(1).max(NOTE_LIMIT_UNLIMITED).optional(),
+    agentInstructions: z
+      .record(z.string().min(1).max(200), z.string().min(1).max(NOTE_LIMIT_UNLIMITED))
+      .optional(),
     agentStackIds: z.array(z.string().min(1).max(200)).min(1).max(10).optional(),
     runTimeoutMs: z.number().int().min(RUN_TIMEOUT_MS_MIN).max(RUN_TIMEOUT_MS_MAX).optional(),
     webAccess: z.boolean().optional(),
     toolDownloads: z.boolean().optional(),
+    secretsCheck: z.boolean().optional(),
     depth: z.enum(['fast', 'full']).optional(),
     useProfile: z.boolean().optional(),
     retest: z
@@ -179,6 +193,34 @@ export class DesktopApplicationService {
     return this.call('openai.accountLogout', {});
   }
 
+  claudeAccountStatus(): Promise<unknown> {
+    return this.call('claude.accountStatus', {});
+  }
+
+  claudeAccountLogin(): Promise<unknown> {
+    return this.call('claude.accountLogin', {});
+  }
+
+  claudeAccountSubmitCode(code: string): Promise<unknown> {
+    return this.call('claude.accountSubmitCode', { code });
+  }
+
+  claudeAccountCancelLogin(): Promise<unknown> {
+    return this.call('claude.accountCancelLogin', {});
+  }
+
+  claudeAccountLogout(): Promise<unknown> {
+    return this.call('claude.accountLogout', {});
+  }
+
+  modelCatalog(): Promise<unknown> {
+    return this.call('models.catalog', {});
+  }
+
+  refreshModelCatalog(): Promise<unknown> {
+    return this.call('models.refresh', {});
+  }
+
   toolchainStatus(): Promise<unknown> {
     return this.call('toolchains.status', {});
   }
@@ -228,6 +270,16 @@ export class DesktopApplicationService {
   toolchainSelection(projectId: string): Promise<unknown> {
     const id = ProjectIdInput.parse(projectId);
     return this.call('projects.toolchainSelection', { projectId: id });
+  }
+
+  /** The selected findings as files, built by the runtime from what the agents reported. */
+  async exportFindings(projectId: string, request: unknown): Promise<FindingExportResultDto> {
+    const id = ProjectIdInput.parse(projectId);
+    const parsed = FindingExportRequestSchema.parse(request);
+    return this.call('projects.exportFindings', {
+      projectId: id,
+      ...parsed,
+    }) as Promise<FindingExportResultDto>;
   }
 
   findingsByRevision(projectId: string): Promise<unknown> {
@@ -284,6 +336,16 @@ export class DesktopApplicationService {
   async startRun(projectId: string, options: unknown): Promise<DesktopOperation> {
     const id = ProjectIdInput.parse(projectId);
     const parsed = StartRunOptions.parse(options);
+    // The notes may be as long as Settings → Application allows (5,000 characters unless changed).
+    const noteLimit = parseNoteLimit(this.deps.credentials.getValue(NOTE_LIMIT_SETTING));
+    for (const note of [parsed.instructions, ...Object.values(parsed.agentInstructions ?? {})])
+      if (note !== undefined && note.length > noteLimit)
+        throw toError(
+          'INVALID_ARGUMENT',
+          'A note is at most ' +
+            noteLimit +
+            ' characters; change the limit in Settings → Application',
+        );
     // A run that does not name its own window gets the default chosen in Settings (3 hours if none).
     const runTimeoutMs =
       parsed.runTimeoutMs ??
@@ -295,10 +357,14 @@ export class DesktopApplicationService {
         ...(parsed.revisionId === undefined ? {} : { revisionId: parsed.revisionId }),
         ...(parsed.includePaths === undefined ? {} : { includePaths: [...parsed.includePaths] }),
         ...(parsed.instructions === undefined ? {} : { instructions: parsed.instructions }),
+        ...(parsed.agentInstructions === undefined
+          ? {}
+          : { agentInstructions: { ...parsed.agentInstructions } }),
         ...(parsed.agentStackIds === undefined ? {} : { agentStackIds: [...parsed.agentStackIds] }),
         ...(runTimeoutMs === undefined ? {} : { runTimeoutMs }),
         ...(parsed.webAccess === true ? { webAccess: true } : {}),
         ...(parsed.toolDownloads === true ? { toolDownloads: true } : {}),
+        ...(parsed.secretsCheck === false ? { secretsCheck: false } : {}),
         ...(parsed.depth === undefined ? {} : { depth: parsed.depth }),
         ...(parsed.useProfile === true ? { useProfile: true } : {}),
         ...(parsed.retest === undefined ? {} : { retest: parsed.retest }),
@@ -402,7 +468,7 @@ export class DesktopApplicationService {
 
   /**
    * Change one of the two run settings the CLI may set (the same values Settings → Providers and
-   * Settings → Runtime save). "default" removes the setting. A value the agent's tool does not take,
+   * Settings → Application save). "default" removes the setting. A value the agent's tool does not take,
    * or a window outside the allowed range, is refused rather than saved.
    */
   async setRunSetting(input: unknown): Promise<unknown> {
@@ -418,8 +484,42 @@ export class DesktopApplicationService {
         z
           .object({ setting: z.literal('run-time-limit'), value: z.string().min(1).max(20) })
           .strict(),
+        z.object({ setting: z.literal('note-limit'), value: z.string().min(1).max(20) }).strict(),
       ])
       .parse(input);
+    if (parsed.setting === 'note-limit') {
+      // "default" removes the setting; "none" is the longest note; otherwise a whole number of characters.
+      if (parsed.value === 'default') {
+        await this.providerClearKey(NOTE_LIMIT_SETTING);
+        return { chars: NOTE_LIMIT_DEFAULT, isDefault: true, unlimited: false };
+      }
+      const requested = parsed.value === 'none' ? String(NOTE_LIMIT_UNLIMITED) : parsed.value;
+      const chars = /^\d{1,8}$/.test(requested) ? Number(requested) : NaN;
+      if (!(chars >= NOTE_LIMIT_CUSTOM_MIN && chars <= NOTE_LIMIT_UNLIMITED))
+        throw toError(
+          'INVALID_ARGUMENT',
+          'The note limit must be default, none, or ' +
+            NOTE_LIMIT_CUSTOM_MIN +
+            ' to ' +
+            NOTE_LIMIT_CUSTOM_MAX +
+            ' characters',
+        );
+      if (chars > NOTE_LIMIT_CUSTOM_MAX && chars !== NOTE_LIMIT_UNLIMITED)
+        throw toError(
+          'INVALID_ARGUMENT',
+          'The note limit must be default, none, or ' +
+            NOTE_LIMIT_CUSTOM_MIN +
+            ' to ' +
+            NOTE_LIMIT_CUSTOM_MAX +
+            ' characters',
+        );
+      await this.providerSaveKey(NOTE_LIMIT_SETTING, String(chars));
+      return {
+        chars,
+        isDefault: chars === NOTE_LIMIT_DEFAULT,
+        unlimited: chars === NOTE_LIMIT_UNLIMITED,
+      };
+    }
     if (parsed.setting === 'reasoning-effort') {
       const agent = parsed.agent as (typeof EFFORT_AGENTS)[number];
       const name = AGENT_EFFORT_SETTING[agent];
@@ -500,10 +600,12 @@ export class DesktopApplicationService {
     const deepseek = get('SENTRY_DEEPSEEK_MODEL');
     const glm = get('SENTRY_GLM_MODEL');
     const chatgpt = get('SENTRY_CHATGPT_MODEL');
+    const claude = get('SENTRY_ANTHROPIC_MODEL');
     if (opencode !== undefined) models['opencode'] = opencode;
     if (deepseek !== undefined) models['deepseek'] = deepseek;
     if (glm !== undefined) models['glm'] = glm;
     if (chatgpt !== undefined) models['chatgpt'] = chatgpt;
+    if (claude !== undefined) models['claude'] = claude;
     const providers: Record<string, string> = {};
     const openRouterKey = get('OPENROUTER_API_KEY');
     const openCodeKey = get('OPENCODE_API_KEY');
@@ -517,6 +619,9 @@ export class DesktopApplicationService {
     if (deepseekKey !== undefined) providers['deepseekApiKey'] = deepseekKey;
     if (glmToken !== undefined) providers['anthropicAuthToken'] = glmToken;
     if (glmEndpoint !== undefined) providers['anthropicBaseUrl'] = glmEndpoint;
+    // The Claude agent's own credentials; the GLM agent's token and endpoint above are separate.
+    const claudeKey = get('ANTHROPIC_API_KEY');
+    if (claudeKey !== undefined) providers['anthropicApiKey'] = claudeKey;
     const binaries: Record<string, string> = {};
     const opencodeBinary = get('SENTRY_OPENCODE_BINARY');
     const deepseekBinary = get('SENTRY_DEEPSEEK_BINARY');
@@ -534,12 +639,15 @@ export class DesktopApplicationService {
         : {};
     const openAiAuth =
       get('SENTRY_OPENAI_AUTH')?.trim().toLowerCase() === 'account' ? 'account' : 'key';
+    const claudeAuth =
+      get('SENTRY_ANTHROPIC_AUTH')?.trim().toLowerCase() === 'account' ? 'account' : 'key';
     return this.call('runtime.configure', {
       models,
       providers,
       binaries,
       ...provider,
       openAiAuth,
+      claudeAuth,
       reasoningEffort: Object.fromEntries(
         EFFORT_AGENTS.map((agent) => [
           agent,

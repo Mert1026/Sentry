@@ -85,6 +85,18 @@ function Invoke-SentryDoctor {
     elseif ($clt.Contains('2.1.276')) { &$add 'Claude Code' 'FAIL' 'known-incompatible 2.1.276; Sentry-managed 2.1.270 required' }
     elseif ($clt.Contains('windows-mount')) { &$add 'Claude Code' 'FAIL' 'Windows mount on PATH; Sentry-managed native binary required' }
     else { &$add 'Claude Code' 'FAIL' 'no usable 2.1.270 binary' }
+    $br = Invoke-SentryWslFile -Distro $distro -ScriptName 'check-browser.sh' -TimeoutSec 90
+    $brt = [string]$br.Stdout
+    if ($brt -match 'BROWSER_OK\s+(\S+)') { &$add 'Headless browser' 'PASS' ('Chrome ' + $Matches[1] + ' rendered a test page (agents use it for browser checks)') }
+    elseif ($brt.Contains('BROWSER_MISSING')) { &$add 'Headless browser' 'WARN' 'not installed: agents report browser checks as inconclusive (run: sentry setup)' }
+    elseif ($brt.Contains('BROWSER_BROKEN')) { &$add 'Headless browser' 'WARN' ('installed but unusable: ' + (($brt -split "`n" | Where-Object { $_ -match 'BROWSER_BROKEN' } | Select-Object -First 1) -replace 'BROWSER_BROKEN\s*','').Trim() + ' (run: sentry setup)') }
+    else { &$add 'Headless browser' 'WARN' 'could not check (run: sentry setup)' }
+    $tm = Invoke-SentryWslFile -Distro $distro -ScriptName 'check-terminal.sh' -TimeoutSec 60
+    $tmt = [string]$tm.Stdout
+    if ($tmt.Contains('TERMINAL_OK')) { &$add 'Claude sign-in terminal' 'PASS' 'script provides a terminal (Claude account sign-in can run)' }
+    elseif ($tmt.Contains('TERMINAL_MISSING')) { &$add 'Claude sign-in terminal' 'WARN' 'script (util-linux) not found: the Claude account sign-in cannot run; the API key sign-in still works' }
+    elseif ($tmt.Contains('TERMINAL_BROKEN')) { &$add 'Claude sign-in terminal' 'WARN' ('script did not provide a terminal: ' + (($tmt -split "`n" | Where-Object { $_ -match 'TERMINAL_BROKEN' } | Select-Object -First 1) -replace 'TERMINAL_BROKEN\s*','').Trim() + '; the API key sign-in still works') }
+    else { &$add 'Claude sign-in terminal' 'WARN' 'could not check (run: sentry setup)' }
     Add-SentryCredentialReport -Add $add -RepoRoot $RepoRoot
   }
   Show-SentryDoctorResults $results
@@ -285,6 +297,8 @@ function Invoke-SentryPostUpdate {
   $oc = Ensure-SentryOpenCode -Distro $distro
   $ds = Ensure-SentryDeepSeek -Distro $distro -RepoRoot $RepoRoot
   $cc = Ensure-SentryClaudeCode -Distro $distro -RepoRoot $RepoRoot
+  [void](Ensure-SentryBrowser -Distro $distro)
+  [void](Test-SentryTerminalTool -Distro $distro)
   $updSandbox = Get-SentrySandboxStatus -Distro $distro
   $cc = ([bool]$cc) -and $updSandbox.Socat -and $updSandbox.Bwrap -and $updSandbox.InitOk
   if (-not $cc) { Write-SentryWarn 'GLM sandbox not fully ready (see sentry doctor).' }
@@ -330,12 +344,13 @@ function Show-SentryCliHelp {
   Write-Host '  project delete <project-id> --yes [--json]'
   Write-Host '  project revisions <project-id> [--json]'
   Write-Host '  project findings <project-id> [--json]'
+  Write-Host '  project export-findings <project-id> --format markdown|json|text (--findings <run-id>:<finding-id>,... | --run <run-id> | --revision <rev-id>,...) --out <path> [--json]'
   Write-Host '  project profile <project-id> [--json]'
-  Write-Host '  project profile-build <project-id> [--agents opencode,deepseek,glm,chatgpt] [--json]'
+  Write-Host '  project profile-build <project-id> [--agents opencode,deepseek,glm,chatgpt,claude] [--json]'
   Write-Host '  project doctor <project-id> [--json]'
   Write-Host '  agent list [--json]'
-  Write-Host '  agent doctor opencode|deepseek|glm|chatgpt [--json]'
-  Write-Host '  run start <project-id> --mode full|targeted [--agents opencode,deepseek,glm,chatgpt] [--paths a,b] [--depth fast|full] [--wait] [--timeout-ms <ms>] [--web] [--tools] [--profile] [--revision <rev-id>] [--json]'
+  Write-Host '  agent doctor opencode|deepseek|glm|chatgpt|claude [--json]'
+  Write-Host '  run start <project-id> --mode full|targeted [--agents opencode,deepseek,glm,chatgpt,claude] [--paths a,b] [--depth fast|full] [--wait] [--timeout-ms <ms>] [--web] [--tools] [--profile] [--no-secrets] [--instructions <text>] [--agent-note <agent>=<text>] [--revision <rev-id>] [--json]'
   Write-Host '  run start <project-id> --retest <run-id>:<finding-id>,... [--retest-with reporter|all] [--agents ...] [--wait] [--json]'
   Write-Host '  run list <project-id> [--json]'
   Write-Host '  run show <run-id> [--json]'
@@ -345,8 +360,13 @@ function Show-SentryCliHelp {
   Write-Host '  run export <run-id> --format log|json --out <path> [--json]'
   Write-Host '  toolchain status [--json]'
   Write-Host '  toolchain install|remove <pack-id> <version> [--json]'
+  Write-Host '  project suggest-targets <project-id> [--json]'
+  Write-Host '  project toolchain-needs|toolchain-selection <project-id> [--json]'
+  Write-Host '  project toolchain-assess <project-id> [--agents opencode,deepseek,glm,chatgpt,claude] [--json]'
+  Write-Host '  toolchain custom status [--json]'
+  Write-Host '  toolchain custom remove <name> --yes [--json]'
   Write-Host '  settings show [--json]'
-  Write-Host '  settings effort <opencode|deepseek|glm|chatgpt> <level|default> [--json]'
+  Write-Host '  settings effort <opencode|deepseek|glm|chatgpt|claude> <level|default> [--json]'
   Write-Host '  settings run-limit <default|3h|6h|none|90m|12h> [--json]'
   Write-Host ''
   Write-Host 'Automation: always pass --json and parse stdout with JSON.parse.'

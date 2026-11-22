@@ -143,7 +143,12 @@ function investigationTurn(extra: ClaudeStreamEvent[] = []) {
     }),
     evt('result', {
       is_error: false,
-      usage: { input_tokens: 100, output_tokens: 50 },
+      usage: {
+        input_tokens: 100,
+        output_tokens: 50,
+        cache_read_input_tokens: 400,
+        cache_creation_input_tokens: 100,
+      },
       subagent_stats: { spawned: 0 },
     }),
   ];
@@ -962,6 +967,15 @@ describe('ClaudeCodeHarnessAdapter', () => {
     expect(events).toContainEqual(
       expect.objectContaining({ type: 'warning', code: 'GLM_REPORT_RETRY' }),
     );
+    // The investigation had finished, so its closing statements are kept as unverified activity.
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'agent.message',
+        message: expect.stringContaining(
+          'Investigation finished but the report could not be produced (GLM_INVALID_RESULT)',
+        ),
+      }),
+    );
     // Exactly one investigation operation observed; the sneaky reporting
     // call never became one.
     expect(events.filter((e) => e.type === 'tool.started')).toHaveLength(1);
@@ -1247,7 +1261,8 @@ describe('ClaudeCodeHarnessAdapter', () => {
     expect(child['SENTRY_GLM_MODEL']).toBe('glm-5.3-flash');
     const usage = events.find((e) => e.type === 'usage.updated');
     expect(usage).toMatchObject({
-      usage: { inputTokens: 120, outputTokens: 60, turns: 3 },
+      // Input is the whole prompt: 100 + 400 read + 100 written in the investigation, plus 10 each for planning and report.
+      usage: { inputTokens: 620, outputTokens: 60, cachedInputTokens: 500, turns: 3 },
     });
   });
 
@@ -1711,6 +1726,63 @@ describe('ClaudeCodeHarnessAdapter', () => {
     expect(events.filter((e) => e.type === 'tool.completed')).toHaveLength(1);
   });
 
+  it('explains a nested user namespace failure (apply-seccomp) as a blocked system setting, on the first call', async () => {
+    // Production shape from a friend's machine: bubblewrap starts, then the seccomp helper cannot create a
+    // nested user namespace. It used to surface as the vague "tool layer unavailable" after three calls.
+    const root = await mkdtemp(join(tmpdir(), 'sentry-claude-nested-userns-'));
+    roots.push(root);
+    const input = await request(root);
+    const diagnostic =
+      'apply-seccomp: write /proc/self/setgroups (nested userns is capability-restricted; caller must provide CAP_SYS_ADMIN): Permission denied';
+    const turn: ClaudeStreamEvent[] = [
+      evt('assistant', {
+        message: {
+          content: [
+            { type: 'tool_use', id: 'tu-userns', name: 'Bash', input: { command: 'pwd && true' } },
+          ],
+        },
+      }),
+      evt('user', {
+        message: {
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: 'tu-userns',
+              is_error: true,
+              content: 'Exit code 1\n' + diagnostic,
+            },
+          ],
+        },
+      }),
+      evt('result', { is_error: false, subagent_stats: { spawned: 0 } }),
+    ];
+    const adapter = new ClaudeCodeHarnessAdapter({
+      executable: 'claude-test',
+      modelId: 'glm-5.3-flash',
+      environment: {},
+      windowsUsersRoot: hermeticUsersRoot(),
+      clientFactory: async () => ({
+        sessionId: 'session-userns',
+        startSession: async () => ({ runText: async () => turn }),
+        close: async () => undefined,
+      }),
+    });
+    const events: HarnessEvent[] = [];
+    for await (const event of adapter.run(input)) events.push(event);
+    await adapter.dispose();
+    const failed = events.at(-1) as { type: string; failure?: { code: string; message: string } };
+    expect(failed.type).toBe('run.failed');
+    expect(failed.failure?.code).toBe('GLM_SANDBOX_UNAVAILABLE');
+    // The message names the real diagnostic, not the "Exit code" line, and says what to do.
+    expect(failed.failure?.message).toContain('apply-seccomp: write /proc/self/setgroups');
+    expect(failed.failure?.message).not.toContain(
+      'Claude Code sandbox failed to initialize (Exit code',
+    );
+    expect(failed.failure?.message).toContain('blocks the nested user namespaces');
+    expect(failed.failure?.message).toContain('docs/beta/troubleshooting.md');
+    expect(events.filter((e) => e.type === 'tool.completed')).toHaveLength(1);
+  });
+
   it('fails fast when the init inventory lacks required QA tools', async () => {
     const root = await mkdtemp(join(tmpdir(), 'sentry-claude-preflight-'));
     roots.push(root);
@@ -1917,7 +1989,8 @@ describe('ClaudeCodeHarnessAdapter', () => {
             code: 'GLM_WINDOWS_PROFILES_HIDDEN',
           }),
         );
-        expect(JSON.stringify(events)).toContain('StaleAccount');
+        // The warning counts the profiles; it never prints account names.
+        expect(JSON.stringify(events)).not.toContain('StaleAccount');
       } finally {
         await chmod(join(usersRoot, 'StaleAccount'), 0o755).catch(() => undefined);
       }

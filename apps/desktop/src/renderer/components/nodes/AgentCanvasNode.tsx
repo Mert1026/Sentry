@@ -4,7 +4,17 @@ import type { AgentNodeView } from '../../lib/types.js';
 import { StatusIcon, nodeStateClass } from '../StatusGlyph.js';
 import { dotClassForStatus } from '../ui/StatusPill.js';
 import { useI18n } from '../../lib/i18n.js';
-import { formatCount, formatElapsed, stageStateLabel } from '../../lib/agent-telemetry.js';
+import {
+  formatCount,
+  formatElapsed,
+  isBeyondHead,
+  isPassedStage,
+  stageHeadIndex,
+  stageStateLabel,
+} from '../../lib/agent-telemetry.js';
+import { SECRETS_LABEL } from '../../lib/secrets-light.js';
+
+const SEVERITY_ORDER = ['critical', 'high', 'medium', 'low', 'info'] as const;
 
 const ACCENTS: Record<string, string> = {
   stack_muse_main: 'var(--muse)',
@@ -12,6 +22,7 @@ const ACCENTS: Record<string, string> = {
   stack_deepseek_main: 'var(--deepseek)',
   stack_glm_main: 'var(--glm)',
   stack_chatgpt_main: 'var(--chatgpt)',
+  stack_claude_main: 'var(--claude)',
 };
 
 function stageTone(state: string): string {
@@ -62,6 +73,23 @@ export function AgentCanvasNode({ data }: NodeProps): React.JSX.Element {
     view.currentOperation.title !== ''
       ? view.currentOperation.title
       : undefined;
+  // How far along the line the agent is: the position of the stage its phase says it is in.
+  const stagesReached = stageHeadIndex(view.stages) + 1;
+  const activeStage = view.stages.find((stage) => stage.state === 'active');
+  // The stage in progress, or the last one reached: a word that says where the agent is.
+  const stageWord = (
+    activeStage ??
+    [...view.stages].reverse().find((stage) => stage.state !== 'not_started') ??
+    view.stages[0]
+  )?.label;
+  // Provider prefixes ("opencode-go/") use up the width and say little; the full id stays in the tooltip.
+  const shortModel = view.model.includes('/')
+    ? view.model.slice(view.model.lastIndexOf('/') + 1)
+    : view.model;
+  const severities = SEVERITY_ORDER.map(
+    (name) => [name, view.severityCounts[name] ?? 0] as const,
+  ).filter(([, count]) => count > 0);
+  const severityText = severities.map(([name, count]) => count + ' ' + t(name)).join(', ');
   return (
     <div
       className={
@@ -75,16 +103,23 @@ export function AgentCanvasNode({ data }: NodeProps): React.JSX.Element {
       <Handle type="target" position={Position.Top} />
       <div className="node-title">
         <span className={dotClassForStatus(view.status)} aria-hidden="true" />
-        {view.displayName}
-        <span className="faint" aria-hidden="true" style={{ marginLeft: 'auto' }}>
+        <span className="node-name" title={view.displayName}>
+          {view.displayName}
+        </span>
+        <span className="faint node-status-icon" aria-hidden="true">
           <StatusIcon status={view.status} size={14} />
         </span>
       </div>
       <div className="node-model" title={view.model}>
-        {view.model}
+        {shortModel}
       </div>
-      <div className="node-sub">
-        {view.status.toUpperCase()} · <TickingElapsed ms={view.elapsedMs} status={view.status} />
+      <div className="node-status-row">
+        <span className={'node-status ' + nodeStateClass(view.status)}>
+          {t(view.status.replace(/_/g, ' '))}
+        </span>
+        <span className="node-elapsed">
+          <TickingElapsed ms={view.elapsedMs} status={view.status} />
+        </span>
       </div>
       <div
         className="stage-dots"
@@ -94,27 +129,62 @@ export function AgentCanvasNode({ data }: NodeProps): React.JSX.Element {
           view.stages.map((stage) => stage.label + ' ' + stageStateLabel(stage.state)).join(', ')
         }
       >
-        {view.stages.map((stage) => (
+        {view.stages.map((stage, index) => (
           <i
             key={stage.id}
-            className={stageTone(stage.state)}
+            className={
+              isBeyondHead(view.stages, index)
+                ? ''
+                : isPassedStage(view.stages, index)
+                  ? 'passed'
+                  : stageTone(stage.state)
+            }
             title={stage.label + ' — ' + stageStateLabel(stage.state)}
           />
         ))}
       </div>
+      <div className="node-stage-line">
+        <span className="node-stage-count">{stagesReached + '/' + view.stages.length}</span>
+        {stageWord === undefined ? null : (
+          <span className="node-stage-word" title={stageWord}>
+            {t(stageWord)}
+          </span>
+        )}
+      </div>
       {activeLine !== undefined ? (
-        <div className="node-sub live-line truncate" title={activeLine} style={{ marginTop: 6 }}>
+        <div className="node-sub live-line truncate" title={activeLine}>
           {activeLine}
         </div>
       ) : null}
-      <div className="metrics">
-        <span className="metric-chip" title="Findings reported by this agent">
-          {formatCount(view.findingsCount) + ' finding' + (view.findingsCount === 1 ? '' : 's')}
-        </span>
-        <span className="metric-chip" title="Evidence records captured by this agent">
-          {formatCount(view.evidenceCount) + ' evidence'}
-        </span>
+      <div className="node-stats">
+        <div className="node-stat" title="Findings reported by this agent">
+          <strong>{formatCount(view.findingsCount)}</strong>
+          <span>{view.findingsCount === 1 ? 'finding' : 'findings'}</span>
+        </div>
+        <div className="node-stat" title="Evidence records captured by this agent">
+          <strong>{formatCount(view.evidenceCount)}</strong>
+          <span>evidence</span>
+        </div>
+        {view.secrets !== undefined ? (
+          <div
+            className={'node-stat secrets-light ' + view.secrets.state}
+            title={t(SECRETS_LABEL[view.secrets.state])}
+            aria-label={t('Secrets in code') + ': ' + t(SECRETS_LABEL[view.secrets.state])}
+          >
+            <strong>
+              <i aria-hidden="true" />
+            </strong>
+            <span>{t('Secrets')}</span>
+          </div>
+        ) : null}
       </div>
+      {severities.length > 0 ? (
+        <div className="node-severity" role="img" aria-label={severityText} title={severityText}>
+          {severities.map(([name, count]) => (
+            <i key={name} className={'sev-' + name} style={{ flexGrow: count }} />
+          ))}
+        </div>
+      ) : null}
       <Handle type="source" position={Position.Bottom} />
     </div>
   );

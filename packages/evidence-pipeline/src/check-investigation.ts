@@ -1,5 +1,5 @@
 import type { AgentUsage, HarnessEvent } from '@qa/schemas';
-import type { AgentNetworkPromptOptions, AgentRunId } from '@qa/shared';
+import { browserPromptLine, type AgentNetworkPromptOptions, type AgentRunId } from '@qa/shared';
 import type { ObservedOperation } from './pipeline.js';
 import type { ContextBudget } from './context-budget.js';
 import { estimatePromptTokens, isContextWindowExceeded } from './context-budget.js';
@@ -28,6 +28,7 @@ import {
 } from './depth.js';
 import { deletesData, hazardModuleKey, type HazardFile } from './hazard-scan.js';
 import { isRetestCheck } from './retest.js';
+import { isSecretsCheck } from './secrets-check.js';
 import {
   PhaseDeadlineReached,
   investigationDeadline,
@@ -72,7 +73,7 @@ export interface CheckInvestigationHooks<T extends InvestigationTurn> {
   readonly agentRunId: AgentRunId;
   readonly plan: { readonly plannedChecks: readonly string[] };
   /** Undefined outside depth-policy (legacy) runs: no deadline, no salvage. */
-  readonly depth: { readonly deadlineAt: number } | undefined;
+  readonly depth: { readonly deadlineAt: number; readonly profile?: 'fast' | 'full' } | undefined;
   /** The adapter's live frozen-ledger map; read after every event. */
   readonly operations: ReadonlyMap<string, ObservedOperation>;
   readonly contextBudget: ContextBudget;
@@ -151,6 +152,11 @@ export async function* investigateChecks<T extends InvestigationTurn>(
   hooks: CheckInvestigationHooks<T>,
 ): AsyncGenerator<HarnessEvent, CheckInvestigationResult> {
   const { plan, depth, operations, contextBudget } = hooks;
+  /** Follow-up passes start fresh sessions, so they need the browser instructions again. */
+  const browserHint =
+    hooks.network.browserLauncher === undefined
+      ? ''
+      : '\n' + browserPromptLine(hooks.network.browserLauncher);
   const blockedChecks: string[] = [];
   const unprovenChecks: string[] = [];
   const redRetryChecks: string[] = [];
@@ -291,7 +297,8 @@ export async function* investigateChecks<T extends InvestigationTurn>(
             index,
             checkConclusions[index] ?? '',
             failedCommandsSince(new Set(), own),
-          );
+          ) +
+          browserHint;
         seed = '';
         const before = new Set(operations.keys());
         // The session may be left dead if this turn throws, so a report context is needed either way.
@@ -343,6 +350,7 @@ export async function* investigateChecks<T extends InvestigationTurn>(
         unprovenChecks.includes(name) ||
         blockedChecks.includes(name) ||
         redRetryChecks.includes(name) ||
+        isSecretsCheck(name) ||
         checkEndKeys[index] === undefined
           ? []
           : [{ index, proofs: ownOperations(index).filter(isExecutableProofOperation).length }],
@@ -362,7 +370,7 @@ export async function* investigateChecks<T extends InvestigationTurn>(
       ...leadTasks.map((lead) => ({
         index: lead.index,
         label: 'LEAD (' + lead.text + ')',
-        prompt: () => buildLeadPrompt(plan, lead.index, lead.text),
+        prompt: () => buildLeadPrompt(plan, lead.index, lead.text) + browserHint,
       })),
       ...candidates.map(({ index }) => ({
         index,
@@ -378,7 +386,7 @@ export async function* investigateChecks<T extends InvestigationTurn>(
                 ? [op.commandText]
                 : [],
             ),
-          ),
+          ) + browserHint,
       })),
     ];
     yield hooks.event({
@@ -500,7 +508,7 @@ export async function* investigateChecks<T extends InvestigationTurn>(
         checkStartedAt = now();
         softAt = checkStartedAt + checkSoftBudgetMs(left, ranked.length - n);
         await rotate(plan.plannedChecks.length);
-        const text = seed + buildHazardPrompt(file.file, file.hazards);
+        const text = seed + buildHazardPrompt(file.file, file.hazards) + browserHint;
         seed = '';
         const before = new Set(operations.keys());
         ran = true;
@@ -747,6 +755,8 @@ export async function* investigateChecks<T extends InvestigationTurn>(
       if (
         tripped === undefined &&
         !budgetEnded &&
+        // The Secrets check is a read-only search: there is nothing to reproduce, so no nudge to run one.
+        !isSecretsCheck(description(currentCheck)) &&
         !turnProducedProof(ledgerBeforeTurn, operations) &&
         !turnExecutedReproduction(ledgerBeforeTurn, operations) &&
         !interrupted()
@@ -785,7 +795,10 @@ export async function* investigateChecks<T extends InvestigationTurn>(
         }
       }
       contextBudget.observeTurn(turn.usage, turn.contextTokens);
-      if (!turnProducedProof(ledgerBeforeTurn, operations))
+      if (
+        !turnProducedProof(ledgerBeforeTurn, operations) &&
+        !isSecretsCheck(description(currentCheck))
+      )
         unprovenChecks.push(description(currentCheck));
       if (turnRepeatedRedProof(ledgerBeforeTurn, operations) && !closingTriagesFailures(turn.text))
         redRetryChecks.push(description(currentCheck));
@@ -800,7 +813,9 @@ export async function* investigateChecks<T extends InvestigationTurn>(
     // A retest answers one question per finding. It never follows leads, deepens or sweeps files:
     // that would spend budget on, and possibly report, problems nobody asked about.
     const retestOnly = plan.plannedChecks.length > 0 && plan.plannedChecks.every(isRetestCheck);
-    if (!retestOnly) {
+    // A Fast run stops after its checks and any second pass: deepening and the hazard sweep are
+    // what make a run long, and Fast is the choice to skip them.
+    if (!retestOnly && depth?.profile !== 'fast') {
       yield* deepenRound();
       yield* sweepRound();
     }

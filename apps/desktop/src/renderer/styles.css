@@ -37,12 +37,18 @@
   --deepseek: #749b91;
   --glm: #b5aa66;
   --chatgpt: #7f9fc4;
+  --claude: #c98a68;
   --success: #6d9b66;
   --running: #d4c00b;
   --thinking: #b5aa66;
   --warning: #c2a760;
   --danger: var(--sentry-danger);
   --failed: var(--danger);
+  --sev-critical: var(--danger);
+  --sev-high: #c98a64;
+  --sev-medium: var(--warning);
+  --sev-low: #5fa8d3;
+  --sev-info: #929d90;
   --cancelled: #737d71;
   --inconclusive: #a99870;
   /* Glows */
@@ -423,8 +429,52 @@ textarea:focus {
   background: var(--bg-panel);
   color: var(--text);
 }
-.sidebar .collapse-btn {
-  margin-top: var(--space-1);
+/* The sidebar closes and opens from a small tab on its right edge, like the split handle of a spreadsheet. */
+.sidebar {
+  position: relative;
+  z-index: 6;
+}
+.sidebar-handle {
+  position: absolute;
+  /* Centred without a transform: the global button:active rule moves buttons by a pixel with one. */
+  top: calc(50% - 26px);
+  right: -12px;
+  width: 12px;
+  height: 52px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  background: var(--surface-2);
+  border: 1px solid var(--border-default);
+  border-left: 0;
+  border-radius: 0 8px 8px 0;
+  cursor: pointer;
+  transition:
+    width var(--dur-med) var(--ease-out),
+    right var(--dur-med) var(--ease-out),
+    background var(--dur-med) var(--ease-out),
+    border-color var(--dur-med) var(--ease-out);
+}
+.sidebar-handle:active:not(:disabled) {
+  transform: none;
+}
+.sidebar-handle-grip {
+  width: 2px;
+  height: 18px;
+  border-left: 1px solid var(--text-tertiary);
+  border-right: 1px solid var(--text-tertiary);
+  opacity: 0.8;
+}
+.sidebar-handle:hover,
+.sidebar-handle:focus-visible {
+  right: -16px;
+  width: 16px;
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.sidebar-handle:hover .sidebar-handle-grip,
+.sidebar-handle:focus-visible .sidebar-handle-grip {
+  border-color: var(--accent);
 }
 .sidebar .active-strip {
   margin-top: auto;
@@ -562,6 +612,243 @@ textarea:focus {
 .card:hover {
   border-color: var(--border-strong);
   box-shadow: var(--shadow-glow);
+}
+/* Providers: one wide card per agent, its settings in a grid of equal panels. */
+.provider-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+.provider-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.provider-card {
+  --tone: var(--accent);
+  position: relative;
+  overflow: visible;
+  background:
+    radial-gradient(
+      120% 90px at 0% 0%,
+      color-mix(in srgb, var(--tone) 16%, transparent),
+      transparent 70%
+    ),
+    var(--bg-elevated);
+  animation: provider-card-in 420ms var(--ease-out) both;
+}
+.provider-card::before {
+  content: '';
+  position: absolute;
+  top: 14px;
+  bottom: 14px;
+  left: 0;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: linear-gradient(180deg, var(--tone), transparent);
+  opacity: 0.85;
+}
+.provider-card:focus-within {
+  z-index: 5;
+}
+.provider-card:hover,
+.provider-card:focus-within {
+  border-color: color-mix(in srgb, var(--tone) 55%, var(--border-default));
+  box-shadow: 0 8px 28px color-mix(in srgb, var(--tone) 14%, transparent);
+}
+.provider-card.tone-opencode {
+  --tone: #b8c2cc;
+}
+.provider-card.tone-deepseek {
+  --tone: #4d6bfe;
+}
+.provider-card.tone-glm {
+  --tone: #3a7bff;
+}
+.provider-card.tone-chatgpt {
+  --tone: #10a37f;
+}
+.provider-card.tone-claude {
+  --tone: #d97757;
+}
+@keyframes provider-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+.provider-card-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding-bottom: 12px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+.provider-logo {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  background: #f4f6f8;
+  border-radius: 14px;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--tone) 40%, transparent),
+    0 6px 18px color-mix(in srgb, var(--tone) 26%, transparent);
+  transition: transform var(--dur-med) var(--ease-out);
+}
+.provider-card:hover .provider-logo {
+  transform: scale(1.06) rotate(-3deg);
+}
+.provider-card-title {
+  flex: 1;
+  min-width: 0;
+}
+.provider-card-title .section-title,
+.provider-card-title .metadata {
+  margin: 0;
+}
+.provider-card-title .section-title {
+  font-size: 18px;
+}
+.provider-chip {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+  color: var(--text-muted);
+}
+.provider-chip::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.provider-chip.ready {
+  color: var(--success);
+  border-color: rgba(109, 155, 102, 0.55);
+  background: rgba(109, 155, 102, 0.12);
+}
+.provider-chip.ready::before {
+  animation: provider-pulse 2.4s ease-in-out infinite;
+}
+@keyframes provider-pulse {
+  50% {
+    box-shadow: 0 0 0 4px rgba(109, 155, 102, 0.25);
+  }
+}
+.provider-field {
+  transition:
+    border-color var(--dur-med) var(--ease-out),
+    background var(--dur-med) var(--ease-out);
+}
+.provider-field:hover,
+.provider-field:focus-within {
+  border-color: color-mix(in srgb, var(--tone) 45%, var(--border-default));
+}
+.provider-field .model-picker {
+  flex: 1 1 auto;
+}
+.provider-field .model-picker-popover {
+  z-index: 40;
+}
+.provider-account-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.account-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 10px;
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+}
+.account-status.signed {
+  color: var(--success);
+  border-color: rgba(109, 155, 102, 0.55);
+  background: rgba(109, 155, 102, 0.12);
+}
+.account-status.waiting {
+  color: var(--warning, #d9a441);
+  border-color: rgba(217, 164, 65, 0.5);
+}
+.provider-toolbar .project-info-button {
+  width: auto;
+  min-height: 0;
+  gap: 6px;
+  padding: 5px 12px;
+  font-size: 12.5px;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+}
+.provider-toolbar .project-info-button span {
+  font-size: inherit;
+}
+.select-picker .model-picker-value {
+  flex-direction: row;
+}
+@media (prefers-reduced-motion: reduce) {
+  .provider-card,
+  .provider-chip.ready::before {
+    animation: none;
+  }
+  .provider-card:hover .provider-logo {
+    transform: none;
+  }
+}
+.provider-card-body {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+@media (max-width: 1000px) {
+  .provider-card-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.provider-card-body .provider-wide {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+/* A card component that holds several fields lets them take part in the card grid. */
+.provider-fields-root {
+  display: contents;
+}
+.provider-field {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+.provider-field > * {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+/* The run limits sit in a column as wide as the application settings above them. */
+.settings-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: 860px;
 }
 .metric-grid {
   display: grid;
@@ -917,6 +1204,8 @@ textarea:focus {
   gap: var(--space-3);
   height: 100%;
   min-height: 0;
+  /* The run page never scrolls: the panels scroll inside themselves, and the header can be folded away. */
+  overflow: hidden;
 }
 .run-page .content-scroll {
   display: flex;
@@ -949,30 +1238,65 @@ textarea:focus {
   color: var(--text-secondary);
   margin-top: 6px;
 }
-/* Run header facts: always visible, laid out in as many columns as fit. */
+/* Run header facts: three labelled groups side by side (the run, its results, its identifiers). */
 .run-details {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-  gap: 10px 24px;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 14px 28px;
   margin: 12px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
 }
-.run-detail {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+.run-group {
   min-width: 0;
 }
-.run-detail dt {
+.run-group + .run-group {
+  padding-left: 22px;
+  border-left: 1px solid var(--border-subtle);
+}
+.run-group-title {
+  margin: 0 0 8px;
   font-size: 11px;
-  letter-spacing: 0.04em;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-tertiary);
+}
+/* A label on the left, its value on the right, one fact per line. */
+.run-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: baseline;
+  gap: 7px 16px;
+  margin: 0;
+}
+.run-detail {
+  display: contents;
+}
+.run-detail dt {
+  font-size: 12px;
+  color: var(--text-muted);
 }
 .run-detail dd {
   margin: 0;
   min-width: 0;
   font-size: 14px;
   overflow-wrap: anywhere;
+}
+.run-group--results .run-detail dd {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+/* When the groups stack there is no room for a divider beside them. */
+@media (max-width: 760px) {
+  .run-group + .run-group {
+    padding-left: 0;
+    border-left: 0;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-subtle);
+  }
 }
 .run-actions {
   margin-left: auto;
@@ -983,7 +1307,8 @@ textarea:focus {
 .workspace {
   display: flex;
   gap: 0;
-  flex: 1;
+  /* A basis of zero: what is inside a panel (the details, say) never makes the workspace, or the page, taller. */
+  flex: 1 1 0;
   min-height: 0;
   min-width: 0;
 }
@@ -1231,13 +1556,21 @@ textarea:focus {
     background var(--dur-med) var(--ease-out),
     box-shadow var(--dur-med) var(--ease-out);
 }
+.canvas-legend .stage-dots i.done,
 .flow-node .stage-dots i.done {
   background: var(--success);
   box-shadow: 0 0 8px rgba(109, 155, 102, 0.55);
 }
+.canvas-legend .stage-dots i.observed,
 .flow-node .stage-dots i.observed {
   background: #929d90;
 }
+/* A stage no event showed, before the furthest one reached: drawn dimmer, so the bars still read as one line. */
+.canvas-legend .stage-dots i.passed,
+.flow-node .stage-dots i.passed {
+  background: rgba(146, 157, 144, 0.55);
+}
+.canvas-legend .stage-dots i.active,
 .flow-node .stage-dots i.active {
   background: var(--running);
   box-shadow: 0 0 10px rgba(212, 192, 11, 0.75);
@@ -1254,6 +1587,7 @@ textarea:focus {
 }
 /* The agent hit a warning or error: a calm yellow blink in diagonal stripes. Only yellow is used
    (the gaps are a faint yellow), with a faint glow and a shallow blink so it never shines. */
+.canvas-legend .stage-dots i.warning,
 .flow-node .stage-dots i.warning {
   background-color: rgba(212, 192, 11, 0.14);
   background-image: repeating-linear-gradient(
@@ -1273,6 +1607,7 @@ textarea:focus {
     opacity: 0.72;
   }
 }
+.canvas-legend .stage-dots i.failed,
 .flow-node .stage-dots i.failed {
   background: var(--danger);
   box-shadow: 0 0 10px rgba(185, 100, 98, 0.7);
@@ -1323,6 +1658,185 @@ textarea:focus {
   box-shadow: 0 0 8px rgba(212, 192, 11, 0.9);
   flex: none;
   animation: icon-breathe 1.4s ease-in-out infinite;
+}
+
+/* Agent node: a fixed width, every line trimmed to it, so nothing can overflow the box. */
+.flow-node.agent-node {
+  width: 244px;
+  min-width: 0;
+  max-width: none;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.flow-node.agent-node > * {
+  min-width: 0;
+}
+.flow-node.agent-node .node-title {
+  gap: 8px;
+}
+.flow-node.agent-node .node-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.flow-node.agent-node .node-status-icon {
+  flex: none;
+}
+.flow-node.agent-node .node-model {
+  font-size: 12px;
+  margin-top: -3px;
+}
+.flow-node.agent-node .node-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.flow-node.agent-node .node-status {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+}
+.flow-node.agent-node .node-status.state-running,
+.flow-node.agent-node .node-status.state-thinking,
+.flow-node.agent-node .node-status.state-starting {
+  color: var(--running);
+  border-color: rgba(212, 192, 11, 0.45);
+  background: rgba(212, 192, 11, 0.08);
+}
+.flow-node.agent-node .node-status.state-completed {
+  color: var(--success);
+  border-color: rgba(109, 155, 102, 0.45);
+  background: rgba(109, 155, 102, 0.1);
+}
+.flow-node.agent-node .node-status.state-failed,
+.flow-node.agent-node .node-status.state-timeout {
+  color: var(--danger);
+  border-color: rgba(185, 100, 98, 0.45);
+  background: rgba(185, 100, 98, 0.08);
+}
+.flow-node.agent-node .node-elapsed {
+  flex: none;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+/* The stage bars share the whole width, so the node reads as one progress bar. */
+.flow-node.agent-node .stage-dots {
+  margin-top: 2px;
+  gap: 4px;
+}
+.flow-node.agent-node .stage-dots i {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
+}
+.flow-node.agent-node .node-stage-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.flow-node.agent-node .node-stage-count {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+.flow-node.agent-node .node-stage-word {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.flow-node.agent-node .live-line {
+  margin-top: 0;
+  font-size: 12px;
+}
+/* Three equal cells: the number first, the word under it. */
+.flow-node.agent-node .node-stats {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 6px;
+  margin-top: 2px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle);
+}
+.flow-node.agent-node .node-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.flow-node.agent-node .node-stat strong {
+  display: flex;
+  align-items: center;
+  min-height: 22px;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+.flow-node.agent-node .node-stat span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+.flow-node.agent-node .node-stat.secrets-light {
+  gap: 1px;
+}
+.flow-node.agent-node .node-stat.secrets-light i {
+  width: 12px;
+  height: 12px;
+}
+/* Findings by severity as one thin bar: a glance says whether anything serious was found. */
+.flow-node.agent-node .node-severity {
+  display: flex;
+  gap: 2px;
+  height: 4px;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.flow-node.agent-node .node-severity i {
+  flex-basis: 0;
+  min-width: 4px;
+}
+.flow-node.agent-node .node-severity .sev-critical,
+.legend-swatch.sev-critical {
+  background: var(--sev-critical);
+}
+.flow-node.agent-node .node-severity .sev-high,
+.legend-swatch.sev-high {
+  background: var(--sev-high);
+}
+.flow-node.agent-node .node-severity .sev-medium,
+.legend-swatch.sev-medium {
+  background: var(--sev-medium);
+}
+.flow-node.agent-node .node-severity .sev-low,
+.legend-swatch.sev-low {
+  background: var(--sev-low);
+}
+.flow-node.agent-node .node-severity .sev-info,
+.legend-swatch.sev-info {
+  background: var(--sev-info);
 }
 
 /* Agent state halos — each lifecycle phase reads instantly */
@@ -1622,4 +2136,516 @@ input:focus-visible,
 select:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* Legend card on the run canvas: what the stage bars and the findings bar colours mean. */
+.canvas-legend-anchor {
+  display: flex;
+}
+/* A dropdown under the toolbar, opened only when the button is pressed. It sits in the canvas itself, so
+   its height is limited by the canvas and it scrolls instead of running past the bottom of the window. */
+.canvas-legend-layer {
+  position: absolute;
+  top: 52px;
+  right: 10px;
+  z-index: 6;
+  display: flex;
+  max-width: calc(100% - 20px);
+  max-height: calc(100% - 64px);
+}
+.canvas-legend {
+  width: 264px;
+  max-width: 100%;
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  background: var(--glass-bg-strong);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+.canvas-legend .legend-heading {
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+.canvas-legend .legend-heading:not(:first-child) {
+  margin-top: 10px;
+}
+.canvas-legend .legend-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+/* One item per line, and a long word wraps instead of being cut off. */
+.canvas-legend .legend-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.canvas-legend .legend-list li > span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.canvas-legend .legend-swatch {
+  flex: none;
+  width: 22px;
+  height: 5px;
+  border-radius: 2px;
+}
+.canvas-legend .stage-dots {
+  flex: none;
+  display: flex;
+}
+.canvas-legend .stage-dots i {
+  width: 22px;
+  height: 5px;
+  border-radius: 2px;
+  background: rgba(160, 190, 160, 0.18);
+}
+.canvas-legend .legend-note {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+/* Stages in the agent details: a vertical timeline, one marker per stage joined by a line. */
+.stage-timeline {
+  padding: 10px 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+.stage-timeline-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.stage-timeline-count {
+  padding: 1px 8px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+}
+.stage-timeline-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.stage-step {
+  --stage-color: var(--text-tertiary);
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 10px;
+  min-width: 0;
+  padding: 5px 0 5px 32px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+/* The line that joins a marker to the next one. */
+.stage-step:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: 10px;
+  top: 27px;
+  bottom: -5px;
+  width: 2px;
+  background: var(--border-default);
+}
+.stage-step[data-state='completed']:not(:last-child)::before,
+.stage-step[data-state='observed']:not(:last-child)::before {
+  background: color-mix(in srgb, var(--stage-color) 55%, transparent);
+}
+.stage-step-marker {
+  position: absolute;
+  left: 0;
+  top: 5px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  color: var(--stage-color);
+  background: var(--bg-panel);
+  border: 1px solid var(--stage-color);
+  border-radius: 50%;
+}
+.stage-step-label {
+  flex: 1 1 96px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--text-primary);
+}
+.stage-step-state {
+  flex: none;
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--stage-color);
+  border: 1px solid var(--stage-color);
+  border-radius: 999px;
+}
+.stage-step[data-state='completed'] {
+  --stage-color: var(--success);
+}
+.stage-step[data-state='observed'] {
+  --stage-color: #8fa08a;
+}
+.stage-step[data-state='active'] {
+  --stage-color: var(--running);
+}
+.stage-step[data-state='active'] .stage-step-marker {
+  box-shadow: 0 0 8px rgba(212, 192, 11, 0.55);
+}
+.stage-step[data-state='warning'] {
+  --stage-color: var(--warning);
+}
+.stage-step[data-state='failed'] {
+  --stage-color: var(--danger);
+}
+.stage-step[data-state='cancelled'] {
+  --stage-color: var(--text-tertiary);
+}
+/* A stage the agent never reached stays quiet. */
+.stage-step[data-state='not_started'] .stage-step-label {
+  color: var(--text-muted);
+}
+.stage-step[data-state='not_started'] .stage-step-state {
+  border-style: dashed;
+  border-color: var(--border-default);
+  color: var(--text-muted);
+}
+
+.run-group--results .run-fact-unit {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+/* Why an analysis is partial or failed: a title line, then one row per agent that did not finish. */
+.run-notice {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: none;
+  /* A long list of failures scrolls inside the note instead of pushing the canvas down. */
+  max-height: 30vh;
+  overflow-y: auto;
+}
+.run-notice-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+.run-notice-head svg {
+  flex: none;
+  color: var(--warning);
+}
+.run-notice-agents {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.run-notice-agent {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 8px 10px;
+  background: rgba(13, 16, 13, 0.45);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+.run-notice-name {
+  font-weight: 700;
+}
+.run-notice-state {
+  padding: 1px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  border-radius: 999px;
+}
+.run-notice-reason {
+  flex: 1 1 260px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.run-notice-details {
+  flex: 1 1 100%;
+  font-size: 12.5px;
+  color: var(--text-muted);
+}
+.run-notice-details summary {
+  cursor: pointer;
+}
+.run-notice-details code {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.run-notice-hint {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+/* A notice the person can close: the X sits in its top right corner. */
+.inline-notice.has-close {
+  position: relative;
+  padding-right: 44px;
+}
+.notice-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.notice-close:hover,
+.notice-close:focus-visible {
+  color: var(--text-primary);
+  background: rgba(238, 241, 235, 0.08);
+  border-color: var(--border-default);
+}
+
+/* In the stage timeline a stage no event showed, before the furthest one reached, keeps the line unbroken. */
+.stage-step[data-passed='true']:not(:last-child)::before {
+  background: color-mix(in srgb, #8fa08a 40%, transparent);
+}
+.stage-step[data-passed='true'] .stage-step-marker {
+  border-color: rgba(143, 160, 138, 0.5);
+}
+
+/* Brings back the notes the person closed. */
+.show-issues {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--warning);
+  border-color: rgba(194, 167, 96, 0.5);
+}
+.show-issues-count {
+  min-width: 18px;
+  padding: 0 5px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--bg-base, #0d100d);
+  background: var(--warning);
+  border-radius: 999px;
+}
+
+/* Model picker: a searchable list with the name and the exact id of every model. */
+.model-list-update {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  margin-top: 4px;
+}
+.model-list-update .spin {
+  animation: icon-spin 1.1s linear infinite;
+}
+.model-list-update-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.model-list-error {
+  flex: 1 1 100%;
+  margin: 0;
+  color: var(--danger);
+}
+.model-picker {
+  position: relative;
+  flex: 1 1 260px;
+  min-width: 0;
+}
+.model-picker-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: 40px;
+  padding: 6px 12px;
+  text-align: left;
+  color: var(--text-primary);
+  background: var(--bg-panel);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+.model-picker-trigger[aria-expanded='true'] {
+  border-color: var(--accent);
+}
+.model-picker-value {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.model-picker-placeholder {
+  color: var(--text-muted);
+}
+.model-picker-popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  max-height: min(440px, 60vh);
+  background: var(--glass-bg-strong);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+.model-picker-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.model-picker-search input {
+  flex: 1;
+  min-width: 0;
+  padding: 2px 0;
+  color: var(--text-primary);
+  background: transparent;
+  border: 0;
+  outline: none;
+}
+.model-picker-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 0;
+  padding: 4px;
+  overflow-y: auto;
+  list-style: none;
+}
+.model-group-title {
+  padding: 8px 8px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+.model-picker-empty {
+  padding: 12px 8px;
+}
+.model-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  width: 100%;
+  padding: 7px 10px;
+  text-align: left;
+  color: var(--text-primary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.model-row.active,
+.model-row:hover,
+.model-row:focus-visible {
+  background: rgba(238, 241, 235, 0.07);
+  border-color: var(--border-subtle);
+}
+.model-row[aria-selected='true'] {
+  border-color: rgba(109, 155, 102, 0.45);
+}
+.model-row-main {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+.model-row-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.model-row-id {
+  font-size: 12px;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.model-row-facts {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.model-badge {
+  padding: 0 7px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border: 1px solid var(--border-default);
+  border-radius: 999px;
+}
+.model-badge.new {
+  color: var(--success);
+  border-color: rgba(109, 155, 102, 0.55);
+  background: rgba(109, 155, 102, 0.12);
+}
+.model-badge.legacy {
+  color: var(--text-muted);
+}
+.model-row-custom {
+  flex: none;
+  flex-direction: row;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  border-radius: 0;
+  border-top: 1px solid var(--border-subtle);
 }

@@ -91,6 +91,10 @@ jobs:
         run: bash scripts/launcher/tests/test-dsh-switch.sh
       - name: Sandbox prerequisite matrix (no WSL)
         run: bash scripts/launcher/tests/test-sandbox-prereqs.sh
+      - name: Headless browser check matrix (no WSL)
+        run: bash scripts/launcher/tests/test-browser-check.sh
+      - name: Claude sign-in terminal check matrix (no WSL)
+        run: bash scripts/launcher/tests/test-terminal-check.sh
       - name: Pre-run readiness gate matrix (no WSL)
         run: pnpm --filter @qa/runtime exec vitest run tests/readiness-gate.test.ts tests/sandbox-deps.test.ts
 
