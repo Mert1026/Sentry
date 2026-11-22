@@ -1422,11 +1422,22 @@ export class SentryRuntimeHost {
                   ...glmSandboxStatus(sandboxDeps),
                 };
               })();
+      // The model each agent really uses comes from its own doctor; the stack definition only holds the
+      // placeholder it was registered with ('unconfigured'), which must never reach the screen once a model is set.
+      const doctorFor = (
+        {
+          stack_opencode_main: opencode,
+          stack_chatgpt_main: chatgpt,
+          stack_deepseek_main: deepseek,
+          stack_glm_main: glm,
+          stack_claude_main: claude,
+        } as Record<string, { modelId?: string; provider?: string } | undefined>
+      )[s.id];
       return {
         id: s.id,
         displayName: s.displayName,
-        modelId: s.model.modelId,
-        provider: s.model.provider,
+        modelId: doctorFor?.modelId ?? s.model.modelId,
+        provider: doctorFor?.provider ?? s.model.provider,
         ...base,
       };
     });

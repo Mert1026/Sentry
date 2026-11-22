@@ -6,6 +6,11 @@
   saves a Markdown file, `sentry-cli-commands.md`, with every `sentry cli` command, its options and what it does
   (the same guide that ships as CLI.md). The text is built into the app, so it works offline and always matches
   the version you run; the save location comes from the normal Save As dialog.
+
+- **The agent cards on the project page show the model you chose.** The DeepSeek, GLM and Claude cards kept showing
+  the model they were registered with ("unconfigured" or the built-in default) next to "configured", even after you
+  had chosen a model in Settings → Providers; only OpenCode and ChatGPT followed the change. Every agent now reports
+  the model it will really use, and it updates as soon as the setting changes.
 - **The sidebar closes from a tab on its edge.** The double-arrow button under the menu is gone. A small tab sits on
   the sidebar's right edge, like the split handle of a spreadsheet, and closes or opens the sidebar when pressed.
 
