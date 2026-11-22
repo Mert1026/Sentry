@@ -9,6 +9,8 @@ a headless browser for web checks, a model picker with an updatable model list, 
 redesigned Providers page and many fixes found by QA runs on Sentry's own code. No database migration, and the
 runtime protocol stays 1. See the [release notes](docs/releases/v2.0.2.md).
 
+- **React Router 6.28.0 to 6.30.6** in the Desktop interface, which fixes a high-severity open-redirect advisory in the
+  router. Sentry only routes its own pages, so it was not reachable from outside; the update removes the finding.
 - **Download the CLI commands from Settings → Application.** A new "CLI command reference" row has a button that
   saves a Markdown file, `sentry-cli-commands.md`, with every `sentry cli` command, its options and what it does
   (the same guide that ships as CLI.md). The text is built into the app, so it works offline and always matches
