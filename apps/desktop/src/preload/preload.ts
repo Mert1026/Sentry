@@ -130,6 +130,7 @@ const api: SentryDesktopApi & {
   },
   app: {
     setLanguage: (language: 'en' | 'bg') => invoke('app:set-language', { language }),
+    saveCliReference: () => invoke('app:save-cli-reference', {}),
   },
   runtime: {
     status: () => invoke('runtime:status', {}),

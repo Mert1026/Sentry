@@ -1018,5 +1018,10 @@
   "Note length limit": "Ограничение на дължината на бележката",
   "How long a note for the agents may be, for the note to all agents and for each agent's own note. It is the number under the note fields when you start a run. 5,000 characters is the default.": "Колко дълга може да бъде бележка към агентите — общата бележка и бележката на всеки агент поотделно. Това е числото под полетата за бележки при стартиране на изпълнение. По подразбиране са 5 000 знака.",
   "No limit takes any length. Everything you write is sent to the agents with the run, so a very long note uses up their context and makes the run slower and more expensive.": "„Без ограничение“ приема бележка с всякаква дължина. Всичко написано се изпраща на агентите заедно с изпълнението, така че много дълга бележка изразходва контекста им и прави изпълнението по-бавно и по-скъпо.",
-  "Characters": "Знаци"
+  "Characters": "Знаци",
+  "CLI command reference": "Справочник с команди на CLI",
+  "Download CLI commands (.md)": "Изтегли командите на CLI (.md)",
+  "Save a Markdown file with every CLI command and what it does": "Запази Markdown файл с всяка команда на CLI и какво прави тя",
+  "A Markdown file with every `sentry cli` command, its options and what it does: projects, runs, settings, models, exports and toolchains. Keep it next to your scripts, or give it to a coding assistant so it knows how to drive Sentry.": "Markdown файл с всяка команда `sentry cli`, нейните опции и какво прави: проекти, изпълнения, настройки, модели, експорти и набори от инструменти. Дръжте го до скриптовете си или го дайте на асистент за програмиране, за да знае как да управлява Sentry.",
+  "Saved to": "Запазено в"
 }

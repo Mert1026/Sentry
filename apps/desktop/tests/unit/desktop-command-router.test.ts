@@ -170,6 +170,7 @@ describe('shared desktop command router', () => {
       'runtime:select-distro',
       'runs:export-save',
       'runs:export-reveal',
+      'app:save-cli-reference',
       'cli:set-enabled',
     ]) {
       expect(isCliAllowed(channel)).toBe(false);
@@ -191,6 +192,31 @@ describe('shared desktop command router', () => {
     expect(result).toEqual({ saved: true, language: 'bg' });
     expect(persisted).toEqual(['bg']);
     expect(h.seen).toHaveLength(0);
+  });
+
+  it('saves the CLI reference only through the native dialog, and never for an external client', async () => {
+    const h = await harness(true);
+    const requestSavePath = vi.fn().mockResolvedValue(null);
+    await expect(
+      dispatchDesktopCommand(h.service, 'app:save-cli-reference', {}, { requestSavePath }),
+    ).resolves.toEqual({ status: 'cancelled' });
+    expect(requestSavePath).toHaveBeenCalledWith(
+      expect.objectContaining({ suggestedFilename: 'sentry-cli-commands.md' }),
+    );
+    // No dialog hook: it fails closed instead of choosing a path itself.
+    await expect(
+      dispatchDesktopCommand(h.service, 'app:save-cli-reference', {}, {}),
+    ).rejects.toMatchObject({ code: 'DIALOG_UNAVAILABLE' });
+    // The renderer cannot pass a destination or text.
+    await expect(
+      dispatchDesktopCommand(
+        h.service,
+        'app:save-cli-reference',
+        { path: '/tmp/x.md', content: 'x' },
+        { requestSavePath },
+      ),
+    ).rejects.toThrow();
+    expect(isCliAllowed('app:save-cli-reference')).toBe(false);
   });
 
   it('rejects invalid languages and keeps them out of the external allowlist', async () => {
