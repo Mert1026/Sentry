@@ -1,5 +1,5 @@
 /* global console */
-// Writes src/shared/cli-reference.generated.ts from docs/beta/cli.md, the CLI guide that ships as CLI.md.
+// Writes src/main/cli-reference.generated.ts from docs/beta/cli.md, the CLI guide that ships as CLI.md.
 // The Desktop app offers that text as a download (Settings → Application), and the installed app has no docs
 // folder, so the guide is compiled in. A test fails when this file is out of date; run
 // `pnpm --filter @qa/desktop gen:cli-reference` after editing the guide.
@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const source = join(here, '..', '..', '..', 'docs', 'beta', 'cli.md');
-const target = join(here, '..', 'src', 'shared', 'cli-reference.generated.ts');
+const target = join(here, '..', 'src', 'main', 'cli-reference.generated.ts');
 
 const markdown = readFileSync(source, 'utf8').replace(/\r\n/g, '\n');
 const output =

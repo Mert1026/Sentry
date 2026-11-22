@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CLI_REFERENCE_MARKDOWN } from '../../src/shared/cli-reference.generated.js';
+import { CLI_REFERENCE_MARKDOWN } from '../../src/main/cli-reference.generated.js';
 import {
   CLI_REFERENCE_FILE_NAME,
   saveCliReference,
@@ -40,6 +40,25 @@ describe('the compiled CLI reference', () => {
       'settings effort',
     ])
       expect(CLI_REFERENCE_MARKDOWN, text).toContain(text);
+  });
+});
+
+describe('where the compiled reference lives', () => {
+  it('is in the main-process sources only: the preload build recompiles src/shared as CommonJS into the same folder and breaks the main process', () => {
+    const preloadConfig = JSON.parse(
+      readFileSync(join(repo, 'apps', 'desktop', 'tsconfig.preload.json'), 'utf8'),
+    ) as { include: string[] };
+    expect(preloadConfig.include).toContain('src/shared');
+    expect(
+      readdirSync(join(repo, 'apps', 'desktop', 'src', 'shared')).filter((name) =>
+        name.includes('cli-reference'),
+      ),
+    ).toEqual([]);
+    expect(
+      readdirSync(join(repo, 'apps', 'desktop', 'src', 'main')).includes(
+        'cli-reference.generated.ts',
+      ),
+    ).toBe(true);
   });
 });
 

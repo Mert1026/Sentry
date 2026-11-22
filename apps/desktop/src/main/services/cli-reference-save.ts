@@ -5,7 +5,7 @@
  * from the guide compiled into the app, the destination always comes from the native Save As dialog, and a
  * failed write never leaves a partial file at the chosen path.
  */
-import { CLI_REFERENCE_MARKDOWN } from '../../shared/cli-reference.generated.js';
+import { CLI_REFERENCE_MARKDOWN } from '../cli-reference.generated.js';
 import { noteSavedExport, writeAtomically, type SaveDialogOptions } from './export-save.js';
 
 export type CliReferenceSaveResult =
