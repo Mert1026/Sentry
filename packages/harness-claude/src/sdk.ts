@@ -14,6 +14,9 @@ export const CLAUDE_CODE_VERSION = '2.1.270' as const;
 /** Claude Code version Sentry validated this adapter against. */
 export const CLAUDE_CODE_TESTED_VERSION = CLAUDE_CODE_VERSION;
 
+/** Per-reply output cap handed to Claude Code (its own default is 32000). */
+export const DEFAULT_CLAUDE_MAX_OUTPUT_TOKENS = '64000' as const;
+
 /**
  * Claude Code versions with live-proven sandbox regressions against
  * Sentry's WSL/bubblewrap worker. Evidence-gated: entries require a
@@ -670,6 +673,10 @@ function spawnOwnedClaudeTurn(
  */
 export function buildClaudeSpawnEnv(spec: ClaudeSpawnSpec): NodeJS.ProcessEnv {
   return {
+    // Claude Code caps one reply at 32000 output tokens and fails the whole turn above it
+    // (observed: a full-depth run died after ~70 minutes with CLAUDE_START_FAILED). Raise the
+    // cap by default; an explicit value in spec.environment still wins.
+    CLAUDE_CODE_MAX_OUTPUT_TOKENS: DEFAULT_CLAUDE_MAX_OUTPUT_TOKENS,
     ...spec.environment,
     ...(spec.homeDir === undefined ? {} : { HOME: spec.homeDir }),
     CLAUDE_CONFIG_DIR: spec.configDir,
