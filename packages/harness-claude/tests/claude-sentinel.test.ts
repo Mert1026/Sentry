@@ -154,6 +154,25 @@ describe('Claude credential boundary', () => {
     expect(env['ANTHROPIC_API_KEY']).toBe(SENTINEL_VALUE);
   });
 
+  it('raises the per-reply output cap by default and lets an explicit value win', () => {
+    const base = {
+      executable: 'claude-test',
+      cwd: '/tmp/ws',
+      configDir: '/tmp/claude-home',
+      modelId: 'claude-5.3-flash',
+      settingsPath: '/tmp/claude-home/sentry-settings.json',
+      initializeTimeoutMs: 30_000,
+      turnTimeoutMs: 60_000,
+      shutdownTimeoutMs: 5_000,
+    };
+    expect(buildClaudeSpawnEnv({ ...base, environment: {} })['CLAUDE_CODE_MAX_OUTPUT_TOKENS']).toBe('64000');
+    expect(
+      buildClaudeSpawnEnv({ ...base, environment: { CLAUDE_CODE_MAX_OUTPUT_TOKENS: '16000' } })[
+        'CLAUDE_CODE_MAX_OUTPUT_TOKENS'
+      ],
+    ).toBe('16000');
+  });
+
   it('blocks unrelated secret-shaped names from the child environment', () => {
     const child = buildClaudeChildEnvironment({
       source: {
