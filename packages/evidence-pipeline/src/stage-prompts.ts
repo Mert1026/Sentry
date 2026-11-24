@@ -421,12 +421,10 @@ export function buildQaReportPrompt(
     SEVERITY_CALIBRATION,
     'Items the investigator tagged [replica] or [traced] are not executed proof of the real code: they can support a suspected finding at strong confidence at most, never confirmed, and they cannot make a check passed. Say in the check details when a result rests on a replica or a trace.',
     'The ledger below is the ONLY authoritative source of operation keys and exit codes. null means unknown. Test evidence requires test:true. Never combine commands or invent outcomes. confirmed requires genuinely reproduced proof; strong requires grounded source or observed operations. code_reference supports strong at most; manual uses agent_reasoning only. Restrictions alone are limitations; report their mishandling only with a concrete product failure.',
+    // The contract goes out with every attempt, corrections included: a retry that only saw the list of
+    // errors came back in the wrong shape (missing required fields, a category that does not exist).
     ...(correction === undefined
-      ? [
-          'Categories: ' + FINDING_CATEGORIES.join(',') + '.',
-          describeSentryAgentReportContract(),
-          REPORT_ENVELOPE_SCHEMA,
-        ]
+      ? []
       : [
           buildReportCorrectionIntro(correction),
           ...(correction.some((error) => /path|file|directory/i.test(error))
@@ -435,6 +433,9 @@ export function buildQaReportPrompt(
               ]
             : []),
         ]),
+    'Categories: ' + FINDING_CATEGORIES.join(',') + '.',
+    describeSentryAgentReportContract(),
+    REPORT_ENVELOPE_SCHEMA,
     'Authoritative operation receipt (frozen after investigation): ' +
       compactOperationReceipt(operations),
   ].join('\n');

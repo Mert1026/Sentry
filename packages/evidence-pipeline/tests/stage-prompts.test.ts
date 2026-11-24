@@ -154,9 +154,13 @@ describe('ordered compact QA stages', () => {
     expect(text).toContain('breaks attempted');
     expect(text).toContain('reproductionSteps');
     expect(text.length).toBeLessThan(6750);
-    expect(buildQaReportPrompt(plan, new Map(), ['Invalid strength']).length).toBeLessThan(
-      text.length,
-    );
+    // A retry carries the full contract again (a retry that saw only the error list came back in the wrong
+    // shape), plus the correction note.
+    const retry = buildQaReportPrompt(plan, new Map(), ['Invalid strength']);
+    expect(retry).toContain('Invalid strength');
+    expect(retry).toContain('reproductionSteps');
+    expect(retry).toContain('Categories:');
+    expect(retry.length).toBeLessThan(text.length + 1500);
   });
 });
 

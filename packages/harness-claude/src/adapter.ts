@@ -392,8 +392,6 @@ const TRANSIENT_SANDBOX_RACE_LIMIT = 3;
 /** How often a status event goes out while the one long report reply is still being written. */
 const REPORT_HEARTBEAT_MS = 60_000;
 
-/** Reasoning effort for the report-only session (the investigation keeps the configured effort). */
-const REPORT_EFFORT = 'low';
 
 /**
  * A plain-language next step for a sandbox bootstrap failure, or nothing when the first diagnostic line
@@ -1674,9 +1672,7 @@ export class ClaudeAgentHarnessAdapter implements HarnessAdapter {
       let conclusionBlock = '';
       const startReportContext = async (conclusions?: string) => {
         if (conclusions !== undefined) conclusionBlock = conclusions;
-        // The report only serializes a frozen ledger, so it does not need the investigation's deep
-        // reasoning; long thinking here is what made a report reply run out of tokens or time.
-        await freshClient(REPORT_EFFORT);
+        await freshClient();
         recoveryContext =
           buildRecoveryReportContext(request, this.toolNotes.render(), conclusionBlock) + '\n';
         contextBudget.reset();
