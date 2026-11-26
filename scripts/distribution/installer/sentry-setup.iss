@@ -89,6 +89,34 @@ en.RebootNeeded=Windows needs to restart to finish installing WSL2. After you si
 en.FinishedOk=Sentry is installed.%n%nOpen it, add your provider keys in Settings → Providers, and start your first QA run.
 en.FinishedFailed=Sentry is not fully set up yet. Run this setup again to continue where it stopped.
 en.LaunchSentry=Open Sentry
+en.TechnicalDetail=Technical detail: %1
+; Status and problem codes sent by wizard.ps1 (MSG/FAIL lines), %1 and %2 are their arguments.
+en.WCheckWindowsOk=Windows 11 x64 (build %1)
+en.WCheckWindowsFail=Sentry needs Windows 11 on a 64-bit Intel or AMD processor.
+en.WCheckVirtOk=Hardware virtualization is on
+en.WCheckVirtFail=Hardware virtualization is off. Turn on Intel VT-x or AMD-V (SVM) in the BIOS/UEFI settings, then run this setup again.
+en.WCheckDiskLow=Only %1 GB of disk space is free; Sentry and Ubuntu need about 10 GB.
+en.WCheckDistroOk=Linux distribution found: %1
+en.WCheckUbuntuTodo=WSL is installed; Ubuntu will be installed next.
+en.WCheckWslTodo=WSL2 and Ubuntu will be installed next.
+en.WWslPresent=WSL is already installed.
+en.WWslInstalling=Installing WSL2. Approve the Windows administrator prompt…
+en.WWslFailed=WSL2 could not be installed (error %1). Check Windows Update and your internet connection.
+en.WWslRestart=WSL2 is installed. Windows needs to restart; setup continues by itself after you sign in again.
+en.WUbuntuInstalling=Downloading and installing Ubuntu. This takes a few minutes…
+en.WUbuntuFailed=Ubuntu could not be installed. Check your internet connection.
+en.WDistroRestart=%1 cannot start yet. Windows needs to restart; setup continues by itself after you sign in again.
+en.WAccountCreating=Creating the Linux account "%1" in %2…
+en.WAccountFailed=The Linux account in %1 could not be created.
+en.WDistroReady=%1 is ready.
+en.WNoDistro=No Linux distribution was chosen yet. Run this setup again.
+en.WLinuxPreparing=Installing Node 22, pnpm, systemd, bubblewrap and socat in %1…
+en.WLinuxFailed=The Linux tools could not be installed in %1. Check your internet connection.
+en.WCoreInstalling=Installing the Sentry runtime inside WSL. This takes several minutes…
+en.WCoreFailed=The Sentry runtime could not be installed.
+en.WToolsInstalling=Installing the agent tools (OpenCode, DeepSeek, Claude Code)…
+en.WToolsFailed=The agent tools could not be installed.
+en.WUnexpected=An unexpected error occurred.
 bg.WelcomeExtra=Този съветник инсталира Sentry и всичко необходимо: WSL2, Ubuntu, инструментите за Linux и инструментите на агентите.%n%nНа нов компютър отнема от 10 до 30 минути и изисква интернет връзка. Windows ще поиска еднократно администраторско одобрение и може да се наложи един рестарт; след това инсталацията продължава сама.
 bg.StepCheck=Проверка на компютъра
 bg.StepWsl=Инсталиране на WSL2
@@ -106,6 +134,33 @@ bg.RebootNeeded=Windows трябва да се рестартира, за да �
 bg.FinishedOk=Sentry е инсталиран.%n%nОтворете го, добавете ключовете на доставчиците в Настройки → Доставчици и стартирайте първата си QA проверка.
 bg.FinishedFailed=Sentry все още не е напълно настроен. Стартирайте инсталацията отново, за да продължи оттам, където е спряла.
 bg.LaunchSentry=Отвори Sentry
+bg.TechnicalDetail=Технически подробности: %1
+bg.WCheckWindowsOk=Windows 11 x64 (компилация %1)
+bg.WCheckWindowsFail=Sentry изисква Windows 11 на 64-битов процесор на Intel или AMD.
+bg.WCheckVirtOk=Хардуерната виртуализация е включена
+bg.WCheckVirtFail=Хардуерната виртуализация е изключена. Включете Intel VT-x или AMD-V (SVM) в настройките на BIOS/UEFI и стартирайте инсталацията отново.
+bg.WCheckDiskLow=Свободни са само %1 GB; Sentry и Ubuntu се нуждаят от около 10 GB.
+bg.WCheckDistroOk=Намерена Linux дистрибуция: %1
+bg.WCheckUbuntuTodo=WSL е инсталиран; следва инсталиране на Ubuntu.
+bg.WCheckWslTodo=Следва инсталиране на WSL2 и Ubuntu.
+bg.WWslPresent=WSL вече е инсталиран.
+bg.WWslInstalling=Инсталиране на WSL2. Потвърдете администраторския прозорец на Windows…
+bg.WWslFailed=WSL2 не можа да бъде инсталиран (грешка %1). Проверете Windows Update и интернет връзката.
+bg.WWslRestart=WSL2 е инсталиран. Windows трябва да се рестартира; инсталацията продължава сама, след като влезете отново.
+bg.WUbuntuInstalling=Изтегляне и инсталиране на Ubuntu. Това отнема няколко минути…
+bg.WUbuntuFailed=Ubuntu не можа да бъде инсталиран. Проверете интернет връзката.
+bg.WDistroRestart=%1 все още не може да стартира. Windows трябва да се рестартира; инсталацията продължава сама, след като влезете отново.
+bg.WAccountCreating=Създаване на Linux акаунта „%1“ в %2…
+bg.WAccountFailed=Linux акаунтът в %1 не можа да бъде създаден.
+bg.WDistroReady=%1 е готов.
+bg.WNoDistro=Все още не е избрана Linux дистрибуция. Стартирайте инсталацията отново.
+bg.WLinuxPreparing=Инсталиране на Node 22, pnpm, systemd, bubblewrap и socat в %1…
+bg.WLinuxFailed=Инструментите за Linux не можаха да бъдат инсталирани в %1. Проверете интернет връзката.
+bg.WCoreInstalling=Инсталиране на средата на Sentry в WSL. Това отнема няколко минути…
+bg.WCoreFailed=Средата на Sentry не можа да бъде инсталирана.
+bg.WToolsInstalling=Инсталиране на инструментите на агентите (OpenCode, DeepSeek, Claude Code)…
+bg.WToolsFailed=Инструментите на агентите не можаха да бъдат инсталирани.
+bg.WUnexpected=Възникна неочаквана грешка.
 
 [Code]
 const
@@ -154,22 +209,60 @@ begin
   Result := Resuming and ((PageID = wpWelcome) or (PageID = wpSelectTasks) or (PageID = wpReady));
 end;
 
+{ Turns a wizard.ps1 code line ("Code|arg1|arg2") into text in the chosen language. }
+function TranslateCode(Line: String): String;
+var
+  Args: array[0..1] of String;
+  Code: String;
+  I, P: Integer;
+begin
+  P := Pos('|', Line);
+  if P = 0 then
+  begin
+    Code := Line;
+    Line := '';
+  end
+  else
+  begin
+    Code := Copy(Line, 1, P - 1);
+    Line := Copy(Line, P + 1, Length(Line));
+  end;
+  for I := 0 to 1 do
+  begin
+    P := Pos('|', Line);
+    if P = 0 then
+    begin
+      Args[I] := Line;
+      Line := '';
+    end
+    else
+    begin
+      Args[I] := Copy(Line, 1, P - 1);
+      Line := Copy(Line, P + 1, Length(Line));
+    end;
+  end;
+  Result := FmtMessage(CustomMessage('W' + Code), [Args[0], Args[1]]);
+end;
+
+{ "MSG <code>" is the current status, "FAIL <code>" a problem to report; indented lines are
+  technical output that only goes to the log (the last one is kept for error reports). }
 procedure OnStepOutput(const S: String; const Error, FirstLine: Boolean);
 var
-  Line: String;
+  Text: String;
 begin
-  Line := Trim(S);
-  if Line = '' then
-    Exit;
-  if (Pos('FAIL ', Line) = 1) then
-    ProblemLines := ProblemLines + Copy(Line, 6, Length(Line)) + #13#10;
-  if (Pos('ERROR ', Line) = 1) then
-    ProblemLines := ProblemLines + Copy(Line, 7, Length(Line)) + #13#10;
-  if Pos('RESULT ', Line) <> 1 then
+  if Pos('MSG ', S) = 1 then
   begin
-    LastLine := Line;
-    ProgressPage.SetText(CurrentStepTitle, Line);
-  end;
+    Text := TranslateCode(Trim(Copy(S, 5, Length(S))));
+    ProgressPage.SetText(CurrentStepTitle, Text);
+  end
+  else if Pos('FAIL ', S) = 1 then
+  begin
+    Text := TranslateCode(Trim(Copy(S, 6, Length(S))));
+    ProblemLines := ProblemLines + Text + #13#10;
+    ProgressPage.SetText(CurrentStepTitle, Text);
+  end
+  else if (Pos('  ', S) = 1) and (Trim(S) <> '') then
+    LastLine := Trim(S);
 end;
 
 { Runs one wizard.ps1 step and returns its exit code. }
@@ -241,7 +334,10 @@ begin
       end;
       Detail := ProblemLines;
       if Detail = '' then
-        Detail := LastLine;
+        Detail := CustomMessage('WUnexpected') + #13#10;
+      { The last technical line is often the real cause (in English, as the tool printed it). }
+      if LastLine <> '' then
+        Detail := Detail + #13#10 + FmtMessage(CustomMessage('TechnicalDetail'), [LastLine]);
       MsgBox(FmtMessage(CustomMessage('Failed'), [CustomMessage(Titles[I]), Detail, ExpandConstant('{localappdata}\Sentry\logs\setup-wizard.log')]), mbError, MB_OK);
       Exit;
     end;

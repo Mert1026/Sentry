@@ -1,5 +1,7 @@
 # wizard.ps1 — the steps behind the Windows setup wizard (SentrySetup.exe).
-# The wizard runs one step at a time and shows each step's output lines as its progress text:
+# The wizard runs one step at a time. Lines meant for the person are codes the wizard translates
+# (English or Bulgarian): `MSG <Code>|<arg>...` is the current status and `FAIL <Code>|<arg>...`
+# a problem to report. Every other line is technical output that only goes to the log.
 #   check   Windows 11 x64, virtualization, WSL and distro state (changes nothing)
 #   wsl     install WSL2 itself (the only step that asks for administrator approval)
 #   ubuntu  install Ubuntu when no WSL2 distro is usable and create its Linux account
@@ -21,10 +23,35 @@ $logDir = Join-Path $env:LOCALAPPDATA 'Sentry\logs'
 [void](New-Item -ItemType Directory -Force -Path $logDir)
 $log = Join-Path $logDir 'setup-wizard.log'
 
-function Write-WizardLine {
+function Write-WizardOut {
   param([string]$Text)
   Write-Host $Text
   Add-Content -LiteralPath $log -Value ((Get-Date -Format 's') + ' [' + $Step + '] ' + $Text) -Encoding UTF8
+}
+
+# Technical output: indented, so it can never be read as a MSG/FAIL code.
+function Write-WizardLine {
+  param([string]$Text)
+  foreach ($line in (([string]$Text) -split '\r?\n')) { if ($line.Trim()) { Write-WizardOut ('  ' + $line.TrimEnd()) } }
+}
+
+# A status the wizard shows in the person's language (see the W_ messages in sentry-setup.iss).
+function Write-WizardMessage {
+  param([string]$Code, [string[]]$Arguments = @())
+  Write-WizardOut ('MSG ' + ((@($Code) + $Arguments) -join '|'))
+}
+
+# A problem the wizard reports in the person's language.
+function Write-WizardProblem {
+  param([string]$Code, [string[]]$Arguments = @())
+  Write-WizardOut ('FAIL ' + ((@($Code) + $Arguments) -join '|'))
+}
+
+# Reports a problem and ends the step as failed.
+function Stop-Wizard {
+  param([string]$Code, [string[]]$Arguments = @())
+  Write-WizardProblem $Code $Arguments
+  throw [System.OperationCanceledException]::new('wizard-stop')
 }
 
 # The Linux account name: the Windows user name in the form Linux accepts, or "sentry".
@@ -49,7 +76,7 @@ function Get-WizardDistro {
   $cfg = Get-SentryLauncherConfig
   $selected = [string]$cfg['selectedDistro']
   if ($selected) { return $selected }
-  throw 'No WSL distro was chosen yet; run the Ubuntu step first.'
+  Stop-Wizard 'NoDistro'
 }
 
 # Runs the archive's own launcher and streams its output into the wizard.
@@ -67,25 +94,23 @@ try {
       $os = Get-CimInstance Win32_OperatingSystem
       $win11 = ([int]$os.BuildNumber -ge 22000) -and ($os.ProductType -eq 1)
       $x64 = [Environment]::Is64BitOperatingSystem -and ($env:PROCESSOR_ARCHITECTURE -eq 'AMD64')
-      if ($win11 -and $x64) { Write-WizardLine ('OK Windows 11 x64 (build ' + $os.BuildNumber + ')') }
-      else { Write-WizardLine 'FAIL Sentry needs Windows 11 on a 64-bit Intel or AMD processor.'; $code = 11 }
-      if (Test-WizardVirtualization) { Write-WizardLine 'OK Hardware virtualization is on' }
-      else { Write-WizardLine 'FAIL Hardware virtualization is off. Turn on Intel VT-x or AMD-V (SVM) in the BIOS/UEFI settings, then run this setup again.'; $code = 11 }
-      if (Test-SentryWslAvailable) {
-        Write-WizardLine 'OK WSL is installed'
-        $usable = @((Get-SentryDistroClass @(Get-SentryWslDistros)).Usable)
-        if ($usable.Count -gt 0) { Write-WizardLine ('OK Linux distribution: ' + (($usable | ForEach-Object { $_.Name }) -join ', ')) }
-        else { Write-WizardLine 'TODO Ubuntu will be installed' }
-      } else {
-        Write-WizardLine 'TODO WSL2 and Ubuntu will be installed (Windows asks for administrator approval and may need one restart)'
-      }
+      if ($win11 -and $x64) { Write-WizardMessage 'CheckWindowsOk' @([string]$os.BuildNumber) }
+      else { Write-WizardProblem 'CheckWindowsFail'; $code = 11 }
+      if (Test-WizardVirtualization) { Write-WizardMessage 'CheckVirtOk' }
+      else { Write-WizardProblem 'CheckVirtFail'; $code = 11 }
       $drive = Get-PSDrive -Name ($env:LOCALAPPDATA.Substring(0, 1)) -ErrorAction SilentlyContinue
-      if ($drive -and $drive.Free -lt 10GB) { Write-WizardLine ('WARN Only ' + [math]::Round($drive.Free / 1GB, 1) + ' GB free; Sentry and Ubuntu need about 10 GB.') }
-      else { Write-WizardLine 'OK Enough free disk space' }
+      if ($drive -and $drive.Free -lt 10GB) { Write-WizardMessage 'CheckDiskLow' @([string][math]::Round($drive.Free / 1GB, 1)) }
+      if (Test-SentryWslAvailable) {
+        $usable = @((Get-SentryDistroClass @(Get-SentryWslDistros)).Usable)
+        if ($usable.Count -gt 0) { Write-WizardMessage 'CheckDistroOk' @((($usable | ForEach-Object { $_.Name }) -join ', ')) }
+        else { Write-WizardMessage 'CheckUbuntuTodo' }
+      } else {
+        Write-WizardMessage 'CheckWslTodo'
+      }
     }
     'wsl' {
-      if (Test-SentryWslAvailable) { Write-WizardLine 'WSL is already installed.'; break }
-      Write-WizardLine 'Installing WSL2 (Windows asks for administrator approval)...'
+      if (Test-SentryWslAvailable) { Write-WizardMessage 'WslPresent'; break }
+      Write-WizardMessage 'WslInstalling'
       $tmp = Join-Path ([IO.Path]::GetTempPath()) ('sentry-wsl-' + [guid]::NewGuid().ToString('N') + '.ps1')
       # Newer WSL installs without a distribution (Ubuntu follows in its own step, without its
       # first-run prompt); older inbox WSL only knows the plain form.
@@ -100,22 +125,22 @@ try {
         try {
           $proc = Start-Process powershell.exe -ArgumentList ('-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "' + $tmp + '"') -Verb RunAs -Wait -PassThru -ErrorAction Stop
         } catch {
-          Write-WizardLine 'The administrator prompt was cancelled. Nothing was changed.'
+          Write-WizardLine 'administrator prompt cancelled; nothing was changed'
           $code = 10
           break
         }
-        Write-WizardLine ('WSL installer finished (exit ' + $proc.ExitCode + ').')
-        if (($proc.ExitCode -ne 0) -and ($proc.ExitCode -ne 3010)) { throw ('WSL could not be installed (exit ' + $proc.ExitCode + ').') }
+        Write-WizardLine ('WSL installer exit=' + $proc.ExitCode)
+        if (($proc.ExitCode -ne 0) -and ($proc.ExitCode -ne 3010)) { Stop-Wizard 'WslFailed' @([string]$proc.ExitCode) }
       } finally { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
       # Turning WSL on for the first time needs a restart before a distribution can start.
-      Write-WizardLine 'WSL2 is installed. Windows needs to restart; setup continues by itself after you sign in again.'
+      Write-WizardMessage 'WslRestart'
       $code = 75
     }
     'ubuntu' {
-      if (-not (Test-SentryWslAvailable)) { Write-WizardLine 'WSL is not ready yet. Restart Windows, then setup continues.'; $code = 75; break }
+      if (-not (Test-SentryWslAvailable)) { Write-WizardMessage 'WslRestart'; $code = 75; break }
       $usable = @((Get-SentryDistroClass @(Get-SentryWslDistros)).Usable)
       if ($usable.Count -eq 0) {
-        Write-WizardLine 'Downloading and installing Ubuntu (a few minutes)...'
+        Write-WizardMessage 'UbuntuInstalling'
         $r = Invoke-SentryNative -FilePath 'wsl.exe' -Arguments @('--install', '-d', 'Ubuntu', '--no-launch') -TimeoutSec 1800
         Write-WizardLine ('wsl --install -d Ubuntu exit=' + $r.ExitCode)
         # Store-packaged Ubuntu registers only after its own installer runs once.
@@ -127,12 +152,12 @@ try {
       }
       $prev = [string](Get-SentryLauncherConfig)['selectedDistro']
       $distro = Select-SentryDistro -Distros @(Get-SentryWslDistros) -Previous $prev -Explicit '' -NonInteractive $true
-      if (-not $distro) { throw 'Ubuntu could not be installed. Check your internet connection and run this setup again.' }
+      if (-not $distro) { Stop-Wizard 'UbuntuFailed' }
       # Everything here runs as root: a fresh distro's own user would start Ubuntu's first-run prompt.
       $rootProbe = Invoke-SentryNative -FilePath 'wsl.exe' -Arguments @('-d', $distro, '-u', 'root', '--', 'true') -TimeoutSec 120
       if ($rootProbe.ExitCode -ne 0) {
         Write-WizardLine ([string]$rootProbe.Stdout + [string]$rootProbe.Stderr).Replace([string][char]0, '').Trim()
-        Write-WizardLine ($distro + ' cannot start yet. Restart Windows, then setup continues.')
+        Write-WizardMessage 'DistroRestart' @($distro)
         $code = 75
         break
       }
@@ -141,38 +166,43 @@ try {
       $firstUser = Invoke-SentryNative -FilePath 'wsl.exe' -Arguments @('-d', $distro, '-u', 'root', '--', 'getent', 'passwd', '1000') -TimeoutSec 60
       if ($firstUser.ExitCode -ne 0) {
         $name = Get-WizardLinuxUserName $env:USERNAME
-        Write-WizardLine ('Creating the Linux account "' + $name + '" in ' + $distro + '...')
+        Write-WizardMessage 'AccountCreating' @($name, $distro)
         $made = Invoke-SentryWslFile -Distro $distro -ScriptName 'create-user.sh' -ScriptArgs @($name) -TimeoutSec 120 -AsRoot $true
-        Write-WizardLine ([string]$made.Stdout).Trim()
-        if ($made.ExitCode -ne 0) { throw ('The Linux account could not be created: ' + ([string]$made.Stderr).Trim()) }
+        Write-WizardLine ([string]$made.Stdout + [string]$made.Stderr).Trim()
+        if ($made.ExitCode -ne 0) { Stop-Wizard 'AccountFailed' @($distro) }
         [void](Invoke-SentryNative -FilePath 'wsl.exe' -Arguments @('--terminate', $distro) -TimeoutSec 60)
         Start-Sleep -Seconds 3
       }
       Set-SentryLauncherConfig @{ selectedDistro = $distro }
-      Write-WizardLine ('Linux distribution ready: ' + $distro)
+      Write-WizardMessage 'DistroReady' @($distro)
     }
     'linux' {
       $distro = Get-WizardDistro
-      Write-WizardLine ('Preparing ' + $distro + ': Node 22, pnpm, systemd, bubblewrap, socat...')
+      Write-WizardMessage 'LinuxPreparing' @($distro)
       $toolchain = Invoke-SentryToolchainPhase -Distro $distro -RepoRoot (Join-Path $root 'runtime-source') 6>&1 | ForEach-Object {
         if ($_ -is [bool]) { $_ } else { Write-WizardLine ([string]$_) }
       }
-      if (-not (@($toolchain) -contains $true)) { throw 'The Linux tools could not be installed (see the lines above).' }
+      if (-not (@($toolchain) -contains $true)) { Stop-Wizard 'LinuxFailed' @($distro) }
     }
     'core' {
       $distro = Get-WizardDistro
-      Write-WizardLine 'Installing the Sentry runtime inside WSL (several minutes)...'
+      Write-WizardMessage 'CoreInstalling'
       $code = Invoke-WizardLauncher @('setup', '-Distro', $distro, '-NonInteractive')
+      if ($code -ne 0) { Write-WizardProblem 'CoreFailed' }
     }
     'tools' {
       $distro = Get-WizardDistro
-      Write-WizardLine 'Installing the agent tools (OpenCode, DeepSeek, Claude Code)...'
+      Write-WizardMessage 'ToolsInstalling'
       $code = Invoke-WizardLauncher @('tools', '-Distro', $distro, '-NonInteractive')
+      if ($code -ne 0) { Write-WizardProblem 'ToolsFailed' }
     }
   }
 } catch {
-  Write-WizardLine ('ERROR ' + $_.Exception.Message)
+  if ($_.Exception.Message -ne 'wizard-stop') {
+    Write-WizardLine ('ERROR ' + $_.Exception.Message)
+    Write-WizardProblem 'Unexpected'
+  }
   $code = 1
 }
-Write-WizardLine ('RESULT ' + $code)
+Write-WizardOut ('RESULT ' + $code)
 exit $code

@@ -27,6 +27,20 @@ test('every wizard message exists in English and Bulgarian', async () => {
     assert.ok(names('en').includes(used[1]), used[1]);
 });
 
+test('every status and problem code the step script sends has a translated text', async () => {
+  const iss = await read('../installer/sentry-setup.iss');
+  const ps1 = await read('../wizard.ps1');
+  const sent = [
+    ...ps1.matchAll(/(?:Write-WizardMessage|Write-WizardProblem|Stop-Wizard) '([A-Za-z]+)'/g),
+  ].map((m) => m[1]);
+  assert.ok(sent.length >= 20, 'expected the step script to send its codes');
+  for (const code of new Set(sent))
+    for (const lang of ['en', 'bg'])
+      assert.match(iss, new RegExp(`^${lang}\\.W${code}=.+`, 'm'), `${lang}.W${code}`);
+  // Nothing the person sees is written directly: only codes and indented technical output.
+  assert.doesNotMatch(ps1, /Write-WizardOut \('(?!MSG |FAIL |RESULT |  ')/);
+});
+
 test('wizard exit codes match between the installer and the step script', async () => {
   const iss = await read('../installer/sentry-setup.iss');
   const ps1 = await read('../wizard.ps1');
