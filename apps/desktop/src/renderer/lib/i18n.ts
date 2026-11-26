@@ -131,6 +131,49 @@ function translateStagePair(label: string, state: string): string | undefined {
   if (bgState === undefined) return undefined;
   return bgLabel + ' ' + bgState;
 }
+/**
+ * The step an agent reports ("OpenCode is investigating check 3/8: …"), shown as the current
+ * operation. The agent's name and the text after the colon (a check or file the agent named) stay
+ * as they are; only Sentry's own wording is translated.
+ */
+const AGENT_NAME = '(OpenCode|DeepSeek|Claude Code|Claude|GLM|ChatGPT|Muse)';
+const AGENT_STEPS: ReadonlyArray<readonly [RegExp, (m: RegExpExecArray) => string]> = [
+  [/^creating a frozen investigation plan\.$/, () => 'създава замразен план за проучване.'],
+  [/^executing the frozen plan\.$/, () => 'изпълнява замразения план.'],
+  [
+    /^serializing the frozen investigation into a report\.$/,
+    () => 'оформя замразеното проучване в доклад.',
+  ],
+  [/^still writing the report\.$/, () => 'все още пише доклада.'],
+  [/^investigating check (\d+\/\d+): (.*)$/s, (m) => `проучва проверка ${m[1]}: ${m[2]}`],
+  [
+    /^giving check (\d+) a second pass \((\d+\/\d+)\): (.*)$/s,
+    (m) => `прави второ преминаване на проверка ${m[1]} (${m[2]}): ${m[3]}`,
+  ],
+  [/^following up lead (\d+\/\d+): (.*)$/s, (m) => `проследява следа ${m[1]}: ${m[2]}`],
+  [
+    /^exploring critical flow (\d+\/\d+): (.*)$/s,
+    (m) => `изследва критичен поток ${m[1]}: ${m[2]}`,
+  ],
+  [
+    /^deepening check (\d+) \((\d+\/\d+)\): (.*)$/s,
+    (m) => `задълбочава проверка ${m[1]} (${m[2]}): ${m[3]}`,
+  ],
+  [
+    /^running the hazard sweep \((\d+\/\d+)\): (.*)$/s,
+    (m) => `прави преглед на рисковите места (${m[1]}): ${m[2]}`,
+  ],
+];
+function translateAgentStep(trimmed: string): string | undefined {
+  const step = new RegExp('^' + AGENT_NAME + ' is (.+)$', 's').exec(trimmed);
+  if (step === null) return undefined;
+  for (const [pattern, render] of AGENT_STEPS) {
+    const match = pattern.exec(step[2] ?? '');
+    if (match !== null) return `${step[1]} ${render(match)}`;
+  }
+  return undefined;
+}
+
 function translateCore(trimmed: string): string {
   if (trimmed.length === 0) return trimmed;
   const exact = BG_MAP[trimmed];
@@ -294,6 +337,27 @@ function translateCore(trimmed: string): string {
   const runWindow = /^Every run gets a window of (.+?)( \(the default\))?\.$/.exec(trimmed);
   if (runWindow !== null)
     return `Всяко изпълнение получава прозорец от ${translateCore(runWindow[1] ?? '')}${runWindow[2] === undefined ? '' : ' (по подразбиране)'}.`;
+  // Dashboard statistics notes.
+  const lastWeek = /^(\d+) in the last 7 days$/.exec(trimmed);
+  if (lastWeek !== null) return `${lastWeek[1]} за последните 7 дни`;
+  const ofFinished = /^(\d+) of (\d+) finished$/.exec(trimmed);
+  if (ofFinished !== null) return `${ofFinished[1]} от ${ofFinished[2]} приключили`;
+  const confirmedCount = /^(\d+) confirmed$/.exec(trimmed);
+  if (confirmedCount !== null) return `${confirmedCount[1]} потвърдени`;
+  const minutesShort = /^(\d+) min$/.exec(trimmed);
+  if (minutesShort !== null) return `${minutesShort[1]} мин`;
+  const hoursShort = /^(\d+) h$/.exec(trimmed);
+  if (hoursShort !== null) return `${hoursShort[1]} ч`;
+  const agentsInvestigate = /^(\d+) agents investigate this revision independently\.$/.exec(
+    trimmed,
+  );
+  if (agentsInvestigate !== null)
+    return `${agentsInvestigate[1]} агента проучват тази ревизия независимо един от друг.`;
+  const noteSize = /^A note may be ([\d,]+) characters( \(the default\))?\.$/.exec(trimmed);
+  if (noteSize !== null)
+    return `Бележката може да е до ${noteSize[1]} знака${noteSize[2] === undefined ? '' : ' (по подразбиране)'}.`;
+  const noteRange = /^Enter between ([\d,]+) and ([\d,]+) characters\.$/.exec(trimmed);
+  if (noteRange !== null) return `Въведете между ${noteRange[1]} и ${noteRange[2]} знака.`;
   const hoursOnly = /^(\d+) hours?$/.exec(trimmed);
   if (hoursOnly !== null) return hoursOnly[1] === '1' ? '1 час' : `${hoursOnly[1]} часа`;
   const minutesOnly = /^(\d+) minutes?$/.exec(trimmed);
@@ -322,6 +386,8 @@ function translateCore(trimmed: string): string {
   const exported = /^(JSON|Log) exported$/.exec(trimmed);
   if (exported !== null)
     return exported[1] === 'JSON' ? 'JSON е експортиран' : 'Журналът е експортиран';
+  const agentStep = translateAgentStep(trimmed);
+  if (agentStep !== undefined) return agentStep;
   const toolStarted = /^Tool started: (.+)$/.exec(trimmed);
   if (toolStarted !== null) return `Инструментът стартира: ${toolStarted[1]}`;
   const toolCompleted = /^Tool completed: (.+)$/.exec(trimmed);

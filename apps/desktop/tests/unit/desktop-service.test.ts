@@ -231,6 +231,23 @@ describe('desktop RPC adapter', () => {
   });
 });
 
+describe('stop extra rounds when idle reaches the runtime for every agent', () => {
+  it('pushes true for each agent that has it on and false for the rest', async () => {
+    const h = await harness();
+    await h.service.providerSaveKey('SENTRY_ANTHROPIC_STOP_IDLE', 'on');
+    await h.service.providerSaveKey('SENTRY_DEEPSEEK_STOP_IDLE', 'on');
+    await h.service.pushRuntimeConfiguration();
+    const pushed = h.seen.filter((c) => c.method === 'runtime.configure').at(-1);
+    expect(pushed?.params).toMatchObject({
+      stopIdle: { claude: true, deepseek: true, opencode: false, chatgpt: false, glm: false },
+    });
+    await h.service.providerClearKey('SENTRY_ANTHROPIC_STOP_IDLE');
+    await h.service.pushRuntimeConfiguration();
+    const again = h.seen.filter((c) => c.method === 'runtime.configure').at(-1);
+    expect(again?.params).toMatchObject({ stopIdle: { claude: false, deepseek: true } });
+  });
+});
+
 describe('reasoning effort reaches the runtime for every agent', () => {
   it('pushes each agent its own level and "default" for the rest', async () => {
     const h = await harness();

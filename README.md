@@ -5,7 +5,7 @@ investigate the same immutable snapshot of your project on their own and report
 findings, evidence, token usage and a persistent run history. Findings are never
 merged or ranked across agents, so you can compare what each one found.
 
-**Stable release:** [Sentry v2.0.3 — Windows](https://github.com/Mert1026/Sentry/releases/tag/v2.0.3)
+**Stable release:** [Sentry v2.0.4 — Windows](https://github.com/Mert1026/Sentry/releases/tag/v2.0.4)
 for **Windows 11 x64 with WSL2** (Ubuntu preferred). The ZIP is unsigned and uses an
 online Linux runtime bootstrap. Native Linux Desktop is deferred.
 Version 2.0 removes the 1.x merge, verification and issue features and keeps your
@@ -77,15 +77,14 @@ it, run `.\sentry.ps1 register-command` there.
 More detail: [getting started](docs/getting-started.md) and the
 [installation and maintenance guide](docs/setup/distribution.md).
 
-## Updating from 2.0.2
+## Updating from 2.0.3
 
 There is no automatic updater. Finish or cancel active runs, then download the release ZIP and its `.sha256` file
-from the [v2.0.3 Release page](https://github.com/Mert1026/Sentry/releases/tag/v2.0.3) into one folder and run
+from the [v2.0.4 Release page](https://github.com/Mert1026/Sentry/releases/tag/v2.0.4) into one folder and run
 `sentry update <path-to-the-zip>`: it verifies the ZIP, backs up your data and sets up the new version. Your
 projects, runs, history and provider settings are kept (no database migration). Afterwards check `sentry version`
-shows 2.0.3 and `sentry cli capabilities --json` lists `fullAccess`. Updating from 2.0.1 or earlier: use the
-Release page's **Update an existing installation** block. Full steps:
-[release notes](docs/releases/v2.0.3.md#updating-from-v202).
+shows 2.0.4. Updating from 2.0.2 or earlier: use the Release page's **Update an existing installation** block.
+Full steps: [release notes](docs/releases/v2.0.4.md#updating-from-v203).
 
 ## Configuration
 
@@ -219,6 +218,17 @@ Read the [threat model](docs/security/V1_THREAT_MODEL.md), the
 The original beta executable is not an approved credential downgrade target.
 
 ## What's new
+
+### 2.0.4
+
+- **Sharper investigations:** risk-ordered, narrow checks built from the source, critical flows explored end to
+  end, and a traced root cause on every reproduced defect.
+- **Stop extra rounds when idle** (Settings → Providers, per agent): the extra rounds end once two turns in a row
+  find nothing new, saving time and provider usage.
+- **Claude and GLM** install dependencies outside the sandbox-protected project folder, and long Claude runs hold
+  up better.
+- A **dashboard** with workspace statistics and a 14-day run chart; clearer run stages, live line and Start QA
+  dialog; **Stopping run…** after a cancel; more Bulgarian.
 
 ### 2.0.3
 

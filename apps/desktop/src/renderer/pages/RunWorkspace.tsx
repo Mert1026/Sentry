@@ -2,7 +2,14 @@ import React from 'react';
 import { LoadingOverlay } from '../components/BlockingOverlay.js';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, ChevronDown, ChevronUp, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import {
+  AlertTriangle,
+  ChevronDown,
+  ChevronUp,
+  ChevronsLeft,
+  ChevronsRight,
+  Loader2,
+} from 'lucide-react';
 import { RunCanvas } from '../components/RunCanvas.js';
 import { AgentInspector } from '../components/AgentInspector.js';
 import { RunSummaryPanel } from '../components/RunSummaryPanel.js';
@@ -55,7 +62,7 @@ export function RunWorkspace(): React.JSX.Element {
   const { runId } = useParams();
   const queryClient = useQueryClient();
   const developerMode = useDeveloperMode();
-  const { language } = useI18n();
+  const { language, t } = useI18n();
   const [selectedId, setSelectedId] = React.useState<string | undefined>(undefined);
   const [centerRequest, setCenterRequest] = React.useState<{ id: string; key: number } | undefined>(
     undefined,
@@ -65,6 +72,8 @@ export function RunWorkspace(): React.JSX.Element {
   const [leftWidth, setLeftWidth] = React.useState(() => loadWidth(LEFT_KEY, LEFT_DEFAULT));
   const [rightWidth, setRightWidth] = React.useState(() => loadWidth(RIGHT_KEY, RIGHT_DEFAULT));
   const [confirmCancel, setConfirmCancel] = React.useState(false);
+  // Set once a cancel is sent: the run takes a while to stop, and until it has, the button says so.
+  const [stopRequested, setStopRequested] = React.useState(false);
   // The facts under the title can be folded away to give the canvas the room; folded by default on a short window.
   const [factsOpen, setFactsOpen] = React.useState<boolean>(() => {
     try {
@@ -125,11 +134,15 @@ export function RunWorkspace(): React.JSX.Element {
     });
   const cancel = useMutation({
     mutationFn: () => sentryApi().runs.cancel(runId as string),
+    onMutate: () => setStopRequested(true),
     onSuccess: () => {
       setConfirmCancel(false);
       refresh();
     },
-    onError: fail,
+    onError: (error) => {
+      setStopRequested(false);
+      fail(error);
+    },
   });
   const exportSave = useMutation({
     mutationFn: (format: 'log' | 'json') => sentryApi().runs.exportSave(runId as string, format),
@@ -322,6 +335,7 @@ export function RunWorkspace(): React.JSX.Element {
   const selectedAgent = graph?.agents.find((a) => 'agent-' + a.agentStackId === selectedId);
   const selectedEdge = graph?.edges.find((e) => e.id === selectedId);
   const cancelState = (cancel.data as { status?: string } | undefined)?.status;
+  const stopping = isActive && (stopRequested || cancel.isPending);
   // What the analysis note says: the status and which agents did not finish, and how.
   const analysisSignature =
     data.run.status +
@@ -421,7 +435,17 @@ export function RunWorkspace(): React.JSX.Element {
                 </Link>
               </>
             ) : null}
-            {isActive ? (
+            {stopping ? (
+              <button
+                className="compact danger run-stopping"
+                disabled
+                aria-busy="true"
+                title={t('The agents are being stopped; findings so far are kept.')}
+              >
+                <Loader2 size={13} aria-hidden="true" className="run-stopping-icon" />
+                Stopping run…
+              </button>
+            ) : isActive ? (
               confirmCancel ? (
                 <span className="metadata">
                   Cancel? Findings are preserved.{' '}

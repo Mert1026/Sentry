@@ -606,7 +606,7 @@ describe('ChatGPT sign-in choice', () => {
   });
 });
 
-describe('Reasoning effort sits at the end of each agent card', () => {
+describe('Reasoning effort sits at the end of each agent card, followed only by its stop-when-idle switch', () => {
   for (const [card, setting] of [
     ['OpenCode', 'SENTRY_OPENCODE_REASONING'],
     ['DeepSeek', 'SENTRY_DEEPSEEK_REASONING'],
@@ -641,8 +641,11 @@ describe('Reasoning effort sits at the end of each agent card', () => {
       );
       const region = await screen.findByRole('region', { name: `${card} provider settings` });
       const effort = await within(region).findByLabelText(`Value for ${setting}`);
+      const stopIdle = within(region).getByRole('switch', { name: 'Stop extra rounds when idle' });
+      // the agent's stop-when-idle switch is the one control after the effort select
+      expect(effort.compareDocumentPosition(stopIdle) & 4).toBe(4);
       const controls = Array.from(region.querySelectorAll('select, input, [role="switch"]')).filter(
-        (element) => element !== effort,
+        (element) => element !== effort && element !== stopIdle,
       );
       expect(controls.length).toBeGreaterThan(0);
       for (const control of controls) {
@@ -651,4 +654,78 @@ describe('Reasoning effort sits at the end of each agent card', () => {
       }
     });
   }
+});
+
+describe('Stop extra rounds when idle, per agent', () => {
+  for (const [card, setting] of [
+    ['OpenCode', 'SENTRY_OPENCODE_STOP_IDLE'],
+    ['DeepSeek', 'SENTRY_DEEPSEEK_STOP_IDLE'],
+    ['GLM', 'SENTRY_GLM_STOP_IDLE'],
+    ['ChatGPT', 'SENTRY_CHATGPT_STOP_IDLE'],
+    ['Claude', 'SENTRY_ANTHROPIC_STOP_IDLE'],
+  ] as const) {
+    it(`${card}: off by default, turning it on saves only this agent's setting`, async () => {
+      const save = vi.fn().mockResolvedValue({});
+      const clearKey = vi.fn().mockResolvedValue({});
+      const client = new QueryClient({
+        defaultOptions: {
+          queries: { retry: false, gcTime: Infinity },
+          mutations: { retry: false },
+        },
+      });
+      clients.push(client);
+      Object.defineProperty(window, 'sentry', {
+        configurable: true,
+        value: {
+          providers: { status: vi.fn().mockResolvedValue([]), save, clearKey, forgetAll: vi.fn() },
+        },
+      });
+      render(
+        <QueryClientProvider client={client}>
+          <MemoryRouter>
+            <Providers />
+          </MemoryRouter>
+        </QueryClientProvider>,
+      );
+      const region = await screen.findByRole('region', { name: `${card} provider settings` });
+      const toggle = await within(region).findByRole('switch', {
+        name: 'Stop extra rounds when idle',
+      });
+      expect(toggle.getAttribute('aria-checked')).toBe('false');
+      fireEvent.click(toggle);
+      await waitFor(() => expect(save).toHaveBeenCalledWith(setting, 'on'));
+      expect(save).toHaveBeenCalledTimes(1);
+    });
+  }
+
+  it('shows a saved choice as on, and turning it off clears the setting', async () => {
+    const clearKey = vi.fn().mockResolvedValue({});
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: Infinity }, mutations: { retry: false } },
+    });
+    clients.push(client);
+    Object.defineProperty(window, 'sentry', {
+      configurable: true,
+      value: {
+        providers: {
+          status: vi.fn().mockResolvedValue([statusRow('SENTRY_ANTHROPIC_STOP_IDLE', 'on')]),
+          save: vi.fn().mockResolvedValue({}),
+          clearKey,
+          forgetAll: vi.fn(),
+        },
+      },
+    });
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <Providers />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    const region = await screen.findByRole('region', { name: 'Claude provider settings' });
+    const toggle = within(region).getByRole('switch', { name: 'Stop extra rounds when idle' });
+    await waitFor(() => expect(toggle.getAttribute('aria-checked')).toBe('true'));
+    fireEvent.click(toggle);
+    await waitFor(() => expect(clearKey).toHaveBeenCalledWith('SENTRY_ANTHROPIC_STOP_IDLE'));
+  });
 });

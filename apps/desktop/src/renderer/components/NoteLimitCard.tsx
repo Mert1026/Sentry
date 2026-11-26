@@ -150,9 +150,11 @@ export function NoteLimitCard(): React.JSX.Element {
         </div>
       ) : null}
       <p className="metadata" style={{ margin: '10px 0 0' }} role="status">
-        {'A note may be ' +
-          describeNoteLimit(saved).toLowerCase() +
-          (saved === NOTE_LIMIT_DEFAULT ? ' (the default).' : '.')}
+        {saved >= NOTE_LIMIT_UNLIMITED
+          ? 'Notes have no length limit.'
+          : 'A note may be ' +
+            describeNoteLimit(saved).toLowerCase() +
+            (saved === NOTE_LIMIT_DEFAULT ? ' (the default).' : '.')}
       </p>
       {error !== undefined ? (
         <p className="error-box" role="alert" style={{ marginTop: 8 }}>

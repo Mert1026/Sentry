@@ -36,6 +36,7 @@ import {
   investigateChecks,
   listHazardCandidates,
   scanHazardFiles,
+  stopExtraRoundsWhenIdle,
   buildQaPlanningPrompt,
   applyBlockedChecks,
   applyUnprovenChecks,
@@ -1342,6 +1343,10 @@ export class OpenCodeHarnessAdapter implements HarnessAdapter {
         cancelled: () =>
           entry.controller.signal.aborted || this.cancelledRuns.has(request.agentRunId),
         hazardFiles: () => scanHazardFiles(request.workspace.runtimePath, 40, originalSource),
+        // Per-agent setting (Settings → Providers): end the extra rounds once they stop finding defects.
+        stopExtraRoundsWhenIdle: stopExtraRoundsWhenIdle(
+          this.hostEnvironment['SENTRY_OPENCODE_STOP_IDLE'],
+        ),
         isTurnTimeout: (cause) => cause instanceof OpenCodeTurnTimeoutError,
         // A turn on an aborted session reports a cancel failure even though nobody
         // cancelled the run (the loop rechecks `cancelled`). With banked work that is

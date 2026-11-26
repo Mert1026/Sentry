@@ -1,7 +1,12 @@
 # Beta compatibility
 
-What changes for an existing 1.0.2 install when it moves to 2.0.x, and what 2.0.3 changes for a 2.0.2
-install. The product version is `2.0.3`; the runtime protocol stays 1.
+What changes for an existing 1.0.2 install when it moves to 2.0.x, and what 2.0.4 changes for a 2.0.3
+install. The product version is `2.0.4`; the runtime protocol stays 1.
+
+**2.0.3 to 2.0.4:** no database migration, no change to credentials or provider pins. The schemas change only
+by optional additions: an optional per-agent `stopIdle` on `runtime.configure`, and five optional provider-store
+settings (`SENTRY_<AGENT>_STOP_IDLE`). Existing projects, runs and settings are kept, and going back to 2.0.3
+needs no backup (2.0.3 ignores the new settings).
 
 **2.0.2 to 2.0.3:** no database migration, no change to credentials or provider pins. The schemas change only
 by optional additions: the new CLI results (`provider`, `account`, `runtime`, `system`, `app language`, custom

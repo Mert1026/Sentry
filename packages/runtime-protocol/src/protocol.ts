@@ -244,6 +244,18 @@ export const RuntimeConfigureParamsSchema = z
       })
       .strict()
       .optional(),
+    // "Stop extra rounds when idle" per agent (Settings → Providers). Full-state like reasoningEffort:
+    // false clears it. Additive and optional, so the version stays 1.
+    stopIdle: z
+      .object({
+        chatgpt: z.boolean().optional(),
+        opencode: z.boolean().optional(),
+        glm: z.boolean().optional(),
+        claude: z.boolean().optional(),
+        deepseek: z.boolean().optional(),
+      })
+      .strict()
+      .optional(),
     // Harness executable overrides (non-secret absolute paths inside the
     // runtime environment, e.g. a user-local opencode install). Ephemeral
     // like everything else here; additive, so the version stays 1.

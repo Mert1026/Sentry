@@ -57,6 +57,17 @@ export function maxPlannedChecks(
   );
 }
 
+/**
+ * Every critical flow needs a check of its own, so the plan lists two fewer flows than checks:
+ * the riskiest weak points keep checks of their own instead of being crowded out by flows.
+ */
+export function maxCriticalFlows(
+  context: Readonly<Record<string, unknown>> | undefined,
+  now = Date.now(),
+): number {
+  return Math.max(1, maxPlannedChecks(context, now) - 2);
+}
+
 /** The legacy plan schema allows longer names than the report schema. */
 export function reportableDepthPlan<T extends { plannedChecks: readonly string[] }>(
   plan: T,
@@ -328,6 +339,43 @@ export const DEEPEN_MIN_REMAINING_FRACTION = 0.5;
 export const MAX_DEEPEN_CHECKS = 3;
 /** Off-check leads followed up in the extension round, before any deepening. */
 export const MAX_LEAD_TURNS = 4;
+/**
+ * Critical flows exercised end to end in the extension round, after the leads and before
+ * the deepening: new ground finds defects the planner never suspected. The planner lists
+ * flows riskiest first, so the cap keeps the riskiest; the round's time split still stops
+ * it early when the window runs short.
+ */
+export const MAX_FLOW_TURNS = 5;
+
+/**
+ * With "stop extra rounds when idle" on (per agent, Settings → Providers), the extra rounds (leads,
+ * flows, deepening, hazard sweep) end after this many turns in a row that reproduced no new defect.
+ * A turn reports a defect with a "Root cause:" line (ROOT_CAUSE_LINE), which the host can see.
+ */
+export const EXTRA_ROUND_IDLE_LIMIT = 2;
+
+/**
+ * The investigation time left, as a clause a person reads in the run timeline. "No limit" in
+ * Settings is a 7-day window, and the old "about 10058 minutes remain" read as nonsense; a window
+ * that long is described as having no practical limit, and a long one in hours.
+ */
+export function timeLeftClause(ms: number): string {
+  const minutes = Math.max(0, Math.round(ms / 60_000));
+  if (minutes >= 48 * 60) return 'the run has no practical time limit';
+  if (minutes >= 120)
+    return 'about ' + Math.round(minutes / 60) + ' hours of investigation time remain';
+  return 'about ' + minutes + ' minutes of investigation time remain';
+}
+
+/** A closing note that reports at least one reproduced defect ("Root cause: …", traced or not). */
+export function reportsDefect(statement: string): boolean {
+  return /^\s*root cause:/im.test(statement);
+}
+
+/** The per-agent "stop extra rounds when idle" setting as the runtime hands it to an adapter. */
+export function stopExtraRoundsWhenIdle(value: string | undefined): boolean {
+  return ['1', 'on', 'true', 'yes'].includes((value ?? '').trim().toLowerCase());
+}
 
 /**
  * Hazard sweep: after the extension round, source files the host flagged for risky
@@ -343,13 +391,33 @@ export const SWEEP_IDLE_TURN_LIMIT = 2;
  * Leads an investigator noted on its "Leads:" line (semicolon separated).
  * Agent-stated and unverified: they only decide what to probe next.
  */
+/**
+ * "none", "none other", "nothing else", "no further leads": filler, not a lead. A real lead may
+ * start with "no" ("no guard on negative index"), so only whole filler phrases are dropped.
+ */
+const FILLER_WORDS =
+  '(?:other|else|further|more|new|additional|found|identified|noted|so far|beyond that)';
+const EMPTY_LEAD = new RegExp(
+  '^(?:(?:none|nothing)(?:\\s+' +
+    FILLER_WORDS +
+    '){0,2}|no(?:\\s+' +
+    FILLER_WORDS +
+    ')?\\s+leads?(?:\\s+' +
+    FILLER_WORDS +
+    ')?|n\\/a|-)[.!]?$',
+  'i',
+);
+function isEmptyLead(lead: string): boolean {
+  return EMPTY_LEAD.test(lead.trim());
+}
+
 export function extractLeads(statement: string): string[] {
   const match = /^\s*leads:\s*(.+)$/im.exec(statement);
   if (match === null) return [];
   return (match[1] ?? '')
     .split(';')
     .map((lead) => lead.replace(/\s+/g, ' ').trim().slice(0, 200))
-    .filter((lead) => lead.length > 3 && !/^(none|n\/a|nothing|-)\.?$/i.test(lead))
+    .filter((lead) => lead.length > 3 && !isEmptyLead(lead))
     .slice(0, 3);
 }
 

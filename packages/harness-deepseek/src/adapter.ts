@@ -25,6 +25,7 @@ import {
   investigateChecks,
   listHazardCandidates,
   scanHazardFiles,
+  stopExtraRoundsWhenIdle,
   reportAttemptDeadline,
   promisePhase,
   PhaseDeadlineReached,
@@ -1211,6 +1212,10 @@ export class DeepSeekHarnessAdapter implements HarnessAdapter {
         startReportContext,
         cancelled: () => this.cancelled,
         hazardFiles: () => scanHazardFiles(request.workspace.runtimePath, 40, originalSource),
+        // Per-agent setting (Settings → Providers): end the extra rounds once they stop finding defects.
+        stopExtraRoundsWhenIdle: stopExtraRoundsWhenIdle(
+          this.hostEnvironment['SENTRY_DEEPSEEK_STOP_IDLE'],
+        ),
         isTurnTimeout: (cause) => cause instanceof DeepSeekTurnTimeoutError,
         onInterrupted: () => this.liveOpenOperations.clear(),
       });

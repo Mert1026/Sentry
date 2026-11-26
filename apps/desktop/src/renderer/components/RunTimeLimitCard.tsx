@@ -164,9 +164,11 @@ export function RunTimeLimitCard(): React.JSX.Element {
         </div>
       ) : null}
       <p className="metadata" style={{ margin: '10px 0 0' }} role="status">
-        {'Every run gets a window of ' +
-          describeRunLimit(effectiveMs) +
-          (savedMs === undefined ? ' (the default).' : '.')}
+        {effectiveMs >= RUN_LIMIT_UNLIMITED_MS
+          ? 'Runs have no time limit (at most 7 days).'
+          : 'Every run gets a window of ' +
+            describeRunLimit(effectiveMs) +
+            (savedMs === undefined ? ' (the default).' : '.')}
       </p>
       {error !== undefined ? (
         <p className="error-box" role="alert" style={{ marginTop: 8 }}>

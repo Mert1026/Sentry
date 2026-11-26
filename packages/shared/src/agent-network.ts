@@ -200,6 +200,16 @@ export interface AgentNetworkPromptOptions {
 export const CLAUDE_SANDBOX_PLACEHOLDER_NOTE =
   'Sandbox placeholders: this sandbox write-protects some paths by putting an empty stand-in over them, so names that are not in the project show up in the workspace. Two kinds: (1) character devices (`ls -l` starts with `c`) named `scripts`, `.github`, `.vscode`, `.idea`, `.mcp.json`, `.ripgreprc` or a shell dotfile such as `.bashrc`, `.profile`, `.zshrc`; (2) zero-byte regular files named like env files (`.env*`), package-manager configuration (`.npmrc`, `.yarnrc*`, `bunfig.toml`, `.gitmodules`) or package files and lockfiles (`package.json`, `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`) that the snapshot manifest does not list. None of these is a project file. Leave them out of file counts, do not read or search them, and do not report them as unreadable files, empty files, secrets-check gaps, a missing package.json or an inconsistent workspace. A file or directory with one of these names that the snapshot manifest does list is real: read it normally.';
 
+/**
+ * Claude Code's sandbox also lists the project's `node_modules/.bin`, `package.json` and lockfiles in
+ * its denyWrite set (seen in Claude Code 2.1.270), so an install in the project folder can never work:
+ * npm ci fails with EBUSY removing the read-only `node_modules/.bin`. The Claude agent retried it three
+ * times before installing elsewhere (run_01M89SBG1PS0, about four minutes; run_01M89MHNE8, seven
+ * EBUSY failures). An install in a folder of its own works under the same network rules.
+ */
+export const CLAUDE_SANDBOX_INSTALL_NOTE =
+  'Installs in this sandbox: it write-protects the project folder’s `node_modules/.bin`, `package.json` and lockfiles, so a package-manager install in the project folder (`npm ci`, `npm install`, `pnpm install`, `yarn install`) always fails with EBUSY or EPERM. Never run one there, not even once. When the project’s dependencies are missing, install them once into `.qa-tmp/deps`: copy `package.json` and the lockfile there, run the install inside that folder with `--ignore-scripts`, run its tools from `.qa-tmp/deps/node_modules/.bin`, and load packages from `.qa-tmp/deps/node_modules` (NODE_PATH for CommonJS, a path import for ESM). Reuse that folder for every later check.';
+
 /** How to use the Sentry-managed headless browser. Also appended to the follow-up passes. */
 export function browserPromptLine(launcher: string): string {
   return (

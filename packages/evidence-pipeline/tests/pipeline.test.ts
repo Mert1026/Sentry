@@ -680,4 +680,73 @@ describe('planning preamble tolerance', () => {
     );
     expect(() => parseWholeJson('Planning now.\n{"a":', 'planning', ctx)).toThrow(/complete JSON/);
   });
+
+  it('accepts a plan after long progress notes when the object starts on its own line', () => {
+    const ctx = {
+      redactStructured: (value: unknown) => value,
+      redactDiagnostic: (value: string) => value,
+      errors: { invalidResult: (message: string) => new Error(message) },
+    } as never;
+    // notes the model wrote between tool calls, joined by the harness, with braces of their own
+    const notes = Array.from(
+      { length: 30 },
+      (_, n) => 'Reading src/file' + n + '.js for {guards}.',
+    ).join('\n');
+    expect(notes.length).toBeGreaterThan(600);
+    const plan = '{\n  "plannedChecks": ["A", "B"]\n}';
+    expect(parseWholeJson(notes + '\n' + plan, 'planning', ctx)).toEqual({
+      plannedChecks: ['A', 'B'],
+    });
+    // an object that does not run to the end is still rejected, and reports stay strict
+    expect(() => parseWholeJson(notes + '\n' + plan + '\nDone.', 'planning', ctx)).toThrow(
+      /complete JSON/,
+    );
+    expect(() => parseWholeJson(notes + '\n' + plan, 'reporting', ctx)).toThrow(/complete JSON/);
+  });
+});
+
+describe('plan entries written as objects', () => {
+  const ctx = {
+    redactStructured: (value: unknown) => value,
+    redactDiagnostic: (value: string) => value,
+    errors: { invalidResult: (message: string) => new Error(message) },
+  } as never;
+
+  it('turns object flows, weak points and checks into one line of text each, so the plan validates', async () => {
+    // run_01M8A5HSND: Claude wrote criticalFlows, then weakPoints, as objects and the run failed in planning
+    const { SentryInvestigationPlanV1Schema } = await import('@qa/schemas');
+    const raw = JSON.stringify({
+      schemaVersion: 1,
+      projectUnderstanding: 'Vue core.',
+      criticalFlows: [
+        {
+          module: 'packages/compiler-core/src/tokenizer.ts',
+          operations: ['parse', 'interpolation'],
+        },
+        'plain flow stays as it is',
+      ],
+      weakPoints: [{ file: 'tokenizer.ts', risk: 'v-pre inside textarea', note: '' }],
+      plannedChecks: ['Falsify the tokenizer with {{ inside a v-pre textarea'],
+    });
+    const plan = SentryInvestigationPlanV1Schema.parse(parseWholeJson(raw, 'planning', ctx));
+    expect(plan.criticalFlows).toEqual([
+      'module: packages/compiler-core/src/tokenizer.ts; operations: parse, interpolation',
+      'plain flow stays as it is',
+    ]);
+    // empty values are dropped rather than written as "note: "
+    expect(plan.weakPoints).toEqual(['file: tokenizer.ts; risk: v-pre inside textarea']);
+    expect(plan.plannedChecks).toEqual(['Falsify the tokenizer with {{ inside a v-pre textarea']);
+  });
+
+  it('leaves reports untouched: only a plan is reshaped', () => {
+    const raw = JSON.stringify({ criticalFlows: [{ a: 1 }] });
+    expect(parseWholeJson(raw, 'reporting', ctx)).toEqual({ criticalFlows: [{ a: 1 }] });
+  });
+
+  it('tells a rejected planner that every entry is one plain string, in every list', async () => {
+    const { buildPlanningCorrectionIntro } = await import('../src/index.js');
+    const text = buildPlanningCorrectionIntro(['criticalFlows.0 [invalid_type]']);
+    expect(text).toContain('one plain string (a sentence), never an object');
+    expect(text).toContain('Fix every list, not only the one named above');
+  });
 });

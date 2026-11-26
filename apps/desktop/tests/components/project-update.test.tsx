@@ -95,8 +95,10 @@ describe('project section navigation', () => {
       fireEvent.click(await screen.findByRole('button', { name: 'Start Full QA' }));
       const dialog = await screen.findByRole('dialog', { name: 'Потвърди стартиране на пълен QA' });
       expect(within(dialog).getByText('Да се стартира ли пълен QA?')).toBeTruthy();
-      expect(within(dialog).getByText(/ревизия/i)).toBeTruthy();
-      expect(dialog.textContent).toContain('rev_01K77777…');
+      expect(within(dialog).getByText('Ревизия')).toBeTruthy();
+      expect(within(dialog).getByText('Използва реален бюджет на доставчика.')).toBeTruthy();
+      // revision ids keep their start and end, the part that tells revisions apart
+      expect(dialog.textContent).toMatch(/rev_0\.\.\.[0-9A-Z]{5}/);
       expect(dialog.textContent).not.toContain('Web access:');
     } finally {
       window.localStorage.removeItem('sentry:language');
@@ -178,6 +180,16 @@ describe('project section navigation', () => {
         expect.objectContaining({ webAccess: true, toolDownloads: true }),
       ),
     );
+  });
+
+  it('opens the start confirmation outside the page so it centres on the screen', async () => {
+    fixture();
+    const start = await screen.findByRole('button', { name: 'Start Full QA' });
+    await waitFor(() => expect((start as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(start);
+    const dialog = await screen.findByRole('dialog', { name: 'Confirm start full QA' });
+    // Portaled like the add-project box: a long, animated page can no longer offset it.
+    expect(dialog.parentElement).toBe(document.body);
   });
 
   it('checks for secrets by default: the switch is on and a start sends no secretsCheck', async () => {
@@ -365,7 +377,10 @@ describe('run revision selection', () => {
     fireEvent.change(picker, { target: { value: 'rev_01K7777777777777777777778A' } });
     fireEvent.click(await screen.findByRole('button', { name: 'Start Full QA' }));
     const dialog = await screen.findByRole('dialog', { name: 'Confirm start full QA' });
-    expect(within(dialog).getByText(/Revision:/)).toBeDefined();
+    expect(within(dialog).getByText('Revision')).toBeDefined();
+    // the revision chosen in the picker is the one shown for confirmation
+    expect(dialog.textContent).toContain('rev_0...7778A');
+    expect(dialog.textContent).not.toContain('7779B');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Start QA' }));
     await waitFor(() =>
       expect(f.api.runs.start).toHaveBeenCalledWith(
@@ -399,7 +414,8 @@ describe('run depth selector', () => {
     );
     fireEvent.click(start);
     const dialog = await screen.findByRole('dialog', { name: 'Confirm start full QA' });
-    expect(within(dialog).getByText('Run depth: Full')).toBeTruthy();
+    expect(within(dialog).getByText('Depth')).toBeTruthy();
+    expect(within(dialog).getByText('Full')).toBeTruthy();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Start QA' }));
     await waitFor(() => expect(f.api.runs.start).toHaveBeenCalled());
     const options = f.api.runs.start.mock.calls[0]?.[1] as unknown as Record<string, unknown>;
@@ -417,7 +433,8 @@ describe('run depth selector', () => {
     );
     fireEvent.click(start);
     const dialog = await screen.findByRole('dialog', { name: 'Confirm start full QA' });
-    expect(within(dialog).getByText('Run depth: Fast')).toBeTruthy();
+    expect(within(dialog).getByText('Depth')).toBeTruthy();
+    expect(within(dialog).getByText('Fast')).toBeTruthy();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Start QA' }));
     await waitFor(() =>
       expect(f.api.runs.start).toHaveBeenCalledWith(

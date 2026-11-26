@@ -64,6 +64,7 @@ import {
 } from '@qa/harness-claude';
 import { HarnessAdapterRegistry } from '@qa/harness-protocol';
 import {
+  AGENT_STOP_IDLE_SETTING,
   NOTE_LIMIT_UNLIMITED,
   RUN_TIMEOUT_MS_MAX,
   RUN_TIMEOUT_MS_MIN,
@@ -90,7 +91,7 @@ import { ToolchainManager } from './toolchains.js';
 import { OpenAiAccount } from './openai-account.js';
 import { ClaudeAccount } from './claude-account.js';
 const releaseIdentity = runtimeReleaseIdentity();
-export const RUNTIME_VERSION = releaseIdentity?.version ?? '2.0.3';
+export const RUNTIME_VERSION = releaseIdentity?.version ?? '2.0.4';
 
 const ProjectIdInput = z.string().min(1).max(200);
 const RunIdInput = z.string().regex(/^run_[0-9A-HJKMNP-TV-Z]{26}$/);
@@ -729,6 +730,13 @@ export class SentryRuntimeHost {
       if (level === undefined) continue;
       if (level === 'default') delete process.env[variable];
       else process.env[variable] = level;
+    }
+    // Each agent's "stop extra rounds when idle" choice reaches its harness under the setting's name.
+    for (const [agent, on] of Object.entries(parsed.stopIdle ?? {})) {
+      const variable = AGENT_STOP_IDLE_SETTING[agent as keyof typeof AGENT_STOP_IDLE_SETTING];
+      if (variable === undefined) continue;
+      if (on) process.env[variable] = '1';
+      else delete process.env[variable];
     }
     if (parsed.claudeAuth !== undefined) {
       process.env['SENTRY_ANTHROPIC_AUTH'] = parsed.claudeAuth;

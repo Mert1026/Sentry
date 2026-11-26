@@ -4,7 +4,11 @@ import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { ReactFlowProvider } from '@xyflow/react';
 import React from 'react';
-import { AgentCanvasNode } from '../../src/renderer/components/nodes/AgentCanvasNode.js';
+import {
+  AgentCanvasNode,
+  LIVE_DETAIL_CLAMP_CHARS,
+  splitLiveLine,
+} from '../../src/renderer/components/nodes/AgentCanvasNode.js';
 import { makeAgentNodeView } from '../fixtures.js';
 
 function withFlow(element: React.ReactElement): React.ReactElement {
@@ -150,10 +154,10 @@ describe('canvas node components', () => {
       ),
     );
     const bars = [...html.matchAll(/<i class="([^"]*)" title="([^"]*)"/g)].map((m) => m[1]);
-    // Evidence (5th) was never seen, but Reporting (6th) was reached: it is drawn as passed, not as empty.
+    // Reporting (5th) was never seen, but Evidence (6th) was reached: it is drawn as passed, not as empty.
     expect(bars).toEqual(['observed', 'observed', 'observed', 'observed', 'passed', 'warning', '']);
-    // Its tooltip still says nothing claims it was seen.
-    expect(html).toContain('title="Evidence — Not observed"');
+    // Its tooltip says the line went past it with no event, not that it was never reached.
+    expect(html).toContain('title="Reporting — No events"');
     // The count is the position of the furthest stage, so it agrees with the bars and the stage word.
     expect(html).toContain('<span class="node-stage-count">6/7</span>');
   });
@@ -202,6 +206,8 @@ describe('canvas node components', () => {
     ]);
     expect(planning.bars).toEqual(['observed', 'warning', '', '', '', '', '']);
     expect(planning.html).toContain('<span class="node-stage-count">2/7</span>');
+    // the word names the stage the count points at, not the last one that showed activity
+    expect(planning.html).toMatch(/node-stage-word[^>]*>Planning</);
     // Investigating with commands and findings observed after it: still nothing filled after the marker.
     const investigating = render([
       'observed',
@@ -214,6 +220,7 @@ describe('canvas node components', () => {
     ]);
     expect(investigating.bars).toEqual(['observed', 'observed', 'warning', '', '', '', '']);
     expect(investigating.html).toContain('<span class="node-stage-count">3/7</span>');
+    expect(investigating.html).toMatch(/node-stage-word[^>]*>Investigation</);
   });
 
   it('keeps every line of the agent node inside its width', () => {
@@ -221,6 +228,60 @@ describe('canvas node components', () => {
     expect(css).toMatch(/\.flow-node\.agent-node \{[^}]*width: 244px/);
     expect(css).toMatch(/\.flow-node\.agent-node \.node-name \{[^}]*text-overflow: ellipsis/);
     expect(css).toMatch(/\.flow-node\.agent-node \.node-stat span \{[^}]*text-overflow: ellipsis/);
+    // the live line wraps inside the node: the detail gets two lines, then an ellipsis
+    expect(css).toMatch(/\.flow-node\.agent-node \.live-line \{[^}]*white-space: normal/);
+    expect(css).toMatch(/\.flow-node\.agent-node \.live-line-detail \{[^}]*-webkit-line-clamp: 2/);
+  });
+
+  it('splits the live line into the step and what the agent named after it', () => {
+    expect(
+      splitLiveLine('OpenCode is investigating check 1/8: Falsify List.js: push 1050'),
+    ).toEqual({
+      full: 'OpenCode is investigating check 1/8: Falsify List.js: push 1050',
+      step: 'OpenCode is investigating check 1/8',
+      detail: 'Falsify List.js: push 1050',
+    });
+    expect(splitLiveLine('OpenCode is executing the frozen plan.')).toEqual({
+      full: 'OpenCode is executing the frozen plan.',
+      step: 'OpenCode is executing the frozen plan.',
+    });
+    const long = 'OpenCode is investigating check 1/8: ' + 'Falsify List.js updateList '.repeat(8);
+    const html = renderToStaticMarkup(
+      withFlow(
+        React.createElement(AgentCanvasNode, {
+          id: 'agent-x',
+          type: 'agentNode',
+          selected: false,
+          zIndex: 1,
+          isConnectable: false,
+          xPos: 0,
+          yPos: 0,
+          dragging: false,
+          data: {
+            label: 'OpenCode',
+            status: 'running',
+            kind: 'agent',
+            payload: {
+              view: makeAgentNodeView({
+                currentOperation: {
+                  kind: 'lifecycle',
+                  title: long,
+                  timestamp: '2026-11-25T09:00:00Z',
+                },
+              }),
+              agentStackId: 'stack_opencode_main',
+            },
+          },
+        } as never),
+      ),
+    );
+    expect(html).toContain(
+      '<span class="live-line-step">OpenCode is investigating check 1/8</span>',
+    );
+    expect(html).toContain('<span class="live-line-detail">Falsify List.js updateList');
+    // the whole line stays available on hover
+    expect(html).toContain('title="' + long.trim() + '"');
+    expect(html).not.toContain('live-line truncate');
   });
 
   it('has no clock chip in the footer, only the counts', () => {
@@ -355,5 +416,76 @@ describe('canvas node components', () => {
     expect(render({ state: 'found' })).toContain('Secrets found');
     expect(render({ state: 'clear' })).toContain('secrets-light clear');
     expect(render({ state: 'unclear' })).toContain('secrets-light unclear');
+  });
+});
+
+describe('live line "Show more"', () => {
+  const node = (title: string) =>
+    withFlow(
+      React.createElement(AgentCanvasNode, {
+        id: 'agent-x',
+        type: 'agentNode',
+        selected: false,
+        zIndex: 1,
+        isConnectable: false,
+        xPos: 0,
+        yPos: 0,
+        dragging: false,
+        data: {
+          label: 'OpenCode',
+          status: 'running',
+          kind: 'agent',
+          payload: {
+            view: makeAgentNodeView({
+              status: 'running',
+              currentOperation: { kind: 'lifecycle', title, timestamp: '2026-11-26T09:00:00Z' },
+            }),
+            agentStackId: 'stack_opencode_main',
+          },
+        },
+      } as never),
+    );
+
+  it('opens and closes a detail too long for two lines, inside a capped box', async () => {
+    const { render, fireEvent, screen, cleanup } = await import('@testing-library/react');
+    const detail =
+      'FALSIFY packages/runtime-core/src/renderer.ts patchKeyedChildren via runtime-test createRenderer';
+    expect(detail.length).toBeGreaterThan(LIVE_DETAIL_CLAMP_CHARS);
+    const { container } = render(node('OpenCode is investigating check 1/6: ' + detail));
+    const more = screen.getByRole('button', { name: 'Show more' });
+    expect(more.getAttribute('aria-expanded')).toBe('false');
+    const text = container.querySelector('.live-line-detail') as HTMLElement;
+    expect(text.className).not.toContain('expanded');
+    fireEvent.click(more);
+    expect(text.className).toContain('expanded');
+    // a long command can scroll inside the node without the canvas zooming
+    expect(text.className).toContain('nowheel');
+    const less = screen.getByRole('button', { name: 'Show less' });
+    expect(less.className).toContain('nodrag');
+    fireEvent.click(less);
+    expect(text.className).not.toContain('expanded');
+    cleanup();
+  });
+
+  it('shows no toggle when the detail fits, and none for a line without a detail', async () => {
+    const { render, screen, cleanup } = await import('@testing-library/react');
+    render(node('Tool started: bash'));
+    expect(screen.queryByRole('button', { name: 'Show more' })).toBeNull();
+    cleanup();
+    render(node('OpenCode is executing the frozen plan.'));
+    expect(screen.queryByRole('button', { name: 'Show more' })).toBeNull();
+    cleanup();
+  });
+
+  it('caps the opened detail', () => {
+    const css = readFileSync(resolve(process.cwd(), 'src/renderer/styles.css'), 'utf8');
+    expect(css).toMatch(/\.live-line-detail\.expanded \{[^}]*max-height: calc\(1\.35em \* 7\)/);
+    expect(css).toMatch(/\.live-line-detail\.expanded \{[^}]*overflow-y: auto/);
+  });
+
+  it('translates the toggle', async () => {
+    const { translateText } = await import('../../src/renderer/lib/i18n.js');
+    expect(translateText('Show more', 'bg')).toBe('Покажи още');
+    expect(translateText('Show less', 'bg')).toBe('Покажи по-малко');
   });
 });

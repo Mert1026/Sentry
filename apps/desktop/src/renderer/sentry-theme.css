@@ -361,8 +361,353 @@ textarea::placeholder {
 }
 
 /* ---------- Dashboard command deck ---------- */
+/* Statistics deck: seven tiles, each a label, a number and a short note under it. */
+.dash-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0;
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  background: rgba(18, 23, 18, 0.72);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  overflow: hidden;
+}
+.dash-metrics .metric-card {
+  --tile-tone: var(--accent);
+  position: relative;
+  min-height: 116px;
+  border: 0;
+  border-right: 1px solid var(--border-subtle);
+  border-radius: 0;
+  background: transparent;
+  padding: 16px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 6px;
+  min-width: 0;
+}
+/* A short line in the tile's colour along its top edge: each statistic reads as its own block. */
+.dash-metrics .metric-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 30%;
+  right: 30%;
+  height: 2px;
+  border-radius: 0 0 2px 2px;
+  background: var(--tile-tone);
+  opacity: 0.7;
+}
+.dash-metrics .metric-good {
+  --tile-tone: var(--success);
+}
+.dash-metrics .metric-alert {
+  --tile-tone: var(--sev-high);
+}
+.dash-metrics .metric-live {
+  --tile-tone: var(--running);
+}
+.dash-metrics .metric-card:last-child {
+  border-right: 0;
+}
+.dash-metrics .metric-card .metric-label {
+  order: -1;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: #9aa894;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+}
+.dash-metrics .metric-card .metric-label span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dash-metrics .metric-icon {
+  flex: none;
+  color: var(--tile-tone);
+}
+.dash-metrics .metric-card .metric-value {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  font: 600 30px/1.1 var(--mono);
+  letter-spacing: -0.04em;
+}
+/* Units in the text font: the number font has no Cyrillic letters. */
+.dash-metrics .metric-unit {
+  font: 500 15px/1 var(--sans);
+  letter-spacing: 0;
+  color: var(--text-secondary);
+  margin-right: 4px;
+}
+.dash-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font: 600 17px/1.2 var(--sans);
+  letter-spacing: 0;
+}
+.dash-status-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--text-faint);
+}
+.dash-status.ok {
+  color: var(--success);
+}
+.dash-status.ok .dash-status-dot {
+  background: var(--success);
+  box-shadow: 0 0 10px var(--success);
+}
+.dash-status.checking .dash-status-dot {
+  background: var(--running);
+}
+.dash-metrics .metric-card .metric-value.metric-pill {
+  font: inherit;
+  letter-spacing: 0;
+}
+.dash-metrics .metric-sub {
+  color: var(--text-faint);
+  font-size: 12px;
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dash-metrics .metric-live .metric-value {
+  color: var(--running);
+  text-shadow: 0 0 22px rgba(212, 192, 11, 0.18);
+}
+.dash-metrics .metric-good .metric-value {
+  color: var(--success);
+}
+.dash-metrics .metric-alert .metric-value {
+  color: var(--sev-high);
+}
+.dash-charts,
+.dash-lists {
+  display: grid;
+  gap: 18px;
+  margin-top: 18px;
+}
+.dash-charts {
+  grid-template-columns: minmax(0, 1.45fr) minmax(280px, 1fr);
+}
+.dash-lists {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1fr);
+}
+.dash-charts > .page-section,
+.dash-lists > .page-section {
+  min-width: 0;
+  margin: 0;
+  border: 1px solid var(--border-default);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(26, 33, 25, 0.9), rgba(16, 21, 16, 0.7));
+  box-shadow: inset 0 1px 0 rgba(164, 195, 154, 0.07);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+}
+.dash-charts > .page-section .section-title,
+.dash-lists > .page-section .section-title {
+  font-size: 15px;
+  letter-spacing: 0.01em;
+}
+/* The chart takes the panel's full height, so a taller panel beside it leaves no empty band. */
+.dash-bars {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(14, minmax(0, 1fr));
+  gap: 8px;
+  min-height: 180px;
+  align-items: end;
+  padding: 8px 4px 0;
+}
+.dash-bar {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: stretch;
+  gap: 6px;
+  min-width: 0;
+}
+.dash-bar-stack {
+  display: flex;
+  flex-direction: column;
+  min-height: 3px;
+  border-radius: 4px 4px 1px 1px;
+  overflow: hidden;
+  background: var(--border-subtle);
+}
+.dash-bar-day {
+  text-align: center;
+  font: 11px var(--mono);
+  color: var(--text-faint);
+}
+.dash-seg {
+  display: block;
+  min-height: 2px;
+}
+.dash-seg.done {
+  background: var(--success);
+}
+.dash-seg.problem {
+  background: var(--danger);
+  opacity: 0.85;
+}
+.dash-seg.running {
+  background: var(--running);
+}
+.dash-legend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 18px;
+  margin-top: 14px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.dash-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.dash-legend i.dash-seg {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+/* One grid for all rows, so the label column is as wide as the longest label and every bar lines up. */
+.dash-severity {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) 40px;
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 12px;
+  padding-top: 6px;
+  font-size: 13px;
+}
+.dash-sev-row {
+  display: contents;
+}
+.dash-sev-label {
+  min-width: 70px;
+  white-space: nowrap;
+  text-transform: capitalize;
+  color: var(--text-secondary);
+}
+.dash-sev-track {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--border-subtle);
+  overflow: hidden;
+}
+.dash-sev-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  min-width: 2px;
+}
+.dash-sev-fill.sev-critical {
+  background: var(--sev-critical);
+}
+.dash-sev-fill.sev-high {
+  background: var(--sev-high);
+}
+.dash-sev-fill.sev-medium {
+  background: var(--sev-medium);
+}
+.dash-sev-fill.sev-low {
+  background: var(--sev-low);
+}
+.dash-sev-fill.sev-info {
+  background: var(--sev-info);
+}
+.dash-sev-count {
+  text-align: right;
+  font-family: var(--mono);
+  color: var(--text-primary);
+}
+.dash-agents {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.dash-agents-title {
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 11px;
+}
+.dash-agent {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+}
+.dash-agent-count {
+  font-family: var(--mono);
+  color: var(--text-primary);
+}
+.dash-list {
+  display: flex;
+  flex-direction: column;
+}
+.dash-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 6px;
+  border-bottom: 1px solid var(--border-subtle);
+  color: var(--text);
+  text-decoration: none;
+  border-radius: 6px;
+  min-width: 0;
+}
+.dash-row:last-child {
+  border-bottom: 0;
+}
+.dash-row:hover {
+  background: rgba(164, 195, 154, 0.06);
+}
+.dash-row .grow {
+  flex: 1;
+  min-width: 0;
+}
+.dash-when {
+  white-space: nowrap;
+}
+@media (max-width: 1250px) {
+  .dash-lists {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .dash-lists > .page-section:first-child {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 1000px) {
+  .dash-charts,
+  .dash-lists {
+    grid-template-columns: 1fr;
+  }
+}
 .dashboard-page {
   max-width: 1500px;
+  /* On a wide window the dashboard sits in the middle, not against the left edge. */
+  margin-inline: auto;
+  width: 100%;
 }
 .observation-strip {
   display: grid;
@@ -720,6 +1065,8 @@ table.table tr:hover td {
   }
   .sidebar .active-strip {
     padding: 10px 7px;
+    display: flex;
+    justify-content: center;
   }
   .content {
     padding: 18px;

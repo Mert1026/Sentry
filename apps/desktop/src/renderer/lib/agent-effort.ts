@@ -56,3 +56,20 @@ export function selectedEffort(
   const level = row?.configured === true ? row.hint.trim().toLowerCase() : '';
   return EFFORT_LABELS[level] ?? 'Default';
 }
+
+/**
+ * "Stop extra rounds when idle" per agent, as Settings → Providers offers it. Mirrors
+ * AGENT_STOP_IDLE_SETTING in @qa/shared (a test keeps the two identical).
+ */
+export const AGENT_STOP_IDLE_SETTING: Readonly<Record<EffortAgent, string>> = {
+  opencode: 'SENTRY_OPENCODE_STOP_IDLE',
+  chatgpt: 'SENTRY_CHATGPT_STOP_IDLE',
+  glm: 'SENTRY_GLM_STOP_IDLE',
+  claude: 'SENTRY_ANTHROPIC_STOP_IDLE',
+  deepseek: 'SENTRY_DEEPSEEK_STOP_IDLE',
+};
+
+/** Whether a stored "stop extra rounds when idle" value means on. */
+export function isStopIdleOn(value: string | undefined): boolean {
+  return ['1', 'on', 'true', 'yes'].includes((value ?? '').trim().toLowerCase());
+}

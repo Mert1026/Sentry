@@ -706,24 +706,70 @@ export function summarizeSchemaIssues(error: {
     .slice(0, 500);
 }
 
+/** The plan lists whose entries are free text: plannedChecks, criticalFlows and weakPoints. */
+const PLAN_TEXT_LISTS = ['plannedChecks', 'criticalFlows', 'weakPoints'] as const;
+
+/** One entry as plain text: 'key: value; key: a, b' for an object, its string form otherwise. */
+function planEntryText(entry: unknown): unknown {
+  if (entry === null || typeof entry !== 'object') return entry;
+  if (Array.isArray(entry)) return entry.map((item) => String(planEntryText(item))).join(', ');
+  return Object.entries(entry as Record<string, unknown>)
+    .filter(([, value]) => value !== undefined && value !== null && value !== '')
+    .map(
+      ([key, value]) =>
+        key + ': ' + (typeof value === 'object' ? String(planEntryText(value)) : String(value)),
+    )
+    .join('; ');
+}
+
+/**
+ * A plan whose flows, weak points or checks came back as objects ({ module, operations } and the
+ * like) instead of strings is the same plan in another shape (run_01M8A5HSND: Claude was rejected
+ * twice, once for criticalFlows and once for weakPoints, and the run failed before it began). Each
+ * object entry becomes one line of text, so the schema accepts it; strings pass unchanged.
+ */
+export function flattenPlanEntries(value: unknown): unknown {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return value;
+  const plan = { ...(value as Record<string, unknown>) };
+  for (const key of PLAN_TEXT_LISTS) {
+    const list = plan[key];
+    if (Array.isArray(list)) plan[key] = list.map(planEntryText);
+  }
+  return plan;
+}
+
 export function parseWholeJson(
   text: string,
   phase: string,
   context: EvidencePipelineContext,
 ): unknown {
+  // A plan's list entries are free text; a model that writes one as an object loses nothing by it.
+  const shape = (value: unknown): unknown =>
+    phase === 'planning' ? flattenPlanEntries(value) : value;
   try {
-    return context.redactStructured(JSON.parse(text));
+    return context.redactStructured(shape(JSON.parse(text)));
   } catch {
     // Planning only: some models announce the plan in a short sentence before
     // the object (run_01M6BZF9). A brief preamble followed by one complete
     // object is accepted; reports stay strictly whole-document.
-    if (phase === 'planning') {
-      const start = text.indexOf('{');
-      if (start > 0 && start <= 600 && text.trimEnd().endsWith('}')) {
+    if (phase === 'planning' && text.trimEnd().endsWith('}')) {
+      // A harness that joins every text part of the turn also carries the progress notes the
+      // model wrote between tool calls, which can run past the short-preamble limit. An object
+      // that starts on its own line and runs to the end of the text is the plan.
+      const first = text.indexOf('{');
+      const starts = [first > 0 && first <= 600 ? first : -1];
+      for (
+        let at = text.indexOf('\n{');
+        at >= 0 && starts.length <= 20;
+        at = text.indexOf('\n{', at + 2)
+      )
+        starts.push(at + 1);
+      for (const start of starts) {
+        if (start <= 0) continue;
         try {
-          return context.redactStructured(JSON.parse(text.slice(start)));
+          return context.redactStructured(shape(JSON.parse(text.slice(start))));
         } catch {
-          // fall through to the diagnostic below
+          // try the next candidate, then fall through to the diagnostic below
         }
       }
     }

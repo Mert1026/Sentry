@@ -11,6 +11,7 @@ import {
 } from './retest.js';
 import { SECRETS_CHECK_RULES, SECRETS_REPORT_GUIDANCE, isSecretsCheck } from './secrets-check.js';
 import {
+  maxCriticalFlows,
   maxPlannedChecks,
   reportCheckAliases,
   reportCheckAlias,
@@ -46,6 +47,8 @@ export const NO_REINSTALL_RULE =
 export const SEVERITY_CALIBRATION =
   'Severity rubric — rate by impact on the shipped product and its users, not by how wrong the code looks. critical: data loss, security breach, or a core user flow broken for most users. high: a main flow broken or wrong results for a common input. medium: wrong behavior on a realistic edge case, or a shipped artifact that misleads. low: cosmetic, rare, or recoverable. A defect in a test, QA harness, fixture or build/helper script (not shipped to users) is at most medium, and high only when it lets a real product defect ship undetected; it is never critical. Confidence "strong" or weaker (source-only, stubs, mocks standing in for the real service) cannot support critical. ' +
   'A crash, hang or resource blowup that needs malformed or hostile input is medium unless the project says outside parties supply that input; high needs a common input. ' +
+  'For a library the users are the developers calling its public API: a silently wrong result (no error, wrong data) from a documented call with valid input is at least medium, and high when that input is ordinary (a documented negative index, an empty collection). A silently wrong result is never low. ' +
+  'Injection (HTML, script, shell) is high or critical only when outside parties can supply the injected value; a value only from the project’s own source, config or build (a version string, a constant) is low. ' +
   'Code execution: input that makes the product run attacker-chosen code or call an attacker-chosen function in its own process is critical when the project itself (a comment, README, test or entry point) says users or admins supply that input. ' +
   'Uploader privilege, an unseen deployment and a harmless proof payload (a marker file) do not lower it; only evidence that no outside party can supply the input moves it below high. ' +
   'One finding per defect: report an exploited dependency pin in the code-path finding\u2019s root cause, not as a second finding.';
@@ -114,9 +117,11 @@ export function buildQaPlanningPrompt(request: Request): string {
   if (request.task.context?.['profileOnly'] === true) return buildProfilePrompt(request);
   return [
     QA_SESSION_CONTRACT,
-    'STAGE 1 — PLANNING ONLY. Read project docs, structure and main entry points, then return a short risk-first plan. Do not inventory every file. No tests, builds, lint, typecheck, installs or reproductions in this stage. plannedChecks must be concise future actions, not executed results. Plan at most ' +
+    'STAGE 1 — PLANNING ONLY. Read the project docs and structure, then READ THE SOURCE of the target scope before you plan: open the main modules and skim the functions in each file (reading only, nothing is run), and note where the logic is intricate, stateful or special-cased. Do not plan from the docs alone. If the scope is large, read the files that look most intricate first and stop after about 40 files. Then return a short risk-first plan in which each check names the file and function it targets and the concrete input or state that should break it. No tests, builds, lint, typecheck, installs or reproductions in this stage. plannedChecks must be concise future actions, not executed results. Plan at most ' +
       maxPlannedChecks(request.task.context) +
-      ' checks; one check is one decidable question that source tracing or a narrow reproduction in this workspace can settle — merge overlapping checks instead of writing audit-everything checks. Write each check as an attempt to FALSIFY a property (name the input or state that should break it), never as a confirmation. Include at least one check on code that transforms or persists data (file and path naming, hashing, import/export, cleanup and deletion arguments, parsers, migrations); do not spend every check on access-control surfaces. Missing paths: locate once with a glob/search; never retry an unchanged failed path.',
+      ' checks; one check is one decidable question that source tracing or a narrow reproduction in this workspace can settle — merge overlapping checks instead of writing audit-everything checks. Write each check as an attempt to FALSIFY a property (name the input or state that should break it), never as a confirmation. Keep every check and every criticalFlows entry NARROW: one module (a source file and its helpers), at most three of its operations; never fold several components or classes into one check or flow. List at most ' +
+      maxCriticalFlows(request.task.context) +
+      " criticalFlows, and cover EVERY criticalFlows entry with at least one check that EXECUTES that flow through its public entry point with boundary inputs (negative, zero, missing or non-integer values; empty, single and unknown-size inputs; the flow's operations chained with each other), not only the suspects you noticed while reading; spend the remaining checks on the riskiest weakPoints, and when a weakPoint names a function and an input, its check uses exactly that input. Order plannedChecks, criticalFlows and weakPoints each from MOST to LEAST risky: first the code most likely to hold a real defect (intricate, stateful or special-cased logic, index and size arithmetic, lazy or cached paths, cases a comment claims are handled), last simple, well-trodden paths. Checks past the limit are dropped and extra time goes to the first flows. Treat every code comment that says a case is handled, guarded or impossible as a claim, not a fact: trace that case through each helper it calls, and plan a check that triggers exactly that case when it matters. Include at least one check on code that transforms or persists data (file and path naming, hashing, import/export, cleanup and deletion arguments, parsers, migrations); do not spend every check on access-control surfaces. Missing paths: locate once with a glob/search; never retry an unchanged failed path.",
     'Return exactly one JSON object; first character is {, last is }. Schema: {"schemaVersion":1,"projectUnderstanding":string,"criticalFlows":string[],"weakPoints":string[],"plannedChecks":string[at least one]}. Check names must be unique and <=500 characters.',
     'Immutable mission context (including preparation and deadline): ' +
       JSON.stringify(request.task.context ?? {}),
@@ -163,19 +168,22 @@ export function buildQaCheckInvestigationPrompt(
     ...(isRetestCheck(description) ? [RETEST_CHECK_RULES] : []),
     ...(isSecretsCheck(description) ? [SECRETS_CHECK_RULES] : []),
     'Before concluding, attempt the hostile inputs that apply to this check, as synthetic fixtures inside the workspace (defensive tests of the owner’s own guards): malformed names and paths (backslashes, traversal, symlinks, empty entries), pre-existing or legacy state, lifecycle transitions (create, delete, forget, restart, retest), and encoded or quoted payloads. If a category cannot apply, note that in your closing instead of skipping it silently. A check whose repro failed during setup is blocked, not verified: simplify the repro (direct built-dist or compiled-source probe) and retry once before giving up. Proof-bearing runs must be single non-compound commands: write probes to a temp file INSIDE the workspace first (for example `.qa-tmp/probe.mjs`; never `/tmp`: the write tool and your shell see different `/tmp` directories, and writes outside the workspace are rejected), then run `node <file>` (or the one test command) as its own command — no `;`, `&&`, `||`, other pipes or redirects on a run this check will cite, or the host cannot certify it. A trailing `2>&1` is fine, and a trailing `| tail -N` or `| head -N` is fine only where the host runs commands under pipefail (otherwise it hides the real exit code).',
-    'A failing run is signal, not noise. When a proof run exits non-zero, triage it before changing anything: read the actual assertion or error and decide whether it is a PRODUCT defect (report it as a finding candidate and reproduce it minimally) or a proven FIXTURE error (missing build, wrong import, wrong API shape — name the exact cause). Never loosen, delete or rewrite an assertion just to turn a run green; an assertion that disagrees with the code under test is a hypothesis to investigate, and behavior you call "by design" must be justified from the documented contract. Your tests must try to break the property, not restate that the guard exists. Prefer running the real code path over a stub of it. Re-running the same failing command three times fails the check turn.',
+    'A failing run is signal, not noise. When a proof run exits non-zero, triage it before changing anything: read the actual assertion or error and decide whether it is a PRODUCT defect (report it as a finding candidate and reproduce it minimally) or a proven FIXTURE error (missing build, wrong import, wrong API shape — name the exact cause). After a proven fixture error, fix only that part of your probe and rerun the WHOLE probe once, so the check has one clean full run to cite; a probe whose last full run still fails through your own bug cannot pass the check. Never loosen, delete or rewrite an assertion just to turn a run green; an assertion that disagrees with the code under test is a hypothesis to investigate, and behavior you call "by design" must be justified from the documented contract. Your tests must try to break the property, not restate that the guard exists. Prefer running the real code path over a stub of it. Re-running the same failing command three times fails the check turn.',
     REPRODUCED_VIOLATION_RULE,
     EXECUTION_PROOF_RULE,
     ...agentNetworkPromptLines(network),
     // A prepared workspace already has its dependencies: a full install deletes and rebuilds node_modules.
     NO_REINSTALL_RULE,
     'Missing tools: work down this order and stop at the first step that decides the check. (1) RUN IT: confirm an absent tool or dependency once with a single command; installs from the allowed package registries are permitted, so try ONE bootstrap of the missing tool or package manager from them (for example a pip or uv wheel from PyPI) and retry once, never in a loop. (2) REPLICA: if the real code still cannot run, run the same logic in a small stand-in with what exists (stdlib probes, mocks, or reading committed artifacts directly: a .docx or .xlsx is a zip of XML) and tag it [replica]; it shows the logic, not the real code path. (3) TRACE: only if nothing can run, walk the code by hand (input, each branch, the output you expect, where it would break) and tag it [traced]. Tag every item in your "Breaks attempted:" line as [executed], [replica] or [traced]. A replica or a trace never makes a check passed or a finding confirmed. Record the gap in your closing and in limitations.',
-    'When this check is decided or concretely blocked, stop. End with 2-3 sentences: your conclusion for this check, the key operations that support it, and any remaining gap. Then one line starting "Breaks attempted:" listing each hostile input or transition you actually tried and its outcome. Then one last line starting "Leads:" naming, in a few words each separated by semicolons, anything suspicious you noticed OUTSIDE this check (an odd error, an unexpected result, code that looks wrong); write "Leads: none" if there is nothing. No final JSON report yet.',
+    'When this check is decided or concretely blocked, stop. End with 2-3 sentences: your conclusion for this check, the key operations that support it, and any remaining gap. Then one line starting "Breaks attempted:" listing each hostile input or transition you actually tried and its outcome. Then one last line starting "Leads:" naming, in a few words each separated by semicolons, anything suspicious about the PRODUCT you noticed OUTSIDE this check (an unexpected result, code that looks wrong, an error the product itself raised); write "Leads: none" if there is nothing. Problems with your own setup (installs, build or transpile steps, module loading, the sandbox, your probe scripts) are limitations to state in your conclusion, never leads: each lead costs a turn. No final JSON report yet.',
     'Frozen plan: ' + JSON.stringify(plan),
     'Already observed operations (exitCode:null means unknown): ' +
       compactOperationReceipt(operations),
   ].join('\n');
 }
+
+/** Marks an extension note that came from a flow-exploration turn. */
+export const FLOW_EXPLORATION_PREFIX = 'FLOW EXPLORATION of ';
 
 /**
  * The investigator's own closing statement per check, for the fresh sessions
@@ -199,16 +207,22 @@ export function renderCheckConclusions(
           },
         ];
   });
-  // Entries past the planned checks are hazard-sweep notes, one per probed file.
+  // Entries past the planned checks are extension notes: one per explored flow or probed file.
   const sweep = conclusions.slice(plan.plannedChecks.length).flatMap((statement) =>
     (statement ?? '').trim().length === 0
       ? []
       : [
-          {
-            check: 'hazard-sweep',
-            description: 'Host-flagged risky source file',
-            statement: statement as string,
-          },
+          (statement as string).startsWith(FLOW_EXPLORATION_PREFIX)
+            ? {
+                check: 'flow-exploration',
+                description: 'Critical flow exercised beyond the planned checks',
+                statement: statement as string,
+              }
+            : {
+                check: 'hazard-sweep',
+                description: 'Host-flagged risky source file',
+                statement: statement as string,
+              },
         ],
   );
   const all = [...entries, ...sweep];
@@ -293,6 +307,7 @@ export function buildSecondPassPrompt(
       JSON.stringify(earlierStatement.slice(-800)),
     'Commands that failed earlier on this check (host ledger): ' + JSON.stringify(failed),
     'Decide the check with a method that has not failed yet: execute the REAL code path with a small probe (one single non-compound command), try to break the property, and triage every non-zero exit as a product defect or a proven fixture error. Never loosen an assertion to turn a run green. If setup was the blocker, name the exact cause and route around it. Stop when the check is decided or concretely blocked, with 2-3 sentences of conclusion and a "Breaks attempted:" line.',
+    ROOT_CAUSE_LINE,
   ].join('\n');
 }
 
@@ -305,11 +320,20 @@ export const INPUT_CLASS_RULE =
   'For every guard, validator, normalizer or destructive operation you read (path checks, delete/cleanup, parsers, name or separator rewrites, hashing, import/export), enumerate the classes of input it can receive and probe EACH one with the real code: clearly outside the allowed set, inside and valid, inside but malformed or of the wrong shape, and degenerate (empty, the root or container itself, a name that is a prefix or sibling of an allowed one, a name containing the separator or escape character, different letter case). A guard that refuses the hostile trigger you were given can still accept or mangle a neighbouring class. Say which classes you ran in "Breaks attempted:".';
 
 /**
+ * The report is written in a fresh session that sees only each turn's closing note, so a cause the
+ * agent traced but did not write down never reaches the finding (run_01M88XS8P6: 5 of 7 findings had
+ * no root cause, the benchmark defect among them).
+ */
+export const ROOT_CAUSE_LINE =
+  'For each defect you reproduced, add one line starting "Root cause:" right after your "Breaks attempted:" line (notes keep their end, so it survives): the file, the function and the logic in it that produces the wrong result, from the source you read (write "Root cause: not traced" when you did not trace it). The report sees only your closing note.';
+
+/**
  * A probe that reproduced a violation is a result, however hard the trigger is to
  * reach. Reachability changes the severity, not whether it is reported.
  */
 export const REPRODUCED_VIOLATION_RULE =
-  'Do not argue a reproduced violation away. If a probe shows a guard bypassed, data outside the allowed root read, changed or deleted, or behaviour that contradicts the documented contract, record it as a defect with the operation that showed it, state the precondition needed to reach it, and let the severity reflect how hard it is to reach (low when it needs unusual setup; the code-execution rule in the severity rubric still applies). "Nothing in the product creates that state" or "needs out-of-band setup" is a precondition to write down, not a reason to call the check passed.';
+  'Do not argue a reproduced violation away. If a probe shows a guard bypassed, data outside the allowed root read, changed or deleted, or behaviour that contradicts the documented contract, record it as a defect with the operation that showed it, state the precondition needed to reach it, and let the severity reflect how hard it is to reach (low when it needs unusual setup; the code-execution rule in the severity rubric still applies). "Nothing in the product creates that state" or "needs out-of-band setup" is a precondition to write down, not a reason to call the check passed. ' +
+  ROOT_CAUSE_LINE;
 
 /**
  * Severity follows what was shown: a parser that only builds objects is rated lower than one that runs
@@ -356,6 +380,29 @@ export function buildDeepeningPrompt(
  * check it was working on. Checks are narrow by design, so an off-check
  * anomaly would otherwise end up as a limitation nobody follows up.
  */
+/**
+ * Extension round, flow exploration: the frozen checks only test what the planner
+ * suspected while reading. This turn exercises one critical flow end to end to find
+ * defects nobody suspected (for example a guard that a comment says works but a
+ * helper silently defeats).
+ */
+export function buildFlowExplorationPrompt(
+  flow: string,
+  executedCommands: readonly string[],
+): string {
+  return [
+    'FLOW EXPLORATION — critical flow: ' +
+      JSON.stringify(flow.slice(0, 400)) +
+      '. The planned checks tested suspects found by reading; this turn looks for defects nobody suspected in this flow. Do not add checks; work ONLY on this flow.',
+    'Probes that already ran in this investigation (host ledger; do not repeat them): ' +
+      JSON.stringify(executedCommands.slice(-12).map((c) => c.slice(0, 160))),
+    "Exercise the flow through its public entry points with small probes (one single non-compound command each). Cover boundary inputs (negative, zero, missing and non-integer values; empty, single and unknown-size inputs) and chain the flow's operations with each other, since a value one step produces can break the next. Wherever a code comment says a case is handled, guarded or impossible, trigger exactly that case. Compare each result with the documented behaviour, a sibling API or the platform's native equivalent. A reproduced difference is a finding: state the trigger and the operation that showed it. A probe that crashes through a bug of your own is not a result: fix it and rerun until it exits 0. Never loosen an assertion. Stop after 2-3 sentences of conclusion.",
+    INPUT_CLASS_RULE,
+    REPRODUCED_VIOLATION_RULE,
+    EXECUTION_PROOF_RULE,
+  ].join('\n');
+}
+
 export function buildLeadPrompt(plan: Plan, index: number, lead: string): string {
   return [
     'LEAD FOLLOW-UP — noticed during CHECK ' +
@@ -419,14 +466,13 @@ export function buildQaReportPrompt(
     DEPTH_COVERAGE_GUIDANCE,
     ...(plan.plannedChecks.some(isSecretsCheck) ? [SECRETS_REPORT_GUIDANCE] : []),
     SEVERITY_CALIBRATION,
+    'Root cause: give rootCause for every finding whose investigation notes carry a "Root cause:" line (or name the faulty code), in the notes’ words, tightened; leave it out only when the notes say "not traced" or name no cause. Never write a cause the notes do not support.',
     'Items the investigator tagged [replica] or [traced] are not executed proof of the real code: they can support a suspected finding at strong confidence at most, never confirmed, and they cannot make a check passed. Say in the check details when a result rests on a replica or a trace.',
     'The ledger below is the ONLY authoritative source of operation keys and exit codes. null means unknown. Test evidence requires test:true. Never combine commands or invent outcomes. confirmed requires genuinely reproduced proof; strong requires grounded source or observed operations. code_reference supports strong at most; manual uses agent_reasoning only. Restrictions alone are limitations; report their mishandling only with a concrete product failure.',
+    // The contract goes out with every attempt, corrections included: a retry that only saw the list of
+    // errors came back in the wrong shape (missing required fields, a category that does not exist).
     ...(correction === undefined
-      ? [
-          'Categories: ' + FINDING_CATEGORIES.join(',') + '.',
-          describeSentryAgentReportContract(),
-          REPORT_ENVELOPE_SCHEMA,
-        ]
+      ? []
       : [
           buildReportCorrectionIntro(correction),
           ...(correction.some((error) => /path|file|directory/i.test(error))
@@ -435,6 +481,9 @@ export function buildQaReportPrompt(
               ]
             : []),
         ]),
+    'Categories: ' + FINDING_CATEGORIES.join(',') + '.',
+    describeSentryAgentReportContract(),
+    REPORT_ENVELOPE_SCHEMA,
     'Authoritative operation receipt (frozen after investigation): ' +
       compactOperationReceipt(operations),
   ].join('\n');

@@ -395,13 +395,20 @@ describe('investigateChecks second pass', () => {
     leadsOnFirstPass?: boolean;
     hazards?: HazardFile[];
     browserLauncher?: string;
+    flows?: string[];
+    rootCauseOnFirstPass?: boolean;
+    /** A turn whose prompt contains this text reports a reproduced defect ("Root cause:"). */
+    defectIn?: string;
   }) {
     const start = Date.now();
     const clock = { t: start };
     const prompts: string[] = [];
     const reportContexts: string[] = [];
     const { hooks } = harness(() => ({ text: 'unused' }), {
-      plan: { plannedChecks: options.checks },
+      plan: {
+        plannedChecks: options.checks,
+        ...(options.flows === undefined ? {} : { criticalFlows: options.flows }),
+      },
       ...(options.browserLauncher === undefined
         ? {}
         : { network: { webAccess: false, browserLauncher: options.browserLauncher } }),
@@ -431,24 +438,38 @@ describe('investigateChecks second pass', () => {
             deepen ||
             text.includes('LEAD FOLLOW-UP') ||
             text.includes('HAZARD SWEEP') ||
+            text.includes('FLOW EXPLORATION') ||
             !options.undecided.includes(name)
           )
             addOp(hooks.operations as Ops, 'bash', 'node probe-' + prompts.length + '.mjs', 0);
           else addOp(hooks.operations as Ops, 'read', 'src/' + prompts.length + '.ts');
           yield eventOf({ type: 'tool.completed' });
           const lead = text.includes('LEAD FOLLOW-UP');
+          const flow = text.includes('FLOW EXPLORATION');
           return {
             text:
-              (lead
-                ? 'lead looked at: '
-                : deepen
-                  ? 'deepened: '
-                  : second
-                    ? 'second pass: '
-                    : 'first pass: ') +
+              (flow
+                ? 'flow explored: '
+                : lead
+                  ? 'lead looked at: '
+                  : deepen
+                    ? 'deepened: '
+                    : second
+                      ? 'second pass: '
+                      : 'first pass: ') +
               name +
               (options.leadsOnFirstPass && !deepen && !second && !lead && name.endsWith('Check A')
                 ? '\nLeads: symlink import fails; cleanup removes the root'
+                : '') +
+              // a long first-pass note whose traced cause sits past its first 500 characters
+              (options.rootCauseOnFirstPass && !deepen && !second && !lead && !flow
+                ? '\n' +
+                  'x'.repeat(700) +
+                  '\nBreaks attempted: slice(-3) on an unknown-size Seq' +
+                  '\nRoot cause: src/Operations.js sliceFactory resolves NaN|0 to 0'
+                : '') +
+              (options.defectIn !== undefined && text.includes(options.defectIn)
+                ? '\nRoot cause: src/x.js f() returns the wrong slot'
                 : ''),
           };
         })(),
@@ -499,6 +520,24 @@ describe('investigateChecks second pass', () => {
     expect(without.prompts.some((p) => p.includes('headless browser'))).toBe(false);
   });
 
+  it("repeats the agent's sandbox notes in every follow-up pass and extra turn", async () => {
+    const note = 'Installs in this sandbox: use .qa-tmp/deps.';
+    const run = scenario({
+      checks: ['Check A', 'Check B', 'Check C'],
+      undecided: ['Check B'],
+      clockPerTurnMin: 2,
+      flows: ['Flow one'],
+    });
+    await drain(
+      investigateChecks({ ...run.hooks, network: { webAccess: false, sandboxNotes: [note] } }),
+    );
+    const followUps = run.prompts.filter((p) =>
+      /SECOND PASS|DEEPENING PASS|FLOW EXPLORATION/.test(p),
+    );
+    expect(followUps.length).toBeGreaterThan(2);
+    for (const prompt of followUps) expect(prompt).toContain(note);
+  });
+
   it('deepens the thinnest decided checks when most of the window is unused', async () => {
     const { hooks, prompts, reportContexts } = scenario({
       checks: ['Check A', 'Check B', 'Check C', 'Check D', 'Check E'],
@@ -520,6 +559,74 @@ describe('investigateChecks second pass', () => {
     expect(deepening[0]).toContain('NOT a result');
   });
 
+  it('keeps a first-pass root cause in the note when the check is deepened', async () => {
+    // run_01M88XS8P6: the deepened benchmark check lost its cause, the note kept only its first 500 characters
+    const { hooks, reportContexts } = scenario({
+      checks: ['Check A', 'Check B', 'Check C'],
+      undecided: [],
+      clockPerTurnMin: 2,
+      rootCauseOnFirstPass: true,
+    });
+    const { value } = await drain(investigateChecks(hooks));
+    expect(value.checkConclusions[0]).toContain('deepened: Check A');
+    expect(value.checkConclusions[0]).toContain(
+      'Root cause: src/Operations.js sliceFactory resolves NaN|0 to 0',
+    );
+    expect(reportContexts.at(-1)).toContain('sliceFactory resolves NaN|0 to 0');
+  });
+
+  it('exercises each critical flow end to end after the leads and before the deepening', async () => {
+    const { hooks, prompts, reportContexts } = scenario({
+      checks: ['Check A', 'Check B', 'Check C'],
+      undecided: [],
+      clockPerTurnMin: 2,
+      flows: [
+        'Seq chains: filter then slice (src/Operations.js)',
+        'Map insert and remove',
+        'fromJS and toJS',
+        'Hashing',
+        'Record defaults',
+        'Stack push and pop',
+      ],
+    });
+    const { events, value } = await drain(investigateChecks(hooks));
+    const deepen = events.find(
+      (event) => event.type === 'warning' && (event as { code?: string }).code === 'QA_DEEPEN_PASS',
+    ) as { message?: string } | undefined;
+    expect(deepen?.message).toContain('exercising 5 critical flow(s)');
+    // the status line names each extra turn instead of staying on the last check
+    const statuses = events
+      .filter((event) => event.type === 'agent.status')
+      .map((event) => (event as { message?: string }).message ?? '');
+    expect(statuses).toContain(
+      'Test is exploring critical flow 1/5: Seq chains: filter then slice (src/Operations.js)',
+    );
+    expect(statuses.some((s) => s.includes('is deepening check '))).toBe(true);
+    const lastCheck = statuses.findIndex((s) => s.includes('investigating check 3/3'));
+    const firstFlowStatus = statuses.findIndex((s) => s.includes('exploring critical flow 1/5'));
+    expect(firstFlowStatus).toBeGreaterThan(lastCheck);
+    const flowPrompts = prompts.filter((p) => p.includes('FLOW EXPLORATION'));
+    // at most five flows, in plan order (riskiest first), each in its own turn
+    expect(flowPrompts).toHaveLength(5);
+    expect(flowPrompts[0]).toContain('filter then slice');
+    expect(flowPrompts[4]).toContain('Record defaults');
+    expect(flowPrompts.some((p) => p.includes('Stack push and pop'))).toBe(false);
+    // the turn knows which probes already ran and is told to test what comments claim
+    expect(flowPrompts[0]).toContain('node probe-');
+    expect(flowPrompts[0]).toContain('comment says a case is handled');
+    // flows come before the deepening turns
+    const firstFlow = prompts.findIndex((p) => p.includes('FLOW EXPLORATION'));
+    const firstDeepen = prompts.findIndex((p) => p.includes('DEEPENING PASS'));
+    expect(firstFlow).toBeGreaterThan(-1);
+    expect(firstFlow).toBeLessThan(firstDeepen);
+    // each proved flow gets its own note after the planned checks; the checks keep theirs
+    expect(value.checkConclusions[3]).toContain('FLOW EXPLORATION of Seq chains');
+    expect(value.checkConclusions[3]).toContain('flow explored:');
+    expect(value.checkConclusions[5]).toContain('FLOW EXPLORATION of fromJS and toJS');
+    expect(value.checkConclusions[0]).not.toContain('flow explored');
+    expect(reportContexts.at(-1)).toContain('"check":"flow-exploration"');
+  });
+
   it('follows up off-check leads in their own turns before deepening', async () => {
     const { hooks, prompts, reportContexts } = scenario({
       checks: ['Check A', 'Check B', 'Check C'],
@@ -539,6 +646,90 @@ describe('investigateChecks second pass', () => {
     expect(value.checkConclusions[0]).toContain('LEAD (symlink import fails)');
     expect(value.checkConclusions[0]).toContain('lead looked at: Check A');
     expect(reportContexts.at(-1)).toContain('LEAD (cleanup removes the root)');
+  });
+
+  describe('stop extra rounds when idle (per-agent setting)', () => {
+    const flows = ['Flow one', 'Flow two', 'Flow three', 'Flow four'];
+    const hazards = [{ file: 'packages/wipe/src/index.ts', hazards: ['deletes files'], score: 4 }];
+    const extraTurns = (prompts: string[]) =>
+      prompts.filter((p) => /FLOW EXPLORATION|DEEPENING PASS|LEAD FOLLOW-UP|HAZARD SWEEP/.test(p));
+
+    it('is off by default: every extra turn runs', async () => {
+      const { hooks, prompts } = scenario({
+        checks: ['Check A', 'Check B', 'Check C'],
+        undecided: [],
+        clockPerTurnMin: 2,
+        flows,
+        hazards,
+      });
+      const { events } = await drain(investigateChecks(hooks));
+      expect(codes(events)).not.toContain('QA_EXTRA_ROUNDS_STOPPED');
+      // four flows, three deepening turns and one sweep file
+      expect(extraTurns(prompts)).toHaveLength(8);
+    });
+
+    it('stops after two extra turns with no new defect, skips the sweep, and still reports', async () => {
+      const { hooks, prompts, reportContexts } = scenario({
+        checks: ['Check A', 'Check B', 'Check C'],
+        undecided: [],
+        clockPerTurnMin: 2,
+        flows,
+        hazards,
+      });
+      const { events, value } = await drain(
+        investigateChecks({ ...hooks, stopExtraRoundsWhenIdle: true }),
+      );
+      expect(extraTurns(prompts)).toHaveLength(2);
+      expect(prompts.some((p) => p.includes('HAZARD SWEEP'))).toBe(false);
+      const stop = events.find(
+        (e) => e.type === 'warning' && (e as { code?: string }).code === 'QA_EXTRA_ROUNDS_STOPPED',
+      ) as { message?: string } | undefined;
+      expect(stop?.message).toContain('The last 2 extra turns reproduced no new defect');
+      expect(stop?.message).toContain('5 turn(s) left in this round');
+      expect(codes(events)).not.toContain('QA_HAZARD_SWEEP');
+      // the planned checks keep their notes and the report context is still written
+      expect(value.checkConclusions[0]).toContain('first pass: Check A');
+      expect(reportContexts.length).toBeGreaterThan(0);
+    });
+
+    it('keeps going while turns keep finding defects', async () => {
+      const { hooks, prompts } = scenario({
+        checks: ['Check A', 'Check B', 'Check C'],
+        undecided: [],
+        clockPerTurnMin: 2,
+        flows,
+        hazards,
+        // the second flow finds a defect, which resets the count
+        defectIn: 'Flow two',
+      });
+      const { events } = await drain(
+        investigateChecks({ ...hooks, stopExtraRoundsWhenIdle: true }),
+      );
+      // flow one (idle 1), flow two (defect, back to 0), flows three and four (idle 2): then stop
+      expect(extraTurns(prompts)).toHaveLength(4);
+      expect(codes(events)).toContain('QA_EXTRA_ROUNDS_STOPPED');
+    });
+
+    it('never cuts the second pass on undecided checks', async () => {
+      const { hooks, prompts } = scenario({
+        checks: ['Check A', 'Check B', 'Check C'],
+        undecided: ['Check B'],
+        clockPerTurnMin: 2,
+        flows,
+      });
+      await drain(investigateChecks({ ...hooks, stopExtraRoundsWhenIdle: true }));
+      expect(prompts.some((p) => p.includes('SECOND PASS'))).toBe(true);
+    });
+
+    it('reads the setting from the runtime value', async () => {
+      const { stopExtraRoundsWhenIdle, reportsDefect } = await import('../src/index.js');
+      expect(stopExtraRoundsWhenIdle('on')).toBe(true);
+      expect(stopExtraRoundsWhenIdle('1')).toBe(true);
+      expect(stopExtraRoundsWhenIdle(undefined)).toBe(false);
+      expect(stopExtraRoundsWhenIdle('off')).toBe(false);
+      expect(reportsDefect('done\nBreaks attempted: x\nRoot cause: not traced')).toBe(true);
+      expect(reportsDefect('done\nBreaks attempted: x\nLeads: none')).toBe(false);
+    });
   });
 
   it('sweeps host-flagged risky files, unreached ones first, and keeps the statement', async () => {

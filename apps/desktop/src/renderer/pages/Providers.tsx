@@ -5,7 +5,14 @@ import { Link } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check } from 'lucide-react';
 import { sentryApi } from '../lib/sentry-api.js';
-import { AGENT_EFFORT_SETTING, effortOptions, type EffortAgent } from '../lib/agent-effort.js';
+import {
+  AGENT_EFFORT_SETTING,
+  AGENT_STOP_IDLE_SETTING,
+  effortOptions,
+  isStopIdleOn,
+  type EffortAgent,
+} from '../lib/agent-effort.js';
+import { SwitchButton } from '../components/SwitchButton.js';
 import {
   CHATGPT_MODELS,
   DEEPSEEK_MODELS,
@@ -44,6 +51,10 @@ interface ProviderStatus {
   storageError?: string;
 }
 
+/** One text for every agent: the toggle means the same for each, only its agent differs. */
+const STOP_IDLE_DESCRIPTION =
+  'After the planned checks, a Full run spends extra turns following leads, exploring critical flows, deepening checks and sweeping risky files. When this is on, those extra rounds end as soon as two turns in a row reproduce no new defect, and the report starts. It saves time and usage. The planned checks and the second pass on undecided checks always run. It applies to runs started after you change it.';
+
 const DESCRIPTIONS: Record<string, string> = {
   OPENROUTER_API_KEY:
     'OpenRouter pay-as-you-go provider key (secret, from openrouter.ai). Used by the OpenCode harness only when Provider is openrouter (or left unset). Never shown, never leaves the desktop host process except over the encrypted runtime channel.',
@@ -63,6 +74,9 @@ const DESCRIPTIONS: Record<string, string> = {
   SENTRY_ANTHROPIC_REASONING:
     'How hard the Claude agent thinks (non-secret): low, medium, high, extra high or maximum. It is passed to Claude Code as its effort level. Higher effort usually finds more but takes longer and costs more. Unset uses the provider default.',
   SENTRY_DEEPSEEK_MODEL: 'DeepSeek model id override (non-secret).',
+  ...Object.fromEntries(
+    Object.values(AGENT_STOP_IDLE_SETTING).map((name) => [name, STOP_IDLE_DESCRIPTION]),
+  ),
   SENTRY_GLM_MODEL: 'GLM model id override (non-secret).',
   SENTRY_DEEPSEEK_BINARY:
     'DeepSeek harness executable (non-secret). Absolute path to the dsh entry; needed when the desktop host PATH does not include it.',
@@ -1264,6 +1278,41 @@ function ReasoningEffortField(props: {
         options={options}
         onChange={(next) => (next === '' ? props.onClear(name) : props.onSave(name, next))}
       />
+      <StopIdleField {...props} />
+    </div>
+  );
+}
+
+/**
+ * Per agent: end the extra rounds once two turns in a row find nothing new. Saving applies at once;
+ * off removes the setting. It sits under the agent's effort field, so every agent card has one.
+ */
+function StopIdleField(props: {
+  readonly agent: EffortAgent;
+  readonly byName: Map<string, ProviderStatus>;
+  readonly pending: boolean;
+  readonly onSave: (name: string, value: string) => void;
+  readonly onClear: (name: string) => void;
+}): React.JSX.Element {
+  const name = AGENT_STOP_IDLE_SETTING[props.agent];
+  const status = props.byName.get(name);
+  const on = status?.configured === true && isStopIdleOn(status.hint);
+  return (
+    <div style={{ marginTop: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <span className="card-title">Stop extra rounds when idle</span>
+        <span className="info-row-spacer" />
+        <InfoPopover title="Stop extra rounds when idle">{STOP_IDLE_DESCRIPTION}</InfoPopover>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6 }}>
+        <SwitchButton
+          checked={on}
+          label="Stop extra rounds when idle"
+          disabled={props.pending}
+          onToggle={() => (on ? props.onClear(name) : props.onSave(name, 'on'))}
+        />
+        <span className="metadata">{on ? 'On' : 'Off'}</span>
+      </div>
     </div>
   );
 }

@@ -4,6 +4,7 @@ import {
   MAX_PLANNED_CHECKS,
   MIN_PLANNED_CHECKS,
   depthPolicy,
+  maxCriticalFlows,
   maxPlannedChecks,
 } from '../src/depth.js';
 
@@ -37,6 +38,14 @@ describe('run depth profile', () => {
     expect(maxPlannedChecks(context(3 * HOUR), now)).toBe(6);
     expect(maxPlannedChecks(context(6 * HOUR), now)).toBe(MAX_PLANNED_CHECKS);
     expect(maxPlannedChecks(context(168 * HOUR), now)).toBe(MAX_PLANNED_CHECKS);
+  });
+
+  it('lists two fewer critical flows than checks, never fewer than one', () => {
+    expect(maxCriticalFlows(context(168 * HOUR), now)).toBe(6);
+    expect(maxCriticalFlows(context(3 * HOUR), now)).toBe(4);
+    expect(maxCriticalFlows(context(3 * HOUR, 'fast'), now)).toBe(1);
+    expect(maxCriticalFlows(context(20 * 60_000), now)).toBe(1);
+    expect(maxCriticalFlows(undefined)).toBe(6);
   });
 
   it('never goes below the minimum, even for a short window and a fast run', () => {

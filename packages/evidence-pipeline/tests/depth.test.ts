@@ -358,4 +358,35 @@ describe('extractLeads', () => {
     ]);
     expect(extractLeads('Leads: a long one; second one; third one; fourth one')).toHaveLength(3);
   });
+
+  it('drops filler such as "none other" but keeps real leads that start with "no"', async () => {
+    const { extractLeads } = await import('../src/index.js');
+    // run_01M88QKYARH572JJ5H8N8Y3X0P spent a lead turn on "none other"
+    expect(
+      extractLeads(
+        'Leads: none other; Nothing else.; no further leads; No leads found; none so far; N/A',
+      ),
+    ).toEqual([]);
+    expect(
+      extractLeads('Leads: sliceFactory NaN coercion; none other; no guard on negative index'),
+    ).toEqual(['sliceFactory NaN coercion', 'no guard on negative index']);
+    expect(extractLeads('Leads: nothing checks the cache size; none of the paths clamp')).toEqual([
+      'nothing checks the cache size',
+      'none of the paths clamp',
+    ]);
+  });
+});
+
+describe('time left in run timeline messages', () => {
+  it('reads as minutes, hours, or no practical limit, never thousands of minutes', async () => {
+    const { timeLeftClause } = await import('../src/index.js');
+    const noLimitWindowMs = 604_800_000;
+    expect(timeLeftClause(35 * 60_000)).toBe('about 35 minutes of investigation time remain');
+    expect(timeLeftClause(150 * 60_000)).toBe('about 3 hours of investigation time remain');
+    // "No limit" in Settings is a 7-day window (the old message said "about 10058 minutes")
+    expect(timeLeftClause(noLimitWindowMs - 22 * 60_000)).toBe(
+      'the run has no practical time limit',
+    );
+    expect(timeLeftClause(-5)).toBe('about 0 minutes of investigation time remain');
+  });
 });

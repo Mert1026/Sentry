@@ -224,9 +224,8 @@ describe('agent stage truth', () => {
     const byId = new Map(view.stages.map((s) => [s.id, s.state]));
     expect(byId.get('preparation')).toBe('observed');
     expect(byId.get('planning')).toBe('failed');
-    // Commands were observed during planning, without proving runtime validation.
-    expect(byId.get('runtime')).toBe('observed');
-    for (const id of ['investigation', 'evidence', 'reporting', 'completed']) {
+    // Commands ran during planning, but the line ends at Planning: nothing after it reads as seen.
+    for (const id of ['investigation', 'runtime', 'evidence', 'reporting', 'completed']) {
       expect(byId.get(id)).toBe('not_started');
     }
     expect(view.currentStage).toBe('planning');
@@ -253,5 +252,151 @@ describe('agent stage truth', () => {
     for (const id of ['runtime', 'evidence', 'reporting', 'completed']) {
       expect(byId.get(id)).toBe('not_started');
     }
+  });
+});
+
+describe('stage line during a live investigation (the run the screenshot came from)', () => {
+  const agentRun = makeAgentRun({ status: 'running' });
+  const at = (second: number) => ({
+    agentRunId: agentRun.id,
+    timestamp: '2026-11-25T06:52:' + String(second).padStart(2, '0') + '.000Z',
+  });
+  const events = [
+    { type: 'run.started', ...at(1) },
+    // an early notice from preparation
+    { type: 'warning', ...at(2), code: 'QA_PREPARATION_LIMITED', message: 'pinned pnpm only' },
+    { type: 'agent.status', ...at(3), status: 'planning', message: 'OpenCode is creating a plan.' },
+    { type: 'tool.started', ...at(4), operationId: 'op1', tool: { name: 'read' } },
+    { type: 'tool.completed', ...at(5), operationId: 'op1', tool: { name: 'read' } },
+    {
+      type: 'agent.status',
+      ...at(6),
+      status: 'investigating',
+      message: 'OpenCode is investigating check 3/8: OrderedMap order',
+    },
+    { type: 'tool.started', ...at(7), operationId: 'op2', tool: { name: 'bash' } },
+    { type: 'tool.completed', ...at(8), operationId: 'op2', tool: { name: 'bash', exitCode: 0 } },
+    { type: 'usage.updated', ...at(9) },
+  ];
+  // the run's own activity stays running until the agent ends
+  const activities = [
+    {
+      id: 'act1',
+      kind: 'agent',
+      status: 'running',
+      title: 'Agent started',
+      startedAt: at(1).timestamp,
+    },
+  ];
+  const view = () =>
+    projectAgentTelemetry({ agentRun, events, activities, findings: [], evidence: [] } as never);
+
+  it('ends the line at Commands / Tests while the agent runs commands, with nothing seen after it', () => {
+    const v = view();
+    const byId = new Map(v.stages.map((s) => [s.id, s.state]));
+    expect(v.currentStage).toBe('runtime');
+    expect(byId.get('investigation')).toBe('observed');
+    expect(byId.get('runtime')).toBe('active');
+    for (const id of ['evidence', 'reporting', 'completed'])
+      expect(byId.get(id)).toBe('not_started');
+  });
+
+  it('does not keep an early warning on the stage in progress', () => {
+    expect(view().stages.some((s) => s.state === 'warning')).toBe(false);
+  });
+
+  it('marks the stage when a warning comes during the current step', () => {
+    const warned = projectAgentTelemetry({
+      agentRun,
+      events: [...events, { type: 'warning', ...at(10), code: 'QA_APPROACH_CHANGE', message: 'x' }],
+      activities,
+      findings: [],
+      evidence: [],
+    } as never);
+    expect(warned.stages.find((s) => s.id === 'runtime')?.state).toBe('warning');
+  });
+
+  it('shows the agent step, not "Agent started" or a usage update, as the current operation', () => {
+    expect(view().currentOperation.title).toBe(
+      'OpenCode is investigating check 3/8: OrderedMap order',
+    );
+  });
+
+  it('shows a tool in flight as the current operation', () => {
+    const busy = projectAgentTelemetry({
+      agentRun,
+      events: [
+        ...events,
+        { type: 'tool.started', ...at(11), operationId: 'op3', tool: { name: 'bash' } },
+      ],
+      activities,
+      findings: [],
+      evidence: [],
+    } as never);
+    expect(busy.currentOperation.title).toBe('Tool started: bash');
+  });
+});
+
+describe('Evidence comes after Reporting: findings arrive with the report', () => {
+  const agentRun = makeAgentRun({ status: 'running' });
+  const base = { agentRunId: agentRun.id, timestamp: '2026-11-25T07:18:14.000Z' };
+  const upToReport = [
+    { type: 'run.started', ...base },
+    { type: 'agent.status', ...base, status: 'planning' },
+    { type: 'agent.status', ...base, status: 'investigating' },
+    { type: 'tool.started', ...base, operationId: 'op1', tool: { name: 'bash' } },
+    { type: 'tool.completed', ...base, operationId: 'op1', tool: { name: 'bash' } },
+    { type: 'agent.status', ...base, status: 'reporting' },
+  ];
+  const finding = {
+    type: 'finding.submitted',
+    ...base,
+    finding: { title: 'slice(-3) wrong', severity: 'medium' },
+  };
+  const project = (events: unknown[], status = 'running', findings: unknown[] = []) =>
+    projectAgentTelemetry({
+      agentRun: makeAgentRun({ status: status as never }),
+      events,
+      activities: [],
+      findings,
+      evidence: [],
+    } as never);
+  const order = (view: ReturnType<typeof project>) => view.stages.map((s) => s.id);
+
+  it('lists the stages in the order they happen', () => {
+    expect(order(project(upToReport))).toEqual([
+      'preparation',
+      'planning',
+      'investigation',
+      'runtime',
+      'reporting',
+      'evidence',
+      'completed',
+    ]);
+  });
+
+  it('while the report is written, the line ends at Reporting with nothing after it', () => {
+    const byId = new Map(project(upToReport).stages.map((s) => [s.id, s.state]));
+    expect(byId.get('runtime')).toBe('observed');
+    expect(byId.get('reporting')).toBe('active');
+    expect(byId.get('evidence')).toBe('not_started');
+  });
+
+  it('once the findings arrive, the line moves on to Evidence and every step before it was seen', () => {
+    const view = project([...upToReport, finding], 'running', [{ severity: 'medium' }]);
+    const byId = new Map(view.stages.map((s) => [s.id, s.state]));
+    expect(view.currentStage).toBe('evidence');
+    expect(byId.get('reporting')).toBe('observed');
+    expect(byId.get('evidence')).toBe('active');
+    expect(view.stages.slice(0, 5).every((s) => s.state === 'observed')).toBe(true);
+  });
+
+  it('a clean run with no findings shows Evidence as passed with no events, not as never reached', async () => {
+    const { stageDisplayLabel } = await import('../../src/renderer/lib/agent-telemetry.js');
+    const view = project([...upToReport, { type: 'run.completed', ...base }], 'completed');
+    const evidence = view.stages.findIndex((s) => s.id === 'evidence');
+    expect(view.stages[evidence]?.state).toBe('not_started');
+    expect(stageDisplayLabel(view.stages, evidence)).toBe('No events');
+    expect(stageDisplayLabel(view.stages, view.stages.length - 1)).toBe('Completed');
   });
 });

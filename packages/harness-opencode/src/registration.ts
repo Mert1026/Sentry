@@ -28,6 +28,8 @@ export function chatGptEnvironment(source: NodeJS.ProcessEnv = process.env): Nod
       if (key === 'SENTRY_OPENCODE_MODEL') return target['SENTRY_CHATGPT_MODEL'];
       // The ChatGPT agent's own reasoning-effort choice reaches the harness as its variant.
       if (key === 'SENTRY_OPENCODE_VARIANT') return target['SENTRY_CHATGPT_REASONING'];
+      // So is its own "stop extra rounds when idle" choice.
+      if (key === 'SENTRY_OPENCODE_STOP_IDLE') return target['SENTRY_CHATGPT_STOP_IDLE'];
       return typeof key === 'string' ? target[key] : undefined;
     },
     has(target, key) {
@@ -35,6 +37,8 @@ export function chatGptEnvironment(source: NodeJS.ProcessEnv = process.env): Nod
       if (key === 'SENTRY_OPENCODE_MODEL') return target['SENTRY_CHATGPT_MODEL'] !== undefined;
       if (key === 'SENTRY_OPENCODE_VARIANT')
         return target['SENTRY_CHATGPT_REASONING'] !== undefined;
+      if (key === 'SENTRY_OPENCODE_STOP_IDLE')
+        return target['SENTRY_CHATGPT_STOP_IDLE'] !== undefined;
       return typeof key === 'string' && key in target;
     },
   });

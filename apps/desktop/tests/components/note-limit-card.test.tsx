@@ -81,7 +81,7 @@ describe('note length limit setting', () => {
 
   it('shows a saved No limit as No limit', async () => {
     const f = mount('1000000');
-    await screen.findByText('A note may be no limit.');
+    await screen.findByText('Notes have no length limit.');
     expect(f.pressed()).toEqual(['No limit']);
   });
 

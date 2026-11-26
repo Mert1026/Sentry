@@ -20,12 +20,14 @@ import {
   describeSchemaIssues,
   parseAgentEffort,
   CLAUDE_SANDBOX_PLACEHOLDER_NOTE,
+  CLAUDE_SANDBOX_INSTALL_NOTE,
 } from '@qa/shared';
 import {
   limitPhase,
   investigateChecks,
   listHazardCandidates,
   scanHazardFiles,
+  stopExtraRoundsWhenIdle,
   reportAttemptDeadline,
   PhaseDeadlineReached,
   ObservedToolNotes,
@@ -1759,7 +1761,7 @@ export class ClaudeCodeHarnessAdapter implements HarnessAdapter {
           webAccess: webAccessEnabled(request.executionSafeguards),
           toolDownloads: toolDownloadsEnabled(request.executionSafeguards),
           ...browserNetworkOption(),
-          sandboxNotes: [CLAUDE_SANDBOX_PLACEHOLDER_NOTE],
+          sandboxNotes: [CLAUDE_SANDBOX_PLACEHOLDER_NOTE, CLAUDE_SANDBOX_INSTALL_NOTE],
         },
         event: (body) => event(request.agentRunId, body),
         streamTurn: (turnText) =>
@@ -1778,6 +1780,10 @@ export class ClaudeCodeHarnessAdapter implements HarnessAdapter {
         startReportContext,
         cancelled: () => this.cancelled,
         hazardFiles: () => scanHazardFiles(request.workspace.runtimePath, 40, originalSource),
+        // Per-agent setting (Settings → Providers): end the extra rounds once they stop finding defects.
+        stopExtraRoundsWhenIdle: stopExtraRoundsWhenIdle(
+          this.hostEnvironment['SENTRY_GLM_STOP_IDLE'],
+        ),
         isTurnTimeout: (cause) => cause instanceof ClaudeTurnTimeoutError,
         // A spawn failure (E2BIG, EAGAIN, ...) after banked operations, or a
         // sandbox that died mid-run after commands already executed (a

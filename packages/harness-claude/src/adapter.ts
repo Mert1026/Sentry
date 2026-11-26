@@ -11,6 +11,7 @@ import {
   dependencyCacheEnvironment,
   webAccessEnabled,
   CLAUDE_SANDBOX_PLACEHOLDER_NOTE,
+  CLAUDE_SANDBOX_INSTALL_NOTE,
   allowedAgentHosts,
   toolDownloadsEnabled,
   withToolchains,
@@ -26,6 +27,7 @@ import {
   investigateChecks,
   listHazardCandidates,
   scanHazardFiles,
+  stopExtraRoundsWhenIdle,
   reportAttemptDeadline,
   PhaseDeadlineReached,
   ObservedToolNotes,
@@ -369,6 +371,30 @@ export function isSandboxBootstrapFailureText(text: string): boolean {
 }
 
 /**
+ * True for the bubblewrap failure that two overlapping shell commands can cause in the same workspace:
+ * Claude Code puts placeholder files over the protected `.git` paths (`hooks`, `config.worktree.lock`, ...)
+ * for the length of a command and removes them afterwards, so a second command that starts in that window
+ * cannot create or bind the placeholder ("Can't create file at .../.git/hooks", "Can't get type of source
+ * .../.git/config.worktree.lock"). The command never ran and a retry normally succeeds, so this must not
+ * end an investigation the way a sandbox that cannot start at all does.
+ */
+export function isTransientGitPlaceholderFailure(text: string): boolean {
+  const head = text.split(/\r?\n/).slice(0, 3).join('\n');
+  return (
+    /^[\t ]*(exit code \d+\s+)?bwrap:[^\r\n]*\/\.git(\/|\b)/im.test(head) &&
+    /(can'?t create file at|can'?t get type of source|can'?t bind mount|can'?t mkdir|read-only file system|no such file)/i.test(
+      head,
+    )
+  );
+}
+
+/** Overlapping-command placeholder failures in a row that still count as a race, not a broken sandbox. */
+const TRANSIENT_SANDBOX_RACE_LIMIT = 3;
+
+/** How often a status event goes out while the one long report reply is still being written. */
+const REPORT_HEARTBEAT_MS = 60_000;
+
+/**
  * A plain-language next step for a sandbox bootstrap failure, or nothing when the first diagnostic line
  * says no more than that the sandbox could not start. Most often it is a system setting that blocks the
  * nested user namespaces the sandbox needs.
@@ -434,6 +460,8 @@ export class ClaudeAgentHarnessAdapter implements HarnessAdapter {
     { operationId: OperationId; toolName: string; commandText?: string; argsText?: string }
   >();
   private readonly completedTools = new Set<string>();
+  /** Overlapping-command `.git` placeholder failures since the last shell command that ran. */
+  private transientSandboxRaces = 0;
   private readonly observedCommands = new Set<string>();
   private readonly observedOperations = new Map<string, ObservedOperation>();
   private operationCounter = 0;
@@ -972,7 +1000,15 @@ export class ClaudeAgentHarnessAdapter implements HarnessAdapter {
         // structure with Read while Bash cannot start wastes budget and
         // produces degraded evidence. The completion above stays in `out`
         // so run history shows the trigger.
-        if (sandboxFailure) {
+        // A placeholder race between overlapping commands is not a broken sandbox: the model has the
+        // failed result and reruns the command. Only a streak of them ends the turn.
+        const transientRace =
+          sandboxFailure &&
+          isTransientGitPlaceholderFailure(rawResultForFailure) &&
+          this.transientSandboxRaces < TRANSIENT_SANDBOX_RACE_LIMIT;
+        if (transientRace) this.transientSandboxRaces += 1;
+        else if (isBashLike && !sandboxFailure) this.transientSandboxRaces = 0;
+        if (sandboxFailure && !transientRace) {
           throw Object.assign(
             new ClaudeAgentHarnessError(
               'CLAUDE_SANDBOX_UNAVAILABLE',
@@ -1589,7 +1625,7 @@ export class ClaudeAgentHarnessAdapter implements HarnessAdapter {
       session = await this.client.startSession();
       let recoveryContext = '';
       const contextBudget = new ContextBudget(this.options.contextWindowTokens ?? 200_000);
-      const freshClient = async () => {
+      const freshClient = async (effortOverride?: string) => {
         await this.dispose();
         if (this.cancelled)
           throw new ClaudeAgentHarnessError(
@@ -1614,7 +1650,9 @@ export class ClaudeAgentHarnessAdapter implements HarnessAdapter {
             'utf8',
           );
         }
-        const candidate = await this.clientFactory(spec);
+        const candidate = await this.clientFactory(
+          effortOverride === undefined ? spec : { ...spec, effort: effortOverride },
+        );
         if (this.cancelled) {
           await candidate.close();
           throw new ClaudeAgentHarnessError(
@@ -1761,7 +1799,7 @@ export class ClaudeAgentHarnessAdapter implements HarnessAdapter {
           webAccess: webAccessEnabled(request.executionSafeguards),
           toolDownloads: toolDownloadsEnabled(request.executionSafeguards),
           ...browserNetworkOption(),
-          sandboxNotes: [CLAUDE_SANDBOX_PLACEHOLDER_NOTE],
+          sandboxNotes: [CLAUDE_SANDBOX_PLACEHOLDER_NOTE, CLAUDE_SANDBOX_INSTALL_NOTE],
         },
         event: (body) => event(request.agentRunId, body),
         streamTurn: (turnText) =>
@@ -1780,6 +1818,10 @@ export class ClaudeAgentHarnessAdapter implements HarnessAdapter {
         startReportContext,
         cancelled: () => this.cancelled,
         hazardFiles: () => scanHazardFiles(request.workspace.runtimePath, 40, originalSource),
+        // Per-agent setting (Settings → Providers): end the extra rounds once they stop finding defects.
+        stopExtraRoundsWhenIdle: stopExtraRoundsWhenIdle(
+          this.hostEnvironment['SENTRY_ANTHROPIC_STOP_IDLE'],
+        ),
         isTurnTimeout: (cause) => cause instanceof ClaudeTurnTimeoutError,
         // A spawn failure (E2BIG, EAGAIN, ...) after banked operations, or a
         // sandbox that died mid-run after commands already executed (a
@@ -1885,12 +1927,34 @@ export class ClaudeAgentHarnessAdapter implements HarnessAdapter {
                         () => this.dispose(),
                         'Reporting',
                       );
-                let step = await live.next();
-                while (step.done !== true) {
+                // The report arrives as one long reply with nothing to stream while it is written. A run that
+                // is only waiting for it must not look stalled (the run engine ends a silent agent), so a
+                // status event goes out every minute the report is still coming.
+                let pending = live.next();
+                let step: IteratorResult<HarnessEvent, CollectedTurn> | undefined;
+                while (step === undefined || step.done !== true) {
+                  let timer: ReturnType<typeof setTimeout> | undefined;
+                  const raced = await Promise.race([
+                    pending.then((value) => ({ value })),
+                    new Promise<undefined>((resolve) => {
+                      timer = setTimeout(() => resolve(undefined), REPORT_HEARTBEAT_MS);
+                    }),
+                  ]);
+                  clearTimeout(timer);
+                  if (raced === undefined) {
+                    yield event(request.agentRunId, {
+                      type: 'agent.status',
+                      status: 'reporting',
+                      message: 'Claude Code is still writing the report.',
+                    });
+                    continue;
+                  }
+                  step = raced.value;
+                  if (step.done === true) break;
                   yield step.value;
-                  step = await live.next();
+                  pending = live.next();
                 }
-                reporting = step.value;
+                reporting = (step as IteratorReturnResult<CollectedTurn>).value;
               }
             } catch (cause) {
               for (const emitted of partialTurnEvents(cause)) yield emitted;

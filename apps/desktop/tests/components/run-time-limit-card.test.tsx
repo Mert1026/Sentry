@@ -85,7 +85,7 @@ describe('run time limit setting', () => {
 
   it('shows No limit as the 7 day window', async () => {
     const f = mount('604800000');
-    await screen.findByText('Every run gets a window of No limit (7 days).');
+    await screen.findByText('Runs have no time limit (at most 7 days).');
     expect(f.pressed()).toEqual(['No limit']);
   });
 

@@ -1023,11 +1023,11 @@ describe('ClaudeAgentHarnessAdapter', () => {
     await adapter.dispose();
     expect(events.at(-1)?.type).toBe('run.completed');
     expect(schemaOnAttempt).toEqual([false, false]);
-    // Compact stage contracts retain exact check IDs, not the full plan/schema
-    // again during correction. Latest owner request supersedes old prompt prose.
+    // Stage contracts retain exact check IDs. Latest owner request supersedes old prompt prose.
     expect(reportPrompts[0]).toContain('"id":"check_1"');
     expect(reportPrompts[1]).toContain('"id":"check_1"');
-    expect(reportPrompts[1]).not.toContain('Evidence variants (exact fields');
+    // A retry carries the full report contract again (78e30f0): errors alone came back in the wrong shape.
+    expect(reportPrompts[1]).toContain('Evidence variants (exact fields');
     // The repair stays in the same session and retains every authoritative
     // operation key, even if Claude compacted the earlier conversation.
     for (const prompt of reportPrompts)

@@ -14,11 +14,14 @@ import {
   Activity,
   CalendarDays,
   CheckCircle2,
+  Check,
   Clock,
   History,
   Tag,
   Brain,
   KeyRound,
+  Play,
+  AlertTriangle,
 } from 'lucide-react';
 import { CopyId } from '../components/CopyId.js';
 import { InfoTile } from '../components/InfoTile.js';
@@ -53,6 +56,7 @@ import { useNoteLimit } from '../lib/use-note-limit.js';
 import { EMPTY_RUN_NOTES, notesToOptions, type RunNotesDraft } from '../lib/run-notes.js';
 import { InfoPopover } from '../components/InfoPopover.js';
 import { BlockingOverlay } from '../components/BlockingOverlay.js';
+import { truncateMiddle } from '../lib/agent-telemetry.js';
 import './project-detail.css';
 
 const AGENT_ORDER = [
@@ -69,8 +73,9 @@ function shortModel(modelId: string | undefined): string {
   return parts[parts.length - 1] ?? modelId;
 }
 
+/** A revision id kept short but recognisable: its start and its end, as ids read elsewhere. */
 function shortRevision(id: string): string {
-  return id.length > 18 ? id.slice(0, 12) + '…' : id;
+  return truncateMiddle(id, 13);
 }
 
 function formatRevisionDay(iso: string | undefined): string {
@@ -953,79 +958,128 @@ export function ProjectDetail(): React.JSX.Element {
         </PageSection>
       </ProjectSectionPanel>
       {pendingStart ? (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label={t(
-            confirmStart === 'full' ? 'Confirm start full QA' : 'Confirm start targeted QA',
-          )}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.55)',
-            zIndex: 60,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 16,
-          }}
-          onClick={() => setConfirmStart(undefined)}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') setConfirmStart(undefined);
-          }}
-        >
+        // Portaled out of the animated page so it centres on the screen, like the add-project box.
+        <BlockingOverlay>
           <div
-            className="card"
-            style={{ maxWidth: 420, width: '100%' }}
-            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label={t(
+              confirmStart === 'full' ? 'Confirm start full QA' : 'Confirm start targeted QA',
+            )}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0,0,0,0.55)',
+              zIndex: 60,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 16,
+            }}
+            onClick={() => setConfirmStart(undefined)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setConfirmStart(undefined);
+            }}
           >
-            <h2 className="section-title">
-              {t(confirmStart === 'full' ? 'Start Full QA?' : 'Start Targeted QA?')}
-            </h2>
-            <p className="body-secondary">
-              {t(
-                `${effectiveStacks.length} ${effectiveStacks.length === 1 ? 'agent' : 'agents'} · uses real provider budget.`,
-              )}
-            </p>
-            {effectiveRevisionId !== undefined ? (
-              <p className="mono metadata">
-                {t('Revision:')}{' '}
-                <span data-no-translate="true">
-                  {shortRevision(effectiveRevisionId)} ·{' '}
-                  {formatRevisionDate(effectiveRevision?.importedAt)}
+            <div className="card start-confirm" onClick={(e) => e.stopPropagation()}>
+              <div className="start-confirm-head">
+                <span className="start-confirm-icon" aria-hidden="true">
+                  <Play size={18} />
                 </span>
+                <div>
+                  <h2 className="section-title start-confirm-title">
+                    {t(confirmStart === 'full' ? 'Start Full QA?' : 'Start Targeted QA?')}
+                  </h2>
+                  <p className="body-secondary start-confirm-lead">
+                    {t(
+                      effectiveStacks.length === 1
+                        ? 'One agent investigates this revision.'
+                        : `${effectiveStacks.length} agents investigate this revision independently.`,
+                    )}
+                  </p>
+                </div>
+              </div>
+              <dl className="start-confirm-facts">
+                <div>
+                  <dt>{t('Agents')}</dt>
+                  <dd data-no-translate="true">
+                    {stacks
+                      .filter((stack) => effectiveStacks.includes(stack.id))
+                      .map((stack) => stack.displayName)
+                      .join(', ') || String(effectiveStacks.length)}
+                  </dd>
+                </div>
+                <div>
+                  <dt>{t('Depth')}</dt>
+                  <dd>{t(depth === 'fast' ? 'Fast' : 'Full')}</dd>
+                </div>
+                {effectiveRevisionId !== undefined ? (
+                  <div>
+                    <dt>{t('Revision')}</dt>
+                    <dd data-no-translate="true">
+                      <span className="mono">{shortRevision(effectiveRevisionId)}</span>
+                      {' · '}
+                      {formatRevisionDate(effectiveRevision?.importedAt)}
+                    </dd>
+                  </div>
+                ) : null}
+                {confirmStart === 'targeted' && targetPaths.trim() !== '' ? (
+                  <div>
+                    <dt>{t('Scope')}</dt>
+                    <dd className="mono" data-no-translate="true">
+                      {targetPaths}
+                    </dd>
+                  </div>
+                ) : null}
+                <div>
+                  <dt>{t('Network')}</dt>
+                  <dd className="start-confirm-chips">
+                    {(
+                      [
+                        ['Internet', webAccess],
+                        ['Tools and SDKs', toolDownloads],
+                        ['Packages', true],
+                      ] as const
+                    ).map(([label, on]) => (
+                      <span
+                        key={label}
+                        className={'start-confirm-chip' + (on ? ' on' : '')}
+                        title={t(label) + ': ' + t(on ? 'On' : 'Off')}
+                        aria-label={t(label) + ': ' + t(on ? 'On' : 'Off')}
+                      >
+                        {on ? (
+                          <Check size={12} aria-hidden="true" />
+                        ) : (
+                          <X size={12} aria-hidden="true" />
+                        )}
+                        {t(label)}
+                      </span>
+                    ))}
+                  </dd>
+                </div>
+              </dl>
+              <p className="start-confirm-budget" role="note">
+                <AlertTriangle size={14} aria-hidden="true" />
+                {t('Uses real provider budget.')}
               </p>
-            ) : null}
-            <p className="metadata">
-              {t(
-                `Web access: ${webAccess ? 'on' : 'off'} · tool and SDK downloads: ${toolDownloads ? 'on' : 'off'} · package installs: on`,
-              )}
-            </p>
-            <p className="metadata">
-              {t(depth === 'fast' ? 'Run depth: Fast' : 'Run depth: Full')}
-            </p>
-            {confirmStart === 'targeted' && targetPaths.trim() !== '' ? (
-              <p className="mono metadata">
-                {t('Scope:')} <span data-no-translate="true">{targetPaths}</span>
-              </p>
-            ) : null}
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
-              <button className="ghost" onClick={() => setConfirmStart(undefined)}>
-                Cancel
-              </button>
-              <button
-                className="primary"
-                autoFocus
-                disabled={startPending || update.isPending}
-                onClick={() =>
-                  confirmStart === 'full' ? startFull.mutate() : startTargeted.mutate()
-                }
-              >
-                {startPending ? 'Starting…' : 'Start QA'}
-              </button>
+              <div className="start-confirm-actions">
+                <button className="ghost" onClick={() => setConfirmStart(undefined)}>
+                  Cancel
+                </button>
+                <button
+                  className="primary"
+                  autoFocus
+                  disabled={startPending || update.isPending}
+                  onClick={() =>
+                    confirmStart === 'full' ? startFull.mutate() : startTargeted.mutate()
+                  }
+                >
+                  {startPending ? 'Starting…' : 'Start QA'}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        </BlockingOverlay>
       ) : null}
       {update.isPending ? (
         <BlockingOverlay>

@@ -10,7 +10,9 @@
 import { z } from 'zod';
 import {
   AGENT_EFFORT_SETTING,
+  AGENT_STOP_IDLE_SETTING,
   EFFORT_AGENTS,
+  isStopIdleOn,
   RUN_TIME_LIMIT_DEFAULT_MS,
   NOTE_LIMIT_CUSTOM_MAX,
   NOTE_LIMIT_CUSTOM_MIN,
@@ -653,6 +655,10 @@ export class DesktopApplicationService {
           agent,
           parseAgentEffort(agent, get(AGENT_EFFORT_SETTING[agent])) ?? 'default',
         ]),
+      ),
+      // Each agent's own on/off choice; false clears an earlier one in the runtime.
+      stopIdle: Object.fromEntries(
+        EFFORT_AGENTS.map((agent) => [agent, isStopIdleOn(get(AGENT_STOP_IDLE_SETTING[agent]))]),
       ),
     });
   }

@@ -154,6 +154,27 @@ describe('Claude credential boundary', () => {
     expect(env['ANTHROPIC_API_KEY']).toBe(SENTINEL_VALUE);
   });
 
+  it('raises the per-reply output cap by default and lets an explicit value win', () => {
+    const base = {
+      executable: 'claude-test',
+      cwd: '/tmp/ws',
+      configDir: '/tmp/claude-home',
+      modelId: 'claude-5.3-flash',
+      settingsPath: '/tmp/claude-home/sentry-settings.json',
+      initializeTimeoutMs: 30_000,
+      turnTimeoutMs: 60_000,
+      shutdownTimeoutMs: 5_000,
+    };
+    expect(buildClaudeSpawnEnv({ ...base, environment: {} })['CLAUDE_CODE_MAX_OUTPUT_TOKENS']).toBe(
+      '64000',
+    );
+    expect(
+      buildClaudeSpawnEnv({ ...base, environment: { CLAUDE_CODE_MAX_OUTPUT_TOKENS: '16000' } })[
+        'CLAUDE_CODE_MAX_OUTPUT_TOKENS'
+      ],
+    ).toBe('16000');
+  });
+
   it('blocks unrelated secret-shaped names from the child environment', () => {
     const child = buildClaudeChildEnvironment({
       source: {
@@ -456,6 +477,40 @@ describe('Claude executable runtime identity', () => {
       isSandboxBootstrapFailureText(['a', 'b', 'c', 'd', 'the fixture prints: ' + line].join('\n')),
     ).toBe(false);
     expect(isSandboxBootstrapFailureText('see docs: apply-seccomp is the helper name')).toBe(false);
+  });
+
+  it('treats the overlapping-command .git placeholder failure as a race, not a broken sandbox', async () => {
+    const { isTransientGitPlaceholderFailure } = await import('../src/adapter.js');
+    const ws = '/home/u/.local/share/sentry/projects/p/runs/r/agents/a/workspace/project';
+    expect(
+      isTransientGitPlaceholderFailure(
+        `bwrap: Can't create file at ${ws}/.git/hooks: Read-only file system`,
+      ),
+    ).toBe(true);
+    expect(
+      isTransientGitPlaceholderFailure(
+        `bwrap: Can't get type of source ${ws}/.git/config.worktree.lock: No such file or directory`,
+      ),
+    ).toBe(true);
+    expect(
+      isTransientGitPlaceholderFailure(
+        `Exit code 1 bwrap: Can't bind mount /oldroot/dev/null on /newroot${ws}/.git/config.worktree.lock: x`,
+      ),
+    ).toBe(true);
+    // A sandbox that cannot start at all, or a quoted line deeper in output, is not the race.
+    expect(
+      isTransientGitPlaceholderFailure(
+        'apply-seccomp: write /proc/self/setgroups: Permission denied',
+      ),
+    ).toBe(false);
+    expect(isTransientGitPlaceholderFailure("bwrap: Can't mkdir /tmp/x: Permission denied")).toBe(
+      false,
+    );
+    expect(
+      isTransientGitPlaceholderFailure(
+        ['a', 'b', 'c', "bwrap: Can't create file at /w/.git/hooks: x"].join('\n'),
+      ),
+    ).toBe(false);
   });
 
   it('gives a repair hint for a blocked user namespace and none for other sandbox failures', async () => {

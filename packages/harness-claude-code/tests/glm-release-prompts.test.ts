@@ -314,16 +314,18 @@ describe('GLM ordered stage prompt behavior', () => {
       const usageEvent = events.find((e) => e.type === 'usage.updated');
       // No self-challenge or refinement turn: plan, investigation, report.
       expect(usageEvent?.type === 'usage.updated' ? usageEvent.usage.turns : undefined).toBe(
-        depth === true ? 4 : 3,
+        depth === true ? 5 : 3,
       );
       expect(events.filter((e) => e.type === 'finding.submitted')).toHaveLength(1);
       if (depth)
         expect(events.some((e) => e.type === 'warning' && e.code === 'QA_CHALLENGE_NOT_RUN')).toBe(
           true,
         );
-      // Depth runs with most of the window unused add one deepening turn before the report.
+      // Depth runs with most of the window unused add one flow-exploration turn for the
+      // plan's critical flow and one deepening turn before the report.
       const deepened = depth === true;
-      expect(prompts).toHaveLength(deepened ? 4 : 3);
+      expect(prompts).toHaveLength(deepened ? 5 : 3);
+      expect(prompts.some((prompt) => prompt.includes('FLOW EXPLORATION'))).toBe(deepened);
       expect(prompts.some((prompt) => prompt.includes('DEEPENING PASS'))).toBe(deepened);
       expect(prompts.some((prompt) => prompt.includes('CHALLENGE YOUR OWN INVESTIGATION'))).toBe(
         false,
@@ -338,6 +340,9 @@ describe('GLM ordered stage prompt behavior', () => {
       expect(investigation).toContain('STAGE 2');
       expect(investigation).toContain('INVESTIGATE CHECK check_1');
       expect(investigation).toContain('Work ONLY on this check');
+      // Claude Code write-protects node_modules/.bin and lockfiles: installs go to .qa-tmp/deps
+      expect(investigation).toContain('Installs in this sandbox');
+      expect(investigation).toContain('.qa-tmp/deps');
       expect(investigation).toContain('counterexample');
       expect(investigation).toContain('Small fixture');
       expect(investigation).not.toContain(QA_SESSION_CONTRACT);
@@ -347,7 +352,7 @@ describe('GLM ordered stage prompt behavior', () => {
       expect(reporting).toContain('not product findings');
       expect(reporting).toContain('check_1');
       if (!deepened) expect(reporting).not.toContain(QA_SESSION_CONTRACT);
-      expect(prompts.join('\n').split(QA_SESSION_CONTRACT)).toHaveLength(depth === true ? 4 : 2);
+      expect(prompts.join('\n').split(QA_SESSION_CONTRACT)).toHaveLength(depth === true ? 5 : 2);
       expect(prompts.join('\n')).not.toContain('sentry-parity-secret-value');
     },
   );
