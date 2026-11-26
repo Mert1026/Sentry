@@ -11,9 +11,11 @@
 import { execFile } from 'node:child_process';
 import { realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { normalize, resolve, sep } from 'node:path';
+import { posix } from 'node:path';
 import { promisify } from 'node:util';
 import { LimaSecurityError, type LimaInstanceInfo } from './lima-types.js';
+
+const { normalize, resolve, sep } = posix;
 
 const execFileAsync = promisify(execFile);
 
@@ -76,6 +78,7 @@ export function compareSemver(a: string, b: string): number {
  */
 export function canonicalizePath(p: string): string {
   const normalized = resolve(normalize(p));
+  if (process.platform === 'win32') return normalized;
   try {
     return realpathSync.native(normalized);
   } catch {
@@ -84,18 +87,18 @@ export function canonicalizePath(p: string): string {
 }
 
 /**
- * Compares two paths taking case-insensitivity on macOS into account.
+ * Compares two macOS host paths case-insensitively (default APFS semantics).
  */
 export function pathsEqual(a: string, b: string): boolean {
-  return process.platform === 'darwin' ? a.toLowerCase() === b.toLowerCase() : a === b;
+  return a.toLowerCase() === b.toLowerCase();
 }
 
 /**
- * Checks if target path is equal to or inside prefix directory, case-insensitively on macOS.
+ * Checks if target path is equal to or inside prefix directory under macOS APFS semantics.
  */
 export function pathStartsWith(target: string, prefix: string): boolean {
-  const normTarget = process.platform === 'darwin' ? target.toLowerCase() : target;
-  const normPrefix = process.platform === 'darwin' ? prefix.toLowerCase() : prefix;
+  const normTarget = target.toLowerCase();
+  const normPrefix = prefix.toLowerCase();
   return (
     normTarget === normPrefix ||
     normTarget.startsWith(normPrefix.endsWith(sep) ? normPrefix : normPrefix + sep)
