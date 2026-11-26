@@ -1,0 +1,653 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Sentry Setup Wizard</title>
+    <style>
+      :root {
+        --bg: #0d100d;
+        --surface: #151a15;
+        --border: #273227;
+        --text: #eef1eb;
+        --muted: #9aa69a;
+        --accent: #8ce668;
+        --warn: #f5b942;
+        --err: #ff6b6b;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        padding: 22px 26px;
+        user-select: none;
+      }
+      .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 6px;
+      }
+      h1 {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 650;
+        letter-spacing: -0.02em;
+      }
+      .step-pill {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 3px 10px;
+        border-radius: 999px;
+        background: #1b241b;
+        border: 1px solid var(--border);
+        color: var(--accent);
+      }
+      .subtitle {
+        margin: 0 0 14px;
+        color: var(--muted);
+        font-size: 12.5px;
+        line-height: 1.45;
+      }
+      .card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 12px 15px;
+        margin-bottom: 12px;
+      }
+      .section-title {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
+        margin: 0 0 8px;
+        font-weight: 600;
+      }
+      .option {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 6px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      }
+      .option:last-child {
+        border-bottom: none;
+        padding-bottom: 0;
+      }
+      .option input[type='checkbox'] {
+        margin-top: 2px;
+        accent-color: var(--accent);
+        width: 15px;
+        height: 15px;
+      }
+      .option-title {
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .option-desc {
+        font-size: 11.5px;
+        color: var(--muted);
+        margin-top: 2px;
+      }
+      .step-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 4px 0;
+        font-size: 12.5px;
+      }
+      .badge {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        color: var(--muted);
+      }
+      .badge.running {
+        color: var(--warn);
+        border-color: rgba(245, 185, 66, 0.45);
+      }
+      .badge.done {
+        color: var(--accent);
+        border-color: rgba(140, 230, 104, 0.45);
+      }
+      .badge.error {
+        color: var(--err);
+        border-color: rgba(255, 107, 107, 0.45);
+      }
+      #logBox {
+        background: #080a08;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 9px 11px;
+        height: 155px;
+        overflow-y: auto;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 11px;
+        line-height: 1.45;
+        color: #c7d1c7;
+        white-space: pre-wrap;
+        user-select: text;
+      }
+      .actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 12px;
+        gap: 10px;
+      }
+      .status-note {
+        font-size: 12px;
+        color: var(--muted);
+        flex: 1;
+      }
+      .btn-group {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      button {
+        border: none;
+        border-radius: 8px;
+        padding: 9px 16px;
+        font-size: 13px;
+        font-weight: 650;
+        cursor: pointer;
+      }
+      button.primary {
+        background: var(--accent);
+        color: #0d100d;
+      }
+      button.secondary {
+        background: #1c231c;
+        color: var(--text);
+        border: 1px solid var(--border);
+      }
+      button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+      }
+      .hidden {
+        display: none !important;
+      }
+      .provider-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+        max-height: 495px;
+        overflow-y: auto;
+        padding-right: 4px;
+      }
+      .provider-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 11px 14px;
+      }
+      .provider-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 6px;
+      }
+      .provider-name {
+        font-size: 13.5px;
+        font-weight: 650;
+      }
+      .provider-sub {
+        font-size: 11.5px;
+        color: var(--muted);
+        margin-bottom: 8px;
+      }
+      .fields {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+      }
+      .fields.single {
+        grid-template-columns: 1fr;
+      }
+      .field label {
+        display: block;
+        font-size: 11px;
+        color: var(--muted);
+        margin-bottom: 3px;
+      }
+      .field input {
+        width: 100%;
+        background: #080a08;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        color: var(--text);
+        padding: 7px 9px;
+        font-size: 12px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        outline: none;
+      }
+      .field input:focus {
+        border-color: var(--accent);
+      }
+      .error-banner {
+        color: var(--err);
+        font-size: 12px;
+        margin-top: 8px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="pageInstall">
+      <div class="header">
+        <h1>Arthur Sentry — macOS Setup Wizard</h1>
+        <span class="step-pill">Step 1 of 2 · Runtime &amp; Harnesses</span>
+      </div>
+      <p class="subtitle">
+        Provisions an isolated Ubuntu 24.04 ARM64 VM (Apple Virtualization.framework), deploys
+        Sentry's Linux runtime, and installs the selected AI QA harnesses inside the guest.
+      </p>
+
+      <div class="card">
+        <div class="section-title">Components to Install</div>
+        <label class="option">
+          <input type="checkbox" checked disabled />
+          <div>
+            <div class="option-title">
+              Isolated Lima VM (<code>sentry-linux</code>) + Linux ARM64 Runtime v2.0.4
+            </div>
+            <div class="option-desc">
+              Required core: Apple VZ, zero host mounts, AppArmor + bubblewrap + systemd sandbox,
+              host loopback isolation.
+            </div>
+          </div>
+        </label>
+        <label class="option">
+          <input id="chkOpencode" type="checkbox" checked />
+          <div>
+            <div class="option-title">OpenCode QA Harness (<code>opencode-ai@1.18.32</code>)</div>
+            <div class="option-desc">
+              Installs OpenCode inside guest tools for OpenCode &amp; ChatGPT QA stacks.
+            </div>
+          </div>
+        </label>
+        <label class="option">
+          <input id="chkClaude" type="checkbox" checked />
+          <div>
+            <div class="option-title">
+              Claude Code QA Harness (<code>@anthropic-ai/claude-code@2.1.270</code>)
+            </div>
+            <div class="option-desc">
+              Installs Claude Code inside guest tools for Claude &amp; GLM QA stacks.
+            </div>
+          </div>
+        </label>
+        <label class="option">
+          <input id="chkDeepseek" type="checkbox" checked />
+          <div>
+            <div class="option-title">
+              DeepSeek QA Harness (<code>@deepseek-ai/dsh@0.1.5-rc.2</code>)
+            </div>
+            <div class="option-desc">
+              Configures the managed <code>dsh</code> CLI wrapper from the Linux runtime (offline).
+            </div>
+          </div>
+        </label>
+      </div>
+
+      <div class="card">
+        <div class="section-title">Provisioning Pipeline</div>
+        <div class="step-row">
+          <span>1. Hardened Lima VM &amp; System Prerequisites</span
+          ><span id="st-vm" class="badge">Pending</span>
+        </div>
+        <div class="step-row">
+          <span>2. Build &amp; Verify Linux ARM64 Runtime</span
+          ><span id="st-runtime" class="badge">Pending</span>
+        </div>
+        <div class="step-row">
+          <span>3. Install Agent Harnesses inside Guest</span
+          ><span id="st-harnesses" class="badge">Pending</span>
+        </div>
+        <div class="step-row">
+          <span>4. Verify Sandbox &amp; Toolchain Readiness</span
+          ><span id="st-verify" class="badge">Pending</span>
+        </div>
+      </div>
+
+      <div id="logBox">Ready to install. Click "Download &amp; Install All" to begin.</div>
+
+      <div class="actions">
+        <div id="statusNote" class="status-note">
+          Estimated first-time download: ~700 MB (VM base image + Node + npm + harnesses).
+        </div>
+        <div class="btn-group">
+          <button id="btnConfigureOnly" class="secondary hidden">Configure AI Keys</button>
+          <button id="btnAction" class="primary">Download &amp; Install All</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="pageProviders" class="hidden">
+      <div class="header">
+        <h1>Connect AI Providers (Optional)</h1>
+        <span class="step-pill">Step 2 of 2 · Onboarding</span>
+      </div>
+      <p class="subtitle">
+        Keys are encrypted using macOS Keychain (<code>safeStorage</code>) and never written in
+        plaintext. Leave any provider blank to configure it later or sign in via ChatGPT / Claude
+        OAuth in Settings.
+      </p>
+
+      <div class="provider-grid">
+        <div class="provider-card">
+          <div class="provider-head">
+            <span class="provider-name">OpenCode (OpenRouter / OpenCode Zen)</span>
+            <span id="b-opencode" class="badge">Unconfigured</span>
+          </div>
+          <div class="fields">
+            <div class="field">
+              <label>OPENROUTER_API_KEY (OpenRouter)</label
+              ><input
+                id="k-OPENROUTER_API_KEY"
+                type="password"
+                placeholder="sk-or-..."
+                autocomplete="off"
+              />
+            </div>
+            <div class="field">
+              <label>OPENCODE_API_KEY (OpenCode Go/Zen)</label
+              ><input
+                id="k-OPENCODE_API_KEY"
+                type="password"
+                placeholder="Optional"
+                autocomplete="off"
+              />
+            </div>
+          </div>
+          <div class="fields single" style="margin-top: 6px">
+            <div class="field">
+              <label>Default Model ID (SENTRY_OPENCODE_MODEL)</label
+              ><input
+                id="m-SENTRY_OPENCODE_MODEL"
+                type="text"
+                placeholder="Optional (e.g. openrouter/anthropic/claude-sonnet-4)"
+                autocomplete="off"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div class="provider-card">
+          <div class="provider-head">
+            <span class="provider-name">ChatGPT / Codex (OpenAI via OpenCode)</span>
+            <span id="b-openai" class="badge">Unconfigured</span>
+          </div>
+          <div class="provider-sub">
+            Supports API key or ChatGPT Plus/Pro OAuth sign-in after launching Desktop.
+          </div>
+          <div class="fields">
+            <div class="field">
+              <label>OPENAI_API_KEY</label
+              ><input
+                id="k-OPENAI_API_KEY"
+                type="password"
+                placeholder="sk-..."
+                autocomplete="off"
+              />
+            </div>
+            <div class="field">
+              <label>Model ID (SENTRY_CHATGPT_MODEL)</label
+              ><input
+                id="m-SENTRY_CHATGPT_MODEL"
+                type="text"
+                placeholder="Optional (e.g. gpt-5.4)"
+                autocomplete="off"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div class="provider-card">
+          <div class="provider-head">
+            <span class="provider-name">Claude (Anthropic)</span>
+            <span id="b-claude" class="badge">Unconfigured</span>
+          </div>
+          <div class="provider-sub">
+            Supports API key or Claude Pro/Max OAuth sign-in after launching Desktop.
+          </div>
+          <div class="fields">
+            <div class="field">
+              <label>ANTHROPIC_API_KEY</label
+              ><input
+                id="k-ANTHROPIC_API_KEY"
+                type="password"
+                placeholder="sk-ant-..."
+                autocomplete="off"
+              />
+            </div>
+            <div class="field">
+              <label>Model ID (SENTRY_ANTHROPIC_MODEL)</label
+              ><input
+                id="m-SENTRY_ANTHROPIC_MODEL"
+                type="text"
+                placeholder="Optional"
+                autocomplete="off"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div class="provider-card">
+          <div class="provider-head">
+            <span class="provider-name">DeepSeek &amp; GLM (Z.ai)</span>
+            <span id="b-dsglm" class="badge">Optional</span>
+          </div>
+          <div class="fields">
+            <div class="field">
+              <label>DEEPSEEK_API_KEY (auto-sets deepseek-flash)</label
+              ><input
+                id="k-DEEPSEEK_API_KEY"
+                type="password"
+                placeholder="sk-..."
+                autocomplete="off"
+              />
+            </div>
+            <div class="field">
+              <label>ANTHROPIC_AUTH_TOKEN (auto-sets glm-5.3-flash + Z.ai)</label
+              ><input
+                id="k-ANTHROPIC_AUTH_TOKEN"
+                type="password"
+                placeholder="Z.ai token"
+                autocomplete="off"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="provErr" class="error-banner hidden"></div>
+
+      <div class="actions">
+        <div class="btn-group">
+          <button id="btnBack" class="secondary">← Back</button>
+        </div>
+        <div class="btn-group">
+          <button id="btnSkipLaunch" class="secondary">Skip &amp; Launch Sentry</button>
+          <button id="btnSaveLaunch" class="primary">Save Keys &amp; Launch Sentry</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const btn = document.getElementById('btnAction');
+      const btnConfigureOnly = document.getElementById('btnConfigureOnly');
+      const logBox = document.getElementById('logBox');
+      const statusNote = document.getElementById('statusNote');
+      const pageInstall = document.getElementById('pageInstall');
+      const pageProviders = document.getElementById('pageProviders');
+      const provErr = document.getElementById('provErr');
+      const badges = {
+        vm: document.getElementById('st-vm'),
+        runtime: document.getElementById('st-runtime'),
+        harnesses: document.getElementById('st-harnesses'),
+        verify: document.getElementById('st-verify'),
+      };
+      let mode = 'idle';
+
+      function appendLog(line) {
+        logBox.textContent += (logBox.textContent ? '\n' : '') + line;
+        logBox.scrollTop = logBox.scrollHeight;
+      }
+
+      function setBadge(key, state, label) {
+        const el = badges[key];
+        if (!el) return;
+        el.className = 'badge ' + state;
+        el.textContent = label;
+      }
+
+      function showProvidersPage() {
+        pageInstall.classList.add('hidden');
+        pageProviders.classList.remove('hidden');
+        window.sentryWizard.getProviderStatus().then((st) => {
+          if (!st) return;
+          const mark = (id, configured) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            if (configured) {
+              el.className = 'badge done';
+              el.textContent = 'Configured';
+            }
+          };
+          mark('b-opencode', st.OPENROUTER_API_KEY || st.OPENCODE_API_KEY);
+          mark('b-openai', st.OPENAI_API_KEY);
+          mark('b-claude', st.ANTHROPIC_API_KEY);
+          mark('b-dsglm', st.DEEPSEEK_API_KEY || st.ANTHROPIC_AUTH_TOKEN);
+          const models = st.models || {};
+          for (const k of [
+            'SENTRY_OPENCODE_MODEL',
+            'SENTRY_CHATGPT_MODEL',
+            'SENTRY_ANTHROPIC_MODEL',
+          ]) {
+            const inp = document.getElementById('m-' + k);
+            if (inp && models[k] && !inp.value) inp.value = models[k];
+          }
+        });
+      }
+
+      window.sentryWizard.getInitialState().then((info) => {
+        if (info && info.sourceCommit) {
+          appendLog(
+            'Release build identity: v' +
+              info.version +
+              ' (' +
+              info.sourceCommit.slice(0, 12) +
+              ')',
+          );
+        }
+        if (info && info.alreadyInstalled) {
+          btnConfigureOnly.classList.remove('hidden');
+        }
+        if (info && info.autoStart) {
+          startInstall();
+        }
+      });
+
+      window.sentryWizard.onLog((line) => appendLog(line));
+      window.sentryWizard.onProgress((p) => {
+        if (p.steps) {
+          for (const [k, v] of Object.entries(p.steps)) {
+            setBadge(k, v.state, v.label);
+          }
+        }
+        if (p.note) statusNote.textContent = p.note;
+        if (p.phase === 'complete') {
+          mode = 'complete';
+          btn.disabled = false;
+          btn.textContent = 'Next: Configure AI Keys →';
+        } else if (p.phase === 'error') {
+          mode = 'idle';
+          btn.disabled = false;
+          btn.textContent = 'Retry Installation';
+        }
+      });
+
+      function startInstall() {
+        mode = 'installing';
+        btn.disabled = true;
+        btn.textContent = 'Installing...';
+        document.getElementById('chkOpencode').disabled = true;
+        document.getElementById('chkClaude').disabled = true;
+        document.getElementById('chkDeepseek').disabled = true;
+        window.sentryWizard.startSetup({
+          opencode: document.getElementById('chkOpencode').checked,
+          claude: document.getElementById('chkClaude').checked,
+          deepseek: document.getElementById('chkDeepseek').checked,
+        });
+      }
+
+      btn.addEventListener('click', () => {
+        if (mode === 'complete') {
+          showProvidersPage();
+        } else if (mode === 'idle') {
+          startInstall();
+        }
+      });
+
+      btnConfigureOnly.addEventListener('click', showProvidersPage);
+      document.getElementById('btnBack').addEventListener('click', () => {
+        pageProviders.classList.add('hidden');
+        pageInstall.classList.remove('hidden');
+      });
+
+      document.getElementById('btnSkipLaunch').addEventListener('click', () => {
+        document.getElementById('btnSkipLaunch').disabled = true;
+        document.getElementById('btnSaveLaunch').disabled = true;
+        window.sentryWizard.launchDesktop();
+      });
+
+      document.getElementById('btnSaveLaunch').addEventListener('click', async () => {
+        const saveBtn = document.getElementById('btnSaveLaunch');
+        const skipBtn = document.getElementById('btnSkipLaunch');
+        provErr.classList.add('hidden');
+        saveBtn.disabled = true;
+        skipBtn.disabled = true;
+        saveBtn.textContent = 'Saving...';
+        const secrets = {};
+        for (const k of [
+          'OPENROUTER_API_KEY',
+          'OPENCODE_API_KEY',
+          'OPENAI_API_KEY',
+          'ANTHROPIC_API_KEY',
+          'DEEPSEEK_API_KEY',
+          'ANTHROPIC_AUTH_TOKEN',
+        ]) {
+          const val = document.getElementById('k-' + k).value.trim();
+          if (val) secrets[k] = val;
+        }
+        const models = {};
+        for (const k of [
+          'SENTRY_OPENCODE_MODEL',
+          'SENTRY_CHATGPT_MODEL',
+          'SENTRY_ANTHROPIC_MODEL',
+        ]) {
+          const val = document.getElementById('m-' + k).value.trim();
+          if (val) models[k] = val;
+        }
+        const res = await window.sentryWizard.saveProviders({ secrets, models });
+        if (!res || !res.ok) {
+          provErr.textContent = (res && res.error) || 'Failed to save credentials.';
+          provErr.classList.remove('hidden');
+          saveBtn.disabled = false;
+          skipBtn.disabled = false;
+          saveBtn.textContent = 'Save Keys & Launch Sentry';
+          return;
+        }
+        await window.sentryWizard.launchDesktop();
+      });
+    </script>
+  </body>
+</html>
