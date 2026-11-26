@@ -337,6 +337,11 @@ function translateCore(trimmed: string): string {
   const runWindow = /^Every run gets a window of (.+?)( \(the default\))?\.$/.exec(trimmed);
   if (runWindow !== null)
     return `Всяко изпълнение получава прозорец от ${translateCore(runWindow[1] ?? '')}${runWindow[2] === undefined ? '' : ' (по подразбиране)'}.`;
+  const agentsInvestigate = /^(\d+) agents investigate this revision independently\.$/.exec(
+    trimmed,
+  );
+  if (agentsInvestigate !== null)
+    return `${agentsInvestigate[1]} агента проучват тази ревизия независимо един от друг.`;
   const noteSize = /^A note may be ([\d,]+) characters( \(the default\))?\.$/.exec(trimmed);
   if (noteSize !== null)
     return `Бележката може да е до ${noteSize[1]} знака${noteSize[2] === undefined ? '' : ' (по подразбиране)'}.`;

@@ -613,3 +613,35 @@ describe('re-test tab', () => {
     expect(screen.queryByRole('tab', { name: /Re-test/ })).toBeNull();
   });
 });
+
+describe('cancelling a run', () => {
+  const sentryRuns = () =>
+    (window as unknown as { sentry: { runs: { cancel: ReturnType<typeof vi.fn> } } }).sentry.runs;
+
+  it('keeps a disabled "Stopping run…" button until the run has actually stopped', async () => {
+    const { client } = workspace(snapshot('agents_running'));
+    sentryRuns().cancel.mockResolvedValue({ status: 'cancelling' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel run' }));
+    // the confirmation shows its own "Cancel run"; that one sends the cancel
+    const confirm = screen.getAllByRole('button', { name: 'Cancel run' }).at(-1) as HTMLElement;
+    fireEvent.click(confirm);
+    const stopping = await screen.findByRole('button', { name: /Stopping run/ });
+    expect((stopping as HTMLButtonElement).disabled).toBe(true);
+    expect(stopping.getAttribute('aria-busy')).toBe('true');
+    expect(sentryRuns().cancel).toHaveBeenCalledTimes(1);
+    // still running: still stopping, and no way to send a second cancel
+    expect(screen.queryByRole('button', { name: 'Cancel run' })).toBeNull();
+    // the run ends: the button goes away with the run
+    act(() => client.setQueryData(['run', 'r'], snapshot('cancelled')));
+    await waitFor(() => expect(screen.queryByRole('button', { name: /Stopping run/ })).toBeNull());
+  });
+
+  it('brings the cancel button back when the cancel request fails', async () => {
+    workspace(snapshot('agents_running'));
+    sentryRuns().cancel.mockRejectedValue(new Error('runtime unavailable'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel run' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Cancel run' }).at(-1) as HTMLElement);
+    await waitFor(() => expect(screen.queryByRole('button', { name: /Stopping run/ })).toBeNull());
+    expect(screen.getAllByRole('button', { name: 'Cancel run' }).length).toBeGreaterThan(0);
+  });
+});
