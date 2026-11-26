@@ -264,9 +264,52 @@ const unpacked = join(
 await cp(unpacked, join(output, 'desktop'), { recursive: true, verbatimSymlinks: true });
 
 let dmgName;
+async function signAppInsideOut(builtApp) {
+  const frameworksDir = join(builtApp, 'Contents', 'Frameworks');
+  const signTarget = (targetPath) => {
+    execFileSync(
+      'codesign',
+      ['--force', '--sign', '-', '--preserve-metadata=entitlements', targetPath],
+      {
+        stdio: 'inherit',
+      },
+    );
+  };
+  if (existsSync(frameworksDir)) {
+    const entries = await readdir(frameworksDir);
+    for (const entry of entries) {
+      const full = join(frameworksDir, entry);
+      if ((await lstat(full)).isSymbolicLink()) continue;
+      if (entry.endsWith('.framework')) {
+        const versionsDir = join(full, 'Versions');
+        if (existsSync(versionsDir)) {
+          for (const ver of await readdir(versionsDir)) {
+            const verPath = join(versionsDir, ver);
+            if ((await lstat(verPath)).isSymbolicLink()) continue;
+            for (const sub of ['Libraries', 'Helpers']) {
+              const subDir = join(verPath, sub);
+              if (!existsSync(subDir)) continue;
+              for (const item of await readdir(subDir)) {
+                const itemPath = join(subDir, item);
+                if (!(await lstat(itemPath)).isSymbolicLink()) signTarget(itemPath);
+              }
+            }
+          }
+        }
+        signTarget(full);
+      }
+    }
+    for (const entry of entries) {
+      if (!entry.endsWith('.app')) continue;
+      const full = join(frameworksDir, entry);
+      if (!(await lstat(full)).isSymbolicLink()) signTarget(full);
+    }
+  }
+  execFileSync('codesign', ['--force', '--sign', '-', builtApp], { stdio: 'inherit' });
+}
+
 if (target === 'macos-arm64') {
   const builtApp = join(output, 'desktop', 'Sentry.app');
-  // Preserve limactl virtualization entitlements while ensuring local ad-hoc verification passes.
   const limactlInApp = join(builtApp, 'Contents', 'Resources', 'lima', 'bin', 'limactl');
   const ents = execFileSync('codesign', ['-d', '--entitlements', ':-', limactlInApp], {
     encoding: 'utf8',
@@ -274,7 +317,15 @@ if (target === 'macos-arm64') {
   if (!ents.includes('com.apple.security.virtualization')) {
     throw new Error('Bundled limactl lost com.apple.security.virtualization entitlement');
   }
-  execFileSync('codesign', ['--force', '--sign', '-', builtApp], { stdio: 'inherit' });
+  await signAppInsideOut(builtApp);
+  const entsAfter = execFileSync('codesign', ['-d', '--entitlements', ':-', limactlInApp], {
+    encoding: 'utf8',
+  });
+  if (!entsAfter.includes('com.apple.security.virtualization')) {
+    throw new Error(
+      'Bundled limactl lost com.apple.security.virtualization entitlement after signing',
+    );
+  }
   execFileSync('codesign', ['--verify', '--deep', '--strict', builtApp], { stdio: 'inherit' });
 
   const dmgStage = await mkdtemp(join(tmpdir(), 'sentry-dmg-stage-'));
