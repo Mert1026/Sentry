@@ -4,7 +4,3 @@ coverage/
 node_modules/
 pnpm-lock.yaml
 
-# Agent skills and the video and post projects are not part of the product; they follow their own style.
-.agents/
-sentry-post/
-sentry-video/
