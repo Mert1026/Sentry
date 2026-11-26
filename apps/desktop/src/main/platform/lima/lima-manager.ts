@@ -421,6 +421,7 @@ async function streamDirectoryTarToGuest(
   timeoutMs = 180_000,
 ): Promise<void> {
   const tarArgs = [
+    ...(process.platform === 'darwin' ? ['--no-xattrs'] : []),
     ...excludes.map((pattern) => `--exclude=${pattern}`),
     '-C',
     localDir,
@@ -428,7 +429,10 @@ async function streamDirectoryTarToGuest(
     '-',
     '.',
   ];
-  const tarProc = spawn('/usr/bin/tar', tarArgs, { stdio: ['ignore', 'pipe', 'pipe'] });
+  const tarProc = spawn('/usr/bin/tar', tarArgs, {
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, COPYFILE_DISABLE: '1' },
+  });
   let tarErr = '';
   tarProc.stderr?.on('data', (c: Buffer) => {
     tarErr = (tarErr + c.toString('utf8')).slice(-4000);

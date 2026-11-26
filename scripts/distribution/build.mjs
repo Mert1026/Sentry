@@ -120,6 +120,7 @@ async function writeRuntimeSource(destRoot) {
     const runtimeSource =
       roots.has(path) ||
       /^(apps\/runtime|packages\/[^/]+)\/(src\/.*|package\.json|tsconfig[^/]*\.json)$/.test(path) ||
+      path === 'apps/runtime/scripts/deploy-inner.sh' ||
       path === 'scripts/distribution/runtime-check.mjs' ||
       path === 'scripts/distribution/contract.mjs';
     if (!runtimeSource) continue;

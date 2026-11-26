@@ -79,6 +79,7 @@ export function requiredFiles(target) {
       'desktop/Sentry.app/Contents/Resources/lima/bin/limactl',
       'desktop/Sentry.app/Contents/Resources/lima/share/lima/lima-guestagent.Linux-aarch64.gz',
       'desktop/Sentry.app/Contents/Resources/runtime-source/build-identity.json',
+      'desktop/Sentry.app/Contents/Resources/runtime-source/apps/runtime/scripts/deploy-inner.sh',
       'sentry',
     ];
   }
