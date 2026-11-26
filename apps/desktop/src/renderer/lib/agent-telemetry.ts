@@ -38,13 +38,17 @@ const STAGE_LABELS: Record<AgentStageId, string> = {
   completed: 'Completed',
 };
 
+/**
+ * The order the stages happen in. Findings and evidence are submitted with the report (every adapter
+ * sends them from the validated report), so Evidence comes after Reporting, not before it.
+ */
 const STAGE_ORDER: readonly AgentStageId[] = [
   'preparation',
   'planning',
   'investigation',
   'runtime',
-  'evidence',
   'reporting',
+  'evidence',
   'completed',
 ];
 
@@ -93,6 +97,19 @@ export function isPassedStage(
 /** Human label for a stage id; falls back to the raw id for forward compatibility. */
 export function stageLabel(stage: AgentStageId | string): string {
   return (STAGE_LABELS as Record<string, string>)[stage] ?? stage;
+}
+
+/**
+ * The label a stage shows on the line: one the line went past with no event of its own (no commands
+ * run, no findings reported, or an old run that kept few events) says so, instead of reading as not
+ * reached. It claims nothing was seen there, and nothing was skipped either.
+ */
+export function stageDisplayLabel(
+  stages: readonly { readonly state: StageState }[],
+  index: number,
+): string {
+  if (isPassedStage(stages, index)) return 'No events';
+  return stageStateLabel(stages[index]?.state ?? 'not_started');
 }
 
 /** AgentRun milestone labels; absent workers use separate Waiting/Not started labels. */
@@ -278,7 +295,8 @@ function activityToOperation(activity: ActivityLike): OperationView {
 
 /**
  * Current operation: latest active tool.started without tool.completed,
- * else latest running RunActivity, else latest useful event, else Working.
+ * else latest running RunActivity other than the agent's own, else the agent's
+ * latest step or end of run, else latest useful event, else Working.
  */
 export function projectCurrentOperation(
   events: readonly HarnessEventLike[],
@@ -305,17 +323,28 @@ export function projectCurrentOperation(
       }
     );
   }
+  // The agent's own activity ("Agent started") stays running until the agent ends: it is the frame
+  // of the whole run, not what the agent is doing now.
   const runningActivity = [...activities]
     .reverse()
-    .find((a) => a.status === 'running' || a.status === 'waiting');
+    .find((a) => (a.status === 'running' || a.status === 'waiting') && a.kind !== 'agent');
   if (runningActivity !== undefined) return activityToOperation(runningActivity);
+  // With no tool in flight, the agent's latest step ("investigating check 3/8: …") says what it is
+  // doing; usage counters and messages after it are not operations. An end of run outranks it.
+  let fallback: OperationView | undefined;
   for (let index = events.length - 1; index >= 0; index -= 1) {
     const event = events[index];
-    if (event === undefined) continue;
-    const operation = eventToOperation(event);
-    if (operation !== undefined) return operation;
+    if (event === undefined || event.type === 'usage.updated') continue;
+    if (
+      event.type === 'agent.status' ||
+      event.type === 'run.completed' ||
+      event.type === 'run.failed' ||
+      event.type === 'run.cancelled'
+    )
+      return eventToOperation(event) ?? { kind: 'working', title: 'Working' };
+    fallback ??= eventToOperation(event);
   }
-  return { kind: 'working', title: 'Working' };
+  return fallback ?? { kind: 'working', title: 'Working' };
 }
 
 /** Recent activity: prioritize command/file/search/test/HTTP/finding/evidence/warning/failure. */
@@ -389,8 +418,20 @@ function deriveStageStates(
     states.set('completed', 'completed');
     return { states, current: 'completed' };
   }
-  const current = furthestStage(agentRun, events, findings, evidence);
+  const phase = furthestStage(agentRun, events, findings, evidence);
+  // Commands and tests are work done INSIDE the investigation phase, and findings and evidence arrive
+  // with the report; the line lists each right after its phase, so it ends there once the work shows.
+  const current: AgentStageId | 'working' =
+    phase === 'investigation' && observed.has('runtime')
+      ? 'runtime'
+      : phase === 'reporting' && observed.has('evidence')
+        ? 'evidence'
+        : phase;
   if (current !== 'working') {
+    // Nothing after the end of the line reads as seen (an agent that is still planning runs
+    // commands too): the line has not got that far.
+    for (const id of STAGE_ORDER.slice(STAGE_ORDER.indexOf(current) + 1))
+      states.set(id, 'not_started');
     const status = agentRun.status;
     states.set(
       current,
@@ -398,12 +439,27 @@ function deriveStageStates(
         ? 'failed'
         : ['cancelled', 'interrupted'].includes(status)
           ? 'cancelled'
-          : events.some((event) => event.type === 'warning')
+          : warnedSinceLastStep(events)
             ? 'warning'
             : 'active',
     );
   }
   return { states, current };
+}
+
+/**
+ * A warning belongs to the step the agent was on when it came. The agent reports each step
+ * (a check, a lead, a flow, the report) with an agent.status, so only a warning after the latest
+ * one is about the work in progress; an early notice (a limited preparation) no longer marks the
+ * whole run.
+ */
+function warnedSinceLastStep(events: readonly HarnessEventLike[]): boolean {
+  for (let index = events.length - 1; index >= 0; index -= 1) {
+    const type = events[index]?.type;
+    if (type === 'agent.status') return false;
+    if (type === 'warning') return true;
+  }
+  return false;
 }
 
 function furthestStage(
@@ -444,22 +500,9 @@ function furthestStage(
     types.has('file.changed')
   )
     return 'investigation';
-  if (types.has('agent.status')) {
-    const lastStatus = [...events].reverse().find((e) => e.type === 'agent.status');
-    if (
-      lastStatus !== undefined &&
-      lastStatus.type === 'agent.status' &&
-      lastStatus.status === 'planning'
-    )
-      return 'planning';
-    if (
-      lastStatus !== undefined &&
-      lastStatus.type === 'agent.status' &&
-      ['investigating', 'running'].includes(lastStatus.status ?? '')
-    )
-      return 'investigation';
-    return 'working';
-  }
+  // A status the checks above did not place (planning, investigating, running and reporting returned
+  // already): the agent says it is working without saying where.
+  if (types.has('agent.status')) return 'working';
   if (events.length === 0) {
     // No observable events yet: map the persisted AgentRun status honestly.
     // queued → Working (nothing started); starting/running → Preparation

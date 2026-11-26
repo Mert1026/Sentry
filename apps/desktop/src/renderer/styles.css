@@ -1766,6 +1766,33 @@ textarea:focus {
   margin-top: 0;
   font-size: 12px;
 }
+/* The live line wraps instead of running out of the box: the step is short and always shown whole,
+   the detail after it (a check or file the agent named) gets two lines and ends with an ellipsis.
+   The full line is in the tooltip and the side panel. */
+.flow-node.agent-node .live-line {
+  align-items: flex-start;
+  white-space: normal;
+  line-height: 1.35;
+}
+.flow-node.agent-node .live-line::before {
+  margin-top: 6px;
+}
+.flow-node.agent-node .live-line-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.flow-node.agent-node .live-line-step {
+  overflow-wrap: anywhere;
+}
+.flow-node.agent-node .live-line-detail {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  color: var(--text-muted);
+}
 /* Three equal cells: the number first, the word under it. */
 .flow-node.agent-node .node-stats {
   display: grid;

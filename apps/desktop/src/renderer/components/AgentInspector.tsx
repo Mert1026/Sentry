@@ -22,7 +22,7 @@ import {
   projectTimeline,
   stageHeadIndex,
   stageLabel,
-  stageStateLabel,
+  stageDisplayLabel,
   truncateMiddle,
 } from '../lib/agent-telemetry.js';
 import { CopyId } from './CopyId.js';
@@ -281,7 +281,7 @@ function StageTimeline({ stages }: { stages: AgentNodeView['stages'] }): React.J
               )}
             </span>
             <span className="stage-step-label">{stage.label}</span>
-            <span className="stage-step-state">{stageStateLabel(stage.state)}</span>
+            <span className="stage-step-state">{stageDisplayLabel(stages, index)}</span>
           </li>
         ))}
       </ol>

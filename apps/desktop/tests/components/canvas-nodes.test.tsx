@@ -4,7 +4,10 @@ import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { ReactFlowProvider } from '@xyflow/react';
 import React from 'react';
-import { AgentCanvasNode } from '../../src/renderer/components/nodes/AgentCanvasNode.js';
+import {
+  AgentCanvasNode,
+  splitLiveLine,
+} from '../../src/renderer/components/nodes/AgentCanvasNode.js';
 import { makeAgentNodeView } from '../fixtures.js';
 
 function withFlow(element: React.ReactElement): React.ReactElement {
@@ -150,10 +153,10 @@ describe('canvas node components', () => {
       ),
     );
     const bars = [...html.matchAll(/<i class="([^"]*)" title="([^"]*)"/g)].map((m) => m[1]);
-    // Evidence (5th) was never seen, but Reporting (6th) was reached: it is drawn as passed, not as empty.
+    // Reporting (5th) was never seen, but Evidence (6th) was reached: it is drawn as passed, not as empty.
     expect(bars).toEqual(['observed', 'observed', 'observed', 'observed', 'passed', 'warning', '']);
-    // Its tooltip still says nothing claims it was seen.
-    expect(html).toContain('title="Evidence — Not observed"');
+    // Its tooltip says the line went past it with no event, not that it was never reached.
+    expect(html).toContain('title="Reporting — No events"');
     // The count is the position of the furthest stage, so it agrees with the bars and the stage word.
     expect(html).toContain('<span class="node-stage-count">6/7</span>');
   });
@@ -202,6 +205,8 @@ describe('canvas node components', () => {
     ]);
     expect(planning.bars).toEqual(['observed', 'warning', '', '', '', '', '']);
     expect(planning.html).toContain('<span class="node-stage-count">2/7</span>');
+    // the word names the stage the count points at, not the last one that showed activity
+    expect(planning.html).toMatch(/node-stage-word[^>]*>Planning</);
     // Investigating with commands and findings observed after it: still nothing filled after the marker.
     const investigating = render([
       'observed',
@@ -214,6 +219,7 @@ describe('canvas node components', () => {
     ]);
     expect(investigating.bars).toEqual(['observed', 'observed', 'warning', '', '', '', '']);
     expect(investigating.html).toContain('<span class="node-stage-count">3/7</span>');
+    expect(investigating.html).toMatch(/node-stage-word[^>]*>Investigation</);
   });
 
   it('keeps every line of the agent node inside its width', () => {
@@ -221,6 +227,60 @@ describe('canvas node components', () => {
     expect(css).toMatch(/\.flow-node\.agent-node \{[^}]*width: 244px/);
     expect(css).toMatch(/\.flow-node\.agent-node \.node-name \{[^}]*text-overflow: ellipsis/);
     expect(css).toMatch(/\.flow-node\.agent-node \.node-stat span \{[^}]*text-overflow: ellipsis/);
+    // the live line wraps inside the node: the detail gets two lines, then an ellipsis
+    expect(css).toMatch(/\.flow-node\.agent-node \.live-line \{[^}]*white-space: normal/);
+    expect(css).toMatch(/\.flow-node\.agent-node \.live-line-detail \{[^}]*-webkit-line-clamp: 2/);
+  });
+
+  it('splits the live line into the step and what the agent named after it', () => {
+    expect(
+      splitLiveLine('OpenCode is investigating check 1/8: Falsify List.js: push 1050'),
+    ).toEqual({
+      full: 'OpenCode is investigating check 1/8: Falsify List.js: push 1050',
+      step: 'OpenCode is investigating check 1/8',
+      detail: 'Falsify List.js: push 1050',
+    });
+    expect(splitLiveLine('OpenCode is executing the frozen plan.')).toEqual({
+      full: 'OpenCode is executing the frozen plan.',
+      step: 'OpenCode is executing the frozen plan.',
+    });
+    const long = 'OpenCode is investigating check 1/8: ' + 'Falsify List.js updateList '.repeat(8);
+    const html = renderToStaticMarkup(
+      withFlow(
+        React.createElement(AgentCanvasNode, {
+          id: 'agent-x',
+          type: 'agentNode',
+          selected: false,
+          zIndex: 1,
+          isConnectable: false,
+          xPos: 0,
+          yPos: 0,
+          dragging: false,
+          data: {
+            label: 'OpenCode',
+            status: 'running',
+            kind: 'agent',
+            payload: {
+              view: makeAgentNodeView({
+                currentOperation: {
+                  kind: 'lifecycle',
+                  title: long,
+                  timestamp: '2026-11-25T09:00:00Z',
+                },
+              }),
+              agentStackId: 'stack_opencode_main',
+            },
+          },
+        } as never),
+      ),
+    );
+    expect(html).toContain(
+      '<span class="live-line-step">OpenCode is investigating check 1/8</span>',
+    );
+    expect(html).toContain('<span class="live-line-detail">Falsify List.js updateList');
+    // the whole line stays available on hover
+    expect(html).toContain('title="' + long.trim() + '"');
+    expect(html).not.toContain('live-line truncate');
   });
 
   it('has no clock chip in the footer, only the counts', () => {

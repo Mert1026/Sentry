@@ -10,7 +10,7 @@ import {
   isBeyondHead,
   isPassedStage,
   stageHeadIndex,
-  stageStateLabel,
+  stageDisplayLabel,
 } from '../../lib/agent-telemetry.js';
 import { SECRETS_LABEL } from '../../lib/secrets-light.js';
 
@@ -40,6 +40,21 @@ function stageTone(state: string): string {
     default:
       return '';
   }
+}
+
+/**
+ * The live line in two parts: what the agent is doing ("OpenCode is investigating check 1/8"), which is
+ * short and always shown whole, and what it named after the colon (a check, a file, a tool), which
+ * the node clamps. The full line stays in the tooltip and in the side panel.
+ */
+export function splitLiveLine(line: string): { full: string; step: string; detail?: string } {
+  const full = line.replace(/\s+/g, ' ').trim();
+  const colon = full.indexOf(': ');
+  if (colon <= 0) return { full, step: full };
+  const detail = full.slice(colon + 2).trim();
+  return detail.length === 0
+    ? { full, step: full.slice(0, colon) }
+    : { full, step: full.slice(0, colon), detail };
 }
 
 export function AgentCanvasNode({ data }: NodeProps): React.JSX.Element {
@@ -73,15 +88,12 @@ export function AgentCanvasNode({ data }: NodeProps): React.JSX.Element {
     view.currentOperation.title !== ''
       ? view.currentOperation.title
       : undefined;
+  const liveLine = activeLine === undefined ? undefined : splitLiveLine(t(activeLine));
   // How far along the line the agent is: the position of the stage its phase says it is in.
-  const stagesReached = stageHeadIndex(view.stages) + 1;
-  const activeStage = view.stages.find((stage) => stage.state === 'active');
-  // The stage in progress, or the last one reached: a word that says where the agent is.
-  const stageWord = (
-    activeStage ??
-    [...view.stages].reverse().find((stage) => stage.state !== 'not_started') ??
-    view.stages[0]
-  )?.label;
+  const head = stageHeadIndex(view.stages);
+  const stagesReached = head + 1;
+  // The word names the same stage the count points at, so "3/7" always reads with stage 3.
+  const stageWord = (view.stages[head] ?? view.stages[0])?.label;
   // Provider prefixes ("opencode-go/") use up the width and say little; the full id stays in the tooltip.
   const shortModel = view.model.includes('/')
     ? view.model.slice(view.model.lastIndexOf('/') + 1)
@@ -126,7 +138,9 @@ export function AgentCanvasNode({ data }: NodeProps): React.JSX.Element {
         role="img"
         aria-label={
           'Stage: ' +
-          view.stages.map((stage) => stage.label + ' ' + stageStateLabel(stage.state)).join(', ')
+          view.stages
+            .map((stage, index) => stage.label + ' ' + stageDisplayLabel(view.stages, index))
+            .join(', ')
         }
       >
         {view.stages.map((stage, index) => (
@@ -139,7 +153,7 @@ export function AgentCanvasNode({ data }: NodeProps): React.JSX.Element {
                   ? 'passed'
                   : stageTone(stage.state)
             }
-            title={stage.label + ' — ' + stageStateLabel(stage.state)}
+            title={stage.label + ' — ' + stageDisplayLabel(view.stages, index)}
           />
         ))}
       </div>
@@ -151,9 +165,14 @@ export function AgentCanvasNode({ data }: NodeProps): React.JSX.Element {
           </span>
         )}
       </div>
-      {activeLine !== undefined ? (
-        <div className="node-sub live-line truncate" title={activeLine}>
-          {activeLine}
+      {liveLine !== undefined ? (
+        <div className="node-sub live-line" title={liveLine.full}>
+          <span className="live-line-text">
+            <span className="live-line-step">{liveLine.step}</span>
+            {liveLine.detail === undefined ? null : (
+              <span className="live-line-detail">{liveLine.detail}</span>
+            )}
+          </span>
         </div>
       ) : null}
       <div className="node-stats">

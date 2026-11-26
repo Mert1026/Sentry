@@ -36,6 +36,45 @@ describe('text built at run time is translated as a whole sentence', () => {
     expect(bg('JSON exported')).toBe('JSON е експортиран');
   });
 
+  it('every step an agent reports as its current operation', () => {
+    expect(bg('OpenCode is creating a frozen investigation plan.')).toBe(
+      'OpenCode създава замразен план за проучване.',
+    );
+    expect(bg('DeepSeek is executing the frozen plan.')).toBe(
+      'DeepSeek изпълнява замразения план.',
+    );
+    expect(bg('Claude Code is serializing the frozen investigation into a report.')).toBe(
+      'Claude Code оформя замразеното проучване в доклад.',
+    );
+    expect(bg('Claude Code is still writing the report.')).toBe(
+      'Claude Code все още пише доклада.',
+    );
+    // the agent's own text after the colon stays as it wrote it
+    expect(bg('OpenCode is investigating check 3/8: Falsify List.js set(-1)')).toBe(
+      'OpenCode проучва проверка 3/8: Falsify List.js set(-1)',
+    );
+    expect(bg('OpenCode is giving check 6 a second pass (1/1): fromJS cycles')).toBe(
+      'OpenCode прави второ преминаване на проверка 6 (1/1): fromJS cycles',
+    );
+    expect(bg('OpenCode is following up lead 2/4: none of the paths clamp')).toBe(
+      'OpenCode проследява следа 2/4: none of the paths clamp',
+    );
+    expect(bg('OpenCode is exploring critical flow 1/5: Map set/get/remove')).toBe(
+      'OpenCode изследва критичен поток 1/5: Map set/get/remove',
+    );
+    expect(bg('OpenCode is deepening check 4 (1/3): Seq slice')).toBe(
+      'OpenCode задълбочава проверка 4 (1/3): Seq slice',
+    );
+    expect(bg('OpenCode is running the hazard sweep (1/1): website/src/static/markdown.ts')).toBe(
+      'OpenCode прави преглед на рисковите места (1/1): website/src/static/markdown.ts',
+    );
+    // anything else an agent says is left alone
+    expect(bg('OpenCode is somewhere new')).toBe('OpenCode is somewhere new');
+    expect(translateText('OpenCode is executing the frozen plan.', 'en')).toBe(
+      'OpenCode is executing the frozen plan.',
+    );
+  });
+
   it('leaves English alone and does not catch ordinary sentences', () => {
     expect(translateText('Re-test 3 selected', 'en')).toBe('Re-test 3 selected');
     expect(bg('Read more')).toBe('Read more');

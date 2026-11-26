@@ -75,7 +75,7 @@ describe('observed stage and activity presentation', () => {
     ]);
     render(<AgentInspector data={{ view }} />);
     expect(stageRows()).toContain('Reporting — Active');
-    expect(stageRows()).toContain('Planning — Not observed');
+    expect(stageRows()).toContain('Planning — No events');
     expect(view.currentStage).toBe('reporting');
     expect(view.stages.some((s) => s.state === 'completed')).toBe(false);
   });
@@ -101,7 +101,7 @@ describe('observed stage and activity presentation', () => {
     );
   });
 
-  it('a sparse historical completion displays missing milestones as Not observed', () => {
+  it('a sparse historical completion shows the milestones it passed as having no events', () => {
     const view = telemetry();
     render(<AgentInspector data={{ view }} />);
     for (const label of [
@@ -109,10 +109,10 @@ describe('observed stage and activity presentation', () => {
       'Planning',
       'Investigation',
       'Commands / Tests',
-      'Evidence',
       'Reporting',
+      'Evidence',
     ]) {
-      expect(stageRows()).toContain(label + ' — Not observed');
+      expect(stageRows()).toContain(label + ' — No events');
     }
     expect(stageRows()).toContain('Completed — Completed');
     expect(screen.queryByText(/not_started|Not started/)).toBeNull();
@@ -128,7 +128,7 @@ describe('observed stage and activity presentation', () => {
     cleanup();
     canvas(view);
     const stages = screen.getByRole('img', {
-      name: /Stage:.*Investigation Observed.*Commands \/ Tests Not observed/,
+      name: /Stage:.*Investigation Observed.*Commands \/ Tests No events/,
     });
     expect(stages.querySelector('[title="Investigation — Observed"]')?.className).toBe('observed');
     expect(screen.getByLabelText('OpenCode completed')).toBeTruthy();
