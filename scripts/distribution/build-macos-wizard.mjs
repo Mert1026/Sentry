@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process';
+import console from 'node:console';
 import { existsSync } from 'node:fs';
 import {
   chmod,
@@ -13,7 +14,9 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
+import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { build as esbuild } from 'esbuild';
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, '..', '..');
@@ -124,6 +127,43 @@ async function signAppInsideOut(builtApp, identity, entitlementsPlist) {
   signTarget(builtApp, { entitlements: entitlementsPlist });
 }
 
+/**
+ * Bundle compiled `wizard-entry.js` with esbuild so relative helpers (such as
+ * `./distribution.js`) and workspace dependencies are inlined just like
+ * `scripts/distribution/build.mjs` bundles `dist/main/index.js`, while leaving
+ * `electron`, `node:*`, and `./index.js` external.
+ */
+export async function bundleWizardEntry(entryFile, outFile) {
+  if (!existsSync(entryFile)) {
+    throw new Error(
+      `Missing compiled wizard entrypoint at ${entryFile}. Run "pnpm --filter @qa/desktop build:main" first.`,
+    );
+  }
+  const meta = await esbuild({
+    entryPoints: [entryFile],
+    outfile: outFile,
+    bundle: true,
+    platform: 'node',
+    format: 'esm',
+    target: 'node22',
+    external: ['electron', './index.js'],
+    metafile: true,
+    minify: false,
+  });
+  for (const file of Object.values(meta.metafile.outputs)) {
+    for (const item of file.imports) {
+      if (
+        item.external &&
+        item.path !== 'electron' &&
+        item.path !== './index.js' &&
+        !item.path.startsWith('node:')
+      ) {
+        throw new Error(`Unbundled wizard dependency: ${item.path}`);
+      }
+    }
+  }
+}
+
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
   const baseApp = opts.baseApp ?? (await resolveDefaultBaseApp(opts.outDir));
@@ -169,14 +209,7 @@ async function main() {
       'wizard-entry.js',
     );
     const appWizardEntry = join(appDir, 'dist', 'main', 'wizard-entry.js');
-    if (existsSync(compiledWizardEntry)) {
-      await copyFile(compiledWizardEntry, appWizardEntry);
-    }
-    if (!existsSync(appWizardEntry)) {
-      throw new Error(
-        `Missing compiled wizard entrypoint at ${appWizardEntry}. Run "pnpm --filter @qa/desktop build:main" first.`,
-      );
-    }
+    await bundleWizardEntry(compiledWizardEntry, appWizardEntry);
 
     const appPkgPath = join(appDir, 'package.json');
     const appPkg = JSON.parse(await readFile(appPkgPath, 'utf8'));
@@ -244,4 +277,6 @@ async function main() {
   }
 }
 
-await main();
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  await main();
+}

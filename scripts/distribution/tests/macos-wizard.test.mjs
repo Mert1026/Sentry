@@ -2,9 +2,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
+import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { bundleWizardEntry } from '../build-macos-wizard.mjs';
 
 const testsDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(testsDir, '..', '..', '..');
@@ -74,4 +77,26 @@ test('macOS Setup Wizard preload, HTML, and main entry share consistent IPC chan
       wizardHtml.includes('window.sentryWizard.launchDesktop'),
     'wizard.html missing expected sentryWizard bridge calls',
   );
+});
+
+test('bundleWizardEntry inlines relative helpers while keeping ./index.js external', async () => {
+  const compiledWizardEntry = join(repoRoot, 'apps', 'desktop', 'dist', 'main', 'wizard-entry.js');
+  if (!existsSync(compiledWizardEntry)) {
+    return;
+  }
+  const tmpDir = await mkdtemp(join(tmpdir(), 'sentry-wizard-bundle-test-'));
+  try {
+    const outFile = join(tmpDir, 'wizard-entry.js');
+    await bundleWizardEntry(compiledWizardEntry, outFile);
+    const bundled = await readFile(outFile, 'utf8');
+    execFileSync(process.execPath, ['--check', outFile], { stdio: 'pipe' });
+    assert.ok(!bundled.includes('./distribution.js'), 'distribution.js must be bundled inline');
+    assert.ok(bundled.includes('function sourceUserDataPath('), 'expected sourceUserDataPath');
+    assert.ok(
+      bundled.includes('./index.js'),
+      'expected ./index.js dynamic import to stay external',
+    );
+  } finally {
+    await rm(tmpDir, { recursive: true, force: true });
+  }
 });
