@@ -67,6 +67,40 @@ describe('OpenCode parent-process namespace and dataRoot hiding (F-08)', () => {
     }
   });
 
+  it('binds toolchains/tools under dataRoot read-only after --tmpfs dataRoot and rejects unsafe readOnlyBinds', () => {
+    const toolchains = `${DATA_ROOT}/toolchains`;
+    const browserTool = `${DATA_ROOT}/tools/browser`;
+    const argv = buildOpenCodeNamespaceArgv(
+      { executable: '/usr/local/bin/opencode', argv: ['run'], cwd: WS, env: ENV },
+      [],
+      [toolchains, browserTool],
+    );
+    const tmpfsDataIdx = argv.indexOf(DATA_ROOT);
+    const tcRoIdx = argv.indexOf(toolchains);
+    expect(tcRoIdx).toBeGreaterThan(tmpfsDataIdx);
+    expect(argv.slice(tcRoIdx - 1, tcRoIdx + 2)).toEqual(['--ro-bind', toolchains, toolchains]);
+    const toolRoIdx = argv.indexOf(browserTool);
+    expect(argv.slice(toolRoIdx - 1, toolRoIdx + 2)).toEqual([
+      '--ro-bind',
+      browserTool,
+      browserTool,
+    ]);
+    for (const bad of [
+      '/etc',
+      `${DATA_ROOT}/projects`,
+      `${DATA_ROOT}/toolchains/../sentry.db`,
+      DATA_ROOT,
+    ]) {
+      expect(() =>
+        buildOpenCodeNamespaceArgv(
+          { executable: '/usr/local/bin/opencode', argv: [], cwd: WS, env: ENV },
+          [],
+          [bad],
+        ),
+      ).toThrow(/unsafe read-only bind/i);
+    }
+  });
+
   it('fails closed when workspace or scope home is not in the canonical Sentry data layout', () => {
     expect(() =>
       buildOpenCodeNamespaceArgv({ executable: 'x', argv: [], cwd: '/tmp/w', env: ENV }),

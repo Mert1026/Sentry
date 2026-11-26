@@ -312,6 +312,8 @@ interface OpenCodeRunEntry {
   turnsIssued: number;
   scope?: OpenCodeRunScope | undefined;
   proxy?: OpenCodeAuthProxy | undefined;
+  /** Read-only toolchain/tool binds needed inside parent namespace so inner bwrap sees source paths. */
+  toolchainBinds?: readonly string[] | undefined;
   /** Registry-only egress proxy for tool shells (absent when socat is missing or the shell is bypassed). */
   egress?: EgressProxy | undefined;
   /** Hosts the egress proxy admits for this run (registries, plus SDK hosts when opted in). */
@@ -742,6 +744,7 @@ export class OpenCodeHarnessAdapter implements HarnessAdapter {
     const realHome = this.hostEnvironment.HOME;
     const egress = await this.startToolShellEgress(scope, entry);
     const toolchains = await this.options.toolchains?.(workspacePath).catch(() => undefined);
+    entry.toolchainBinds = toolchains?.binds;
     // Windows drives and interop stay out of reach of model-controlled shells.
     const windows = await windowsHiddenPaths();
     return writeToolShellWrapper({
@@ -1144,15 +1147,20 @@ export class OpenCodeHarnessAdapter implements HarnessAdapter {
       // selectProductionLauncher (fail-closed, never bypassed implicitly).
       const launcherSelector = this.options.launcherSelector ?? selectProductionLauncher;
       const baseLauncher = await launcherSelector(this.hostEnvironment);
+      const extraBinds = entry.egress?.socketPath !== undefined ? [entry.egress.socketPath] : [];
+      const readOnlyBinds = entry.toolchainBinds ?? [];
       const launcher =
-        entry.egress?.socketPath !== undefined &&
+        (extraBinds.length > 0 || readOnlyBinds.length > 0) &&
         'withExtraBinds' in baseLauncher &&
         typeof (baseLauncher as { withExtraBinds?: unknown }).withExtraBinds === 'function'
           ? (
               baseLauncher as {
-                withExtraBinds: (binds: readonly string[]) => typeof baseLauncher;
+                withExtraBinds: (
+                  binds: readonly string[],
+                  roBinds?: readonly string[],
+                ) => typeof baseLauncher;
               }
-            ).withExtraBinds([entry.egress.socketPath])
+            ).withExtraBinds(extraBinds, readOnlyBinds)
           : baseLauncher;
       const createClient = () =>
         this.clientFactory({

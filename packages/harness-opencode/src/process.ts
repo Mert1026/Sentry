@@ -460,14 +460,31 @@ export function openCodeScopeDirFromEnv(env: NodeJS.ProcessEnv): string | undefi
   return /\/\.sentry-opencode-[A-Za-z0-9_-]+$/.test(dir) ? dir : undefined;
 }
 
+function validateNamespaceReadOnlyBind(raw: string, dataRoot: string): string {
+  const normalized = posix.normalize(raw);
+  const allowedRoots = [`${dataRoot}/toolchains`, `${dataRoot}/tools`];
+  const underAllowedRoot = allowedRoots.some(
+    (root) => normalized === root || normalized.startsWith(root + '/'),
+  );
+  if (raw.includes('..') || !normalized.startsWith('/') || !underAllowedRoot || /\s/.test(raw)) {
+    throw new OpenCodeHarnessError(
+      'OPENCODE_SANDBOX_UNAVAILABLE',
+      'Refusing unsafe read-only bind for OpenCode parent namespace: ' + raw,
+    );
+  }
+  return normalized;
+}
+
 /**
  * Build bubblewrap mount-namespace argv for the OpenCode parent process (F-08):
  * hides `<dataRoot>`, `/mnt`, and `/tmp`, while binding only this run's workspace,
- * scope directory, and explicit egress socket paths back in.
+ * scope directory, read-only toolchain/tool roots under `<dataRoot>`, and explicit
+ * egress socket paths back in.
  */
 export function buildOpenCodeNamespaceArgv(
   input: OpenCodeNamespaceInput,
   extraBinds: readonly string[] = [],
+  readOnlyBinds: readonly string[] = [],
 ): string[] {
   const dataRoot = inferDataRoot(input.cwd);
   const scopeDir = openCodeScopeDirFromEnv(input.env);
@@ -496,6 +513,10 @@ export function buildOpenCodeNamespaceArgv(
   if (input.executable.startsWith(dataRoot + '/')) {
     argv.push('--ro-bind', input.executable, input.executable);
   }
+  for (const raw of readOnlyBinds) {
+    const normalized = validateNamespaceReadOnlyBind(raw, dataRoot);
+    argv.push('--ro-bind', normalized, normalized);
+  }
   argv.push('--bind', input.cwd, input.cwd, '--bind', scopeDir, scopeDir);
   for (const raw of extraBinds) {
     const normalized = posix.normalize(raw);
@@ -522,6 +543,7 @@ export class NamespacedOpenCodeProcessLauncher implements OpenCodeProcessLaunche
     private readonly bwrap: string,
     inner?: OpenCodeProcessLauncher,
     private readonly extraBinds: readonly string[] = [],
+    private readonly readOnlyBinds: readonly string[] = [],
   ) {
     this.inner = inner ?? new DirectOpenCodeProcessLauncher();
   }
@@ -530,12 +552,15 @@ export class NamespacedOpenCodeProcessLauncher implements OpenCodeProcessLaunche
     return this.inner.kind;
   }
 
-  withExtraBinds(extraBinds: readonly string[]): NamespacedOpenCodeProcessLauncher {
-    return new NamespacedOpenCodeProcessLauncher(this.bwrap, this.inner, extraBinds);
+  withExtraBinds(
+    extraBinds: readonly string[],
+    readOnlyBinds: readonly string[] = this.readOnlyBinds,
+  ): NamespacedOpenCodeProcessLauncher {
+    return new NamespacedOpenCodeProcessLauncher(this.bwrap, this.inner, extraBinds, readOnlyBinds);
   }
 
   launch(input: OpenCodeNamespaceInput): OwnedOpenCodeProcess {
-    const argv = buildOpenCodeNamespaceArgv(input, this.extraBinds);
+    const argv = buildOpenCodeNamespaceArgv(input, this.extraBinds, this.readOnlyBinds);
     return this.inner.launch({ executable: this.bwrap, argv, cwd: input.cwd, env: input.env });
   }
 }
