@@ -62,6 +62,7 @@ function nextId(prefix: string): string {
 export interface StdioRuntimeClientOptions {
   /** Platform-supplied child creation (host launcher today, native node next). */
   readonly launch: RuntimeProcessLauncher;
+  readonly hostIdentity?: Pick<RuntimeStatus, 'hostPlatform' | 'executionMode'>;
   /** Prefix for spawn-failure diagnostics (host executable name lives here). */
   readonly spawnErrorPrefix?: string;
   /** Offline error message when no child is running. */
@@ -93,12 +94,14 @@ export class StdioRuntimeClient implements RuntimeClient {
    */
   private generation = 0;
   private readonly launch: RuntimeProcessLauncher;
+  private readonly hostIdentity: StdioRuntimeClientOptions['hostIdentity'];
   private readonly spawnErrorPrefix: string;
   private readonly offlineMessage: string;
   private readonly electronGuardMessage: string;
 
   constructor(options: StdioRuntimeClientOptions) {
     this.launch = options.launch;
+    this.hostIdentity = options.hostIdentity;
     this.spawnErrorPrefix = options.spawnErrorPrefix ?? DEFAULT_SPAWN_ERROR_PREFIX;
     this.offlineMessage = options.offlineMessage ?? DEFAULT_OFFLINE_MESSAGE;
     this.electronGuardMessage = options.electronGuardMessage ?? DEFAULT_ELECTRON_GUARD_MESSAGE;
@@ -114,6 +117,7 @@ export class StdioRuntimeClient implements RuntimeClient {
 
   get status(): RuntimeStatus {
     return {
+      ...this.hostIdentity,
       connected: this.child !== undefined && this.hello !== undefined,
       hello: this.hello,
       lastError: this.lastError,

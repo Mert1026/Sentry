@@ -98,7 +98,10 @@ function registerDialogIpc(): void {
       if (typeof record.project?.sourcePath !== 'string')
         throw new Error('Project source is unavailable.');
       const info = await bootstrapped.host.runtimeEnvironmentInfo();
-      const root = sourcePathForDialog(record.project.sourcePath, process.platform, info.distro);
+      const dialogSource =
+        (await bootstrapped.host.resolveHostSourcePath?.(record.project.sourcePath)) ??
+        record.project.sourcePath;
+      const root = sourcePathForDialog(dialogSource, process.platform, info.distro);
       const result = await dialog.showOpenDialog(mainWindow, {
         title: translateMainCopy(
           kind === 'files' ? 'Choose project files' : 'Choose a project folder',

@@ -299,7 +299,21 @@ export class DesktopApplicationService {
 
   async updateProject(projectId: string, sourcePath?: string): Promise<unknown> {
     const id = ProjectIdInput.parse(projectId);
-    if (sourcePath === undefined) return this.call('projects.update', { projectId: id });
+    if (sourcePath === undefined) {
+      if (this.deps.host.resolveHostSourcePath !== undefined) {
+        const record = (await this.getProject(id)) as { project?: { sourcePath?: unknown } };
+        if (typeof record.project?.sourcePath === 'string') {
+          const resolvedHost = await this.deps.host.resolveHostSourcePath(
+            record.project.sourcePath,
+          );
+          if (resolvedHost !== record.project.sourcePath) {
+            const reStaged = await this.translateSourcePath(resolvedHost);
+            return this.call('projects.update', { projectId: id, sourcePath: reStaged });
+          }
+        }
+      }
+      return this.call('projects.update', { projectId: id });
+    }
     const parsed = z.string().min(1).max(2000).parse(sourcePath);
     const translated = await this.translateSourcePath(parsed);
     return this.call('projects.update', { projectId: id, sourcePath: translated });

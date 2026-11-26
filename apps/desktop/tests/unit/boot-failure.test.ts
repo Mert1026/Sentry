@@ -44,6 +44,15 @@ describe('boot failure classification', () => {
     expect(copy.help).toContain('wsl-runtime.md');
   });
 
+  it('routes structured macOS Lima failures to the Lima copy', () => {
+    const classified = classifyBootFailure(offlineError('macos', 'lima'));
+    expect(classified.kind).toBe('lima-runtime-offline');
+    const copy = fatalScreenCopy(classified.kind);
+    expect(copy.intro).toContain('Lima');
+    expect(copy.help).toContain('2.3+');
+    expect(copy.help).not.toContain('wsl');
+  });
+
   it('routes distro rejection to the native host failure', () => {
     const failure = Object.assign(
       new Error('Native Linux support currently targets CachyOS only. Detected: Ubuntu.'),

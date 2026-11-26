@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { access, constants, mkdir, realpath, stat } from 'node:fs/promises';
 import { delimiter, dirname, join, resolve } from 'node:path';
 
@@ -366,7 +367,9 @@ export class SystemdSandboxBackend implements SandboxBackend {
     // to missing host paths fails unit setup with 226/NAMESPACE on
     // WSL2, so do not add those redundant mounts here.
     for (const systemDir of ['/usr/bin', '/usr/lib', '/usr/share', '/bin', '/lib', '/lib64']) {
-      properties.push('BindReadOnlyPaths=' + systemDir);
+      if (existsSync(systemDir)) {
+        properties.push('BindReadOnlyPaths=' + systemDir);
+      }
     }
     for (const bind of input.runtimeBinds) {
       properties.push('BindReadOnlyPaths=' + bind);

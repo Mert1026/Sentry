@@ -61,6 +61,13 @@ const releases: GoRelease[] = [
         kind: 'archive',
         sha256: 'ccc',
       },
+      {
+        filename: 'go1.23.8.linux-arm64.tar.gz',
+        os: 'linux',
+        arch: 'arm64',
+        kind: 'archive',
+        sha256: 'ddd',
+      },
     ],
   },
 ];
@@ -70,6 +77,9 @@ describe('toolchain manager', () => {
     expect(pickGoArchive(releases, '1.24', 'x86_64')?.sha256).toBe('aaa');
     expect(pickGoArchive(releases, '1.24', 'aarch64')?.sha256).toBe('bbb');
     expect(pickGoArchive(releases, '1.23', 'x86_64')?.filename).toBe('go1.23.8.linux-amd64.tar.gz');
+    expect(pickGoArchive(releases, '1.23', 'aarch64')?.filename).toBe(
+      'go1.23.8.linux-arm64.tar.gz',
+    );
     expect(pickGoArchive(releases, '1.2', 'x86_64')).toBeUndefined();
   });
 
@@ -113,8 +123,11 @@ describe('toolchain manager', () => {
     const manager = new ToolchainManager(root, okRunner(seen), async () => releases);
     manager.install('go', '1.23');
     await manager.settled();
-    expect(seen[0]?.env['SENTRY_GO_FILE']).toBe('go1.23.8.linux-amd64.tar.gz');
-    expect(seen[0]?.env['SENTRY_GO_SHA']).toBe('ccc');
+    const arm = process.arch === 'arm64';
+    expect(seen[0]?.env['SENTRY_GO_FILE']).toBe(
+      arm ? 'go1.23.8.linux-arm64.tar.gz' : 'go1.23.8.linux-amd64.tar.gz',
+    );
+    expect(seen[0]?.env['SENTRY_GO_SHA']).toBe(arm ? 'ddd' : 'ccc');
   });
 
   it('rejects unknown packs and versions, and removes what is installed', async () => {

@@ -14,6 +14,8 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { sentryApi } from '../lib/sentry-api.js';
+import { useRuntimeStatus } from '../lib/use-runtime-status.js';
+import { deriveRuntimeHostView } from '../lib/runtime-host-view.js';
 import { PageHeader, PageSection } from '../components/ui/PageHeader.js';
 import { StatusPill, dotClassForStatus } from '../components/ui/StatusPill.js';
 import { EmptyState } from '../components/ui/EmptyState.js';
@@ -65,6 +67,8 @@ export function Dashboard(): React.JSX.Element {
     queryKey: ['environment'],
     queryFn: () => sentryApi().doctors.environment(),
   });
+  const runtimeStatus = useRuntimeStatus();
+  const hostView = deriveRuntimeHostView(runtimeStatus.data, undefined);
   const projectList = (projects.data as ProjectListItem[] | undefined) ?? [];
   const active = (activeRuns.data as ActiveRunItem[] | undefined) ?? [];
   const envReady = environment.data !== undefined;
@@ -195,7 +199,13 @@ export function Dashboard(): React.JSX.Element {
             <span className="dash-status-dot" aria-hidden="true" />
             {envReady ? 'Ready to run' : 'Checking…'}
           </span>,
-          envReady ? 'WSL connected' : undefined,
+          envReady
+            ? hostView.kind === 'macos'
+              ? 'Lima connected'
+              : hostView.kind === 'linux'
+                ? 'Linux connected'
+                : 'WSL connected'
+            : undefined,
         )}
       </div>
 

@@ -678,11 +678,14 @@ export class OpenCodeHarnessAdapter implements HarnessAdapter {
           }
         : {}),
       ...(shell === undefined ? {} : { shell }),
-      // OpenCode web tools run in the parent process with host networking, so
-      // they are gated by permission, not by the tool network namespace.
-      ...(webAccessEnabled(request.executionSafeguards)
-        ? {}
-        : { permission: { webfetch: 'deny', websearch: 'deny' } as const }),
+      // OpenCode's own file tools run in the parent process, so explicitly deny
+      // external_directory access alongside web tools when disabled.
+      permission: {
+        external_directory: 'deny',
+        ...(webAccessEnabled(request.executionSafeguards)
+          ? {}
+          : { webfetch: 'deny', websearch: 'deny' }),
+      } as const,
     });
     return { ...scoped, OPENCODE_CONFIG_CONTENT: configContent };
   }
@@ -1140,7 +1143,17 @@ export class OpenCodeHarnessAdapter implements HarnessAdapter {
       // a deterministic launcherSelector; production defaults to
       // selectProductionLauncher (fail-closed, never bypassed implicitly).
       const launcherSelector = this.options.launcherSelector ?? selectProductionLauncher;
-      const launcher = await launcherSelector(this.hostEnvironment);
+      const baseLauncher = await launcherSelector(this.hostEnvironment);
+      const launcher =
+        entry.egress?.socketPath !== undefined &&
+        'withExtraBinds' in baseLauncher &&
+        typeof (baseLauncher as { withExtraBinds?: unknown }).withExtraBinds === 'function'
+          ? (
+              baseLauncher as {
+                withExtraBinds: (binds: readonly string[]) => typeof baseLauncher;
+              }
+            ).withExtraBinds([entry.egress.socketPath])
+          : baseLauncher;
       const createClient = () =>
         this.clientFactory({
           executable: this.runtime.executable,

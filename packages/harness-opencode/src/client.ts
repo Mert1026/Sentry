@@ -7,6 +7,8 @@ import {
 } from './errors.js';
 import {
   DirectOpenCodeProcessLauncher,
+  findExecutableOnPath,
+  NamespacedOpenCodeProcessLauncher,
   probeSystemdUser,
   stripSystemdClientChatter,
   SystemdOpenCodeProcessLauncher,
@@ -132,7 +134,7 @@ export function classifyOpenCodeTurnFailure(input: {
         '): its safety filter said the content was flagged for possible cybersecurity risk. ' +
         'This is not an outage or a credential problem and retrying does not help. ' +
         (said === undefined ? '' : 'The provider said: ' + said + ' ') +
-        'For authorized security testing, follow the provider’s instructions for permissive access, or run this project with another agent.',
+        'For authorized security testing, follow the providerï¿½s instructions for permissive access, or run this project with another agent.',
       retryable: false,
     };
   }
@@ -279,7 +281,17 @@ export async function selectProductionLauncher(
       cached = probeSystemdUser(5_000, environment);
       systemdProbes.set(key, cached);
     }
-    if (await cached) return new SystemdOpenCodeProcessLauncher();
+    if (await cached) {
+      const systemd = new SystemdOpenCodeProcessLauncher();
+      const bwrap = await findExecutableOnPath(
+        ['/usr/bin/bwrap', '/bin/bwrap', 'bwrap'],
+        environment,
+      );
+      if (bwrap !== undefined) {
+        return new NamespacedOpenCodeProcessLauncher(bwrap, systemd);
+      }
+      return systemd;
+    }
     if (environment['SENTRY_OPENCODE_ALLOW_DIRECT'] === '1') {
       return new DirectOpenCodeProcessLauncher();
     }

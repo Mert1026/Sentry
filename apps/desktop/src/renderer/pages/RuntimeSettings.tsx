@@ -59,11 +59,13 @@ export function RuntimeSettings(): React.JSX.Element {
   return (
     <div className="page">
       <PageHeader
-        title={isLinux ? 'Execution Runtime' : 'WSL runtime'}
+        title={view.showDistroSelector ? 'WSL runtime' : 'Execution Runtime'}
         subtitle={
-          isLinux
-            ? 'Sentry executes QA inside a native Linux runtime on this host.'
-            : 'Sentry executes QA inside a long-lived WSL2 Linux runtime.'
+          view.kind === 'macos'
+            ? 'Sentry executes QA inside the configured Lima virtual machine.'
+            : isLinux
+              ? 'Sentry executes QA inside a native Linux runtime on this host.'
+              : 'Sentry executes QA inside a long-lived WSL2 Linux runtime.'
         }
         crumbs={
           <>
@@ -103,7 +105,9 @@ export function RuntimeSettings(): React.JSX.Element {
           )}
         </div>
       ) : null}
-      <PageSection title={isLinux ? 'Native Runtime' : 'WSL Runtime'}>
+      <PageSection
+        title={view.kind === 'macos' ? 'Lima Runtime' : isLinux ? 'Native Runtime' : 'WSL Runtime'}
+      >
         <div className="card">
           <div className="info-aligned-row" style={{ marginBottom: 10 }}>
             <StatusPill
@@ -117,9 +121,14 @@ export function RuntimeSettings(): React.JSX.Element {
               }
               pulse={connected}
             />
-            {!view.showDistroSelector ? (
+            {isLinux ? (
               <InfoPopover title="Native runtime">
                 The native runtime follows the current host; no distribution selection is needed.
+              </InfoPopover>
+            ) : view.kind === 'macos' ? (
+              <InfoPopover title="Lima runtime">
+                Sentry runs QA inside an isolated Virtualization.framework Linux VM managed via
+                Lima.
               </InfoPopover>
             ) : null}
           </div>
@@ -128,10 +137,14 @@ export function RuntimeSettings(): React.JSX.Element {
             <dd>{view.hostLabel ?? '—'}</dd>
             <dt>Execution</dt>
             <dd>{view.executionLabel ?? '—'}</dd>
-            <dt>{isLinux ? 'Distribution' : 'Current'}</dt>
-            <dd>
-              {isLinux ? (view.distroLabel ?? '—') : (info?.selected ?? info?.preferred ?? '—')}
-            </dd>
+            {view.kind !== 'macos' ? (
+              <>
+                <dt>{isLinux ? 'Distribution' : 'Current'}</dt>
+                <dd>
+                  {isLinux ? (view.distroLabel ?? '—') : (info?.selected ?? info?.preferred ?? '—')}
+                </dd>
+              </>
+            ) : null}
           </dl>
           {view.showDistroSelector ? (
             <>

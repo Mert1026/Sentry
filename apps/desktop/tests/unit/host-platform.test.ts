@@ -14,8 +14,66 @@ describe('host platform routing', () => {
   });
 
   it('rejects unsupported hosts with a typed error', async () => {
-    await expect(createHostPlatform({ platform: 'darwin' })).rejects.toMatchObject({
+    await expect(
+      createHostPlatform({ platform: 'freebsd' as NodeJS.Platform }),
+    ).rejects.toMatchObject({
       code: 'HOST_PLATFORM_UNSUPPORTED',
+    });
+  });
+
+  it('routes darwin to managed Lima defaults even without SENTRY_LIMA_INSTANCE', async () => {
+    const host = await createHostPlatform({
+      platform: 'darwin',
+      env: {},
+      inspectLimaInstance: async (name) => ({
+        name,
+        vmType: 'vz',
+        config: {
+          vmType: 'vz',
+          mounts: [],
+          portForwards: [
+            { guestIP: '0.0.0.0', guestIPMustBeZero: false, proto: 'any', ignore: true },
+          ],
+          networkOpts: { hostLoopback: false },
+        },
+      }),
+    });
+    expect(host.hostKind).toBe('macos');
+    expect(host.executionMode).toBe('lima');
+    expect((await host.createRuntimeClient()).status).toMatchObject({
+      hostPlatform: 'macos',
+      executionMode: 'lima',
+      connected: false,
+    });
+  });
+
+  it('uses Lima on macOS when explicitly configured', async () => {
+    const host = await createHostPlatform({
+      platform: 'darwin',
+      env: { SENTRY_LIMA_INSTANCE: 'demo', SENTRY_RUNTIME_ENTRY: '/guest/dist/host.js' },
+      inspectLimaInstance: async () => ({
+        name: 'demo',
+        vmType: 'vz',
+        config: {
+          vmType: 'vz',
+          mounts: [],
+          portForwards: [
+            { guestIP: '0.0.0.0', guestIPMustBeZero: false, proto: 'any', ignore: true },
+          ],
+          networkOpts: { hostLoopback: false },
+        },
+      }),
+    });
+    expect((await host.createRuntimeClient()).status).toMatchObject({
+      hostPlatform: 'macos',
+      executionMode: 'lima',
+      connected: false,
+    });
+    await expect(host.prepareSourcePath('/Users/test/Demo Project')).resolves.toBe(
+      '/Users/test/Demo Project',
+    );
+    await expect(host.prepareSourcePath('relative')).rejects.toMatchObject({
+      code: 'INVALID_SOURCE_PATH',
     });
   });
 

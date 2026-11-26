@@ -104,6 +104,10 @@ const MAIN_COPY: Record<string, MainCopy> = {
     en: 'Sentry Desktop is running, but the native Linux execution runtime could not start.',
     bg: 'Sentry Desktop работи, но средата за изпълнение на native Linux не можа да се стартира.',
   },
+  'Sentry Desktop is running, but the macOS Lima Linux execution runtime could not start.': {
+    en: 'Sentry Desktop is running, but the macOS Lima Linux execution runtime could not start.',
+    bg: 'Sentry Desktop работи, но Linux средата за изпълнение в Lima за macOS не можа да се стартира.',
+  },
   'Sentry Desktop is running, but the WSL2 execution runtime could not start.': {
     en: 'Sentry Desktop is running, but the WSL2 execution runtime could not start.',
     bg: 'Sentry Desktop работи, но WSL2 средата за изпълнение не можа да се стартира.',
@@ -112,6 +116,11 @@ const MAIN_COPY: Record<string, MainCopy> = {
     en: 'QA execution is disabled. Native Linux support currently targets CachyOS only.',
     bg: 'Изпълнението на QA е деактивирано. Поддръжката на native Linux в момента е само за CachyOS.',
   },
+  'QA execution is disabled. Verify Lima 2.3+ and Virtualization.framework availability, then retry.':
+    {
+      en: 'QA execution is disabled. Verify Lima 2.3+ and Virtualization.framework availability, then retry.',
+      bg: 'Изпълнението на QA е деактивирано. Проверете наличността на Lima 2.3+ и Virtualization.framework и опитайте отново.',
+    },
   'QA execution is disabled. See docs/setup/wsl-runtime.md for setup instructions.': {
     en: 'QA execution is disabled. See docs/setup/wsl-runtime.md for setup instructions.',
     bg: 'Изпълнението на QA е деактивирано. Вижте docs/setup/wsl-runtime.md за инструкции за настройка.',

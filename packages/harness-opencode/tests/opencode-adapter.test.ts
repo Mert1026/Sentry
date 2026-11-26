@@ -271,7 +271,13 @@ describe('OpenCodeHarnessAdapter', () => {
     // host session-bus address, so systemd-unit proves host selection: had
     // the scrubbed turn env been probed instead, the run would have failed
     // closed with OPENCODE_SANDBOX_UNAVAILABLE.
-    expect(seen.launcherKind).toBe(process.platform === 'linux' ? 'systemd-unit' : 'direct');
+    expect(seen.launcherKind).toBe(
+      process.platform === 'linux'
+        ? 'systemd-unit'
+        : process.platform === 'win32'
+          ? 'direct'
+          : 'process-group',
+    );
     await adapter.dispose();
   });
 
