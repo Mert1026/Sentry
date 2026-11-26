@@ -4,8 +4,10 @@ import { createRequire } from 'node:module';
 import { existsSync } from 'node:fs';
 import {
   cp,
+  lstat,
   mkdir,
   mkdtemp,
+  readdir,
   readFile,
   rm,
   symlink,
