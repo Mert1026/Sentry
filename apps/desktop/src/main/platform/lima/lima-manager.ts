@@ -49,7 +49,9 @@ export const DEFAULT_GUEST_RUNTIME_ENTRY = '/opt/sentry/runtime/current/apps/run
 export const GUEST_STAGING_ROOT = '/opt/sentry/staged-projects';
 
 export function defaultSentryLimaHome(home: string = homedir()): string {
-  return join(home, 'Library', 'Application Support', 'Sentry', 'lima');
+  return home.startsWith('/')
+    ? posix.join(home, 'Library', 'Application Support', 'Sentry', 'lima')
+    : join(home, 'Library', 'Application Support', 'Sentry', 'lima');
 }
 
 export interface LimaExecutableResolution {
@@ -105,21 +107,26 @@ export function candidateLimaExecutables(options: ResolveLimaExecutableOptions =
     }
   };
 
+  const joinTarget = (base: string, ...parts: string[]): string =>
+    base.startsWith('/') ? posix.join(base, ...parts) : join(base, ...parts);
+  const resolveTarget = (base: string, ...parts: string[]): string =>
+    base.startsWith('/') ? posix.resolve(base, ...parts) : resolve(base, ...parts);
+
   push(options.explicitExecutable);
   push(env['SENTRY_LIMACTL_PATH']);
   if (resourcesPath !== undefined) {
-    push(join(resourcesPath, 'lima', 'bin', 'limactl'));
+    push(joinTarget(resourcesPath, 'lima', 'bin', 'limactl'));
   }
   if (appPath !== undefined) {
-    push(resolve(appPath, '..', '..', '..', 'lima', 'bin', 'limactl'));
-    push(resolve(appPath, '..', '..', '..', '..', 'lima', 'bin', 'limactl'));
+    push(resolveTarget(appPath, '..', '..', '..', 'lima', 'bin', 'limactl'));
+    push(resolveTarget(appPath, '..', '..', '..', '..', 'lima', 'bin', 'limactl'));
   }
-  push(join(home, 'Library', 'Application Support', 'Sentry', 'lima-bin', 'bin', 'limactl'));
-  push(join(home, '.cache', 'sentry-lima-2.3.0', 'root', 'bin', 'limactl'));
+  push(joinTarget(home, 'Library', 'Application Support', 'Sentry', 'lima-bin', 'bin', 'limactl'));
+  push(joinTarget(home, '.cache', 'sentry-lima-2.3.0', 'root', 'bin', 'limactl'));
   push('/opt/homebrew/bin/limactl');
   push('/usr/local/bin/limactl');
   for (const dir of (env['PATH'] ?? '').split(':')) {
-    if (dir.length > 0) push(join(dir, 'limactl'));
+    if (dir.length > 0) push(joinTarget(dir, 'limactl'));
   }
   return candidates;
 }

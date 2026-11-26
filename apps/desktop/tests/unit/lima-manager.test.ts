@@ -55,52 +55,58 @@ describe('Managed Lima lifecycle & resolution', () => {
     expect(brewIdx).toBeGreaterThan(isolatedIdx);
   });
 
-  it('enforces minimum Lima 2.3.0 when requireMinVersion is enabled', async () => {
-    const dir = await tempDir('sentry-limactl-old-');
-    const oldBin = join(dir, 'limactl');
-    await writeFile(oldBin, '#!/bin/sh\necho "limactl version 2.2.1"\n');
-    await chmod(oldBin, 0o755);
+  it.skipIf(process.platform === 'win32')(
+    'enforces minimum Lima 2.3.0 when requireMinVersion is enabled',
+    async () => {
+      const dir = await tempDir('sentry-limactl-old-');
+      const oldBin = join(dir, 'limactl');
+      await writeFile(oldBin, '#!/bin/sh\necho "limactl version 2.2.1"\n');
+      await chmod(oldBin, 0o755);
 
-    await expect(
-      resolveLimaExecutable({
+      await expect(
+        resolveLimaExecutable({
+          explicitExecutable: oldBin,
+          env: { PATH: '' },
+          homeDir: dir,
+          requireMinVersion: true,
+        }),
+      ).rejects.toMatchObject({ code: 'LIMA_VERSION_UNSUPPORTED' });
+
+      const nonStrict = await resolveLimaExecutable({
         explicitExecutable: oldBin,
         env: { PATH: '' },
         homeDir: dir,
+        requireMinVersion: false,
+      });
+      expect(nonStrict.version).toBe('2.2.1');
+    },
+  );
+
+  it.skipIf(process.platform === 'win32')(
+    'resolves valid Lima 2.3.0 executable and constructs isolated subprocess env',
+    async () => {
+      const dir = await tempDir('sentry-limactl-new-');
+      const binDir = join(dir, 'lima', 'bin');
+      await mkdir(binDir, { recursive: true });
+      const bin = join(binDir, 'limactl');
+      await writeFile(bin, '#!/bin/sh\necho "limactl version 2.3.0"\n');
+      await chmod(bin, 0o755);
+
+      const resolved = await resolveLimaExecutable({
+        resourcesPath: dir,
+        env: { PATH: '' },
+        homeDir: dir,
         requireMinVersion: true,
-      }),
-    ).rejects.toMatchObject({ code: 'LIMA_VERSION_UNSUPPORTED' });
+      });
+      expect(resolved).toEqual({ executable: bin, version: '2.3.0' });
 
-    const nonStrict = await resolveLimaExecutable({
-      explicitExecutable: oldBin,
-      env: { PATH: '' },
-      homeDir: dir,
-      requireMinVersion: false,
-    });
-    expect(nonStrict.version).toBe('2.2.1');
-  });
-
-  it('resolves valid Lima 2.3.0 executable and constructs isolated subprocess env', async () => {
-    const dir = await tempDir('sentry-limactl-new-');
-    const binDir = join(dir, 'lima', 'bin');
-    await mkdir(binDir, { recursive: true });
-    const bin = join(binDir, 'limactl');
-    await writeFile(bin, '#!/bin/sh\necho "limactl version 2.3.0"\n');
-    await chmod(bin, 0o755);
-
-    const resolved = await resolveLimaExecutable({
-      resourcesPath: dir,
-      env: { PATH: '' },
-      homeDir: dir,
-      requireMinVersion: true,
-    });
-    expect(resolved).toEqual({ executable: bin, version: '2.3.0' });
-
-    const limaHome = join(dir, 'isolated-lima');
-    const env = buildLimaSubprocessEnv(bin, limaHome, { PATH: '/custom/bin' });
-    expect(env['LIMA_HOME']).toBe(limaHome);
-    expect(env['PATH']?.startsWith(binDir + ':')).toBe(true);
-    expect(env['PATH']).toContain('/usr/bin');
-  });
+      const limaHome = join(dir, 'isolated-lima');
+      const env = buildLimaSubprocessEnv(bin, limaHome, { PATH: '/custom/bin' });
+      expect(env['LIMA_HOME']).toBe(limaHome);
+      expect(env['PATH']?.startsWith(binDir + ':')).toBe(true);
+      expect(env['PATH']).toContain('/usr/bin');
+    },
+  );
 
   it('persists guest staging -> host path mappings for updateProject and target picker', async () => {
     const userData = await tempDir('sentry-sourcemap-');
@@ -113,44 +119,47 @@ describe('Managed Lima lifecycle & resolution', () => {
     expect(map2.resolveHost('/unmapped/path')).toBe('/unmapped/path');
   });
 
-  it('stages host projects over zero-mount seam and maps back via resolveHostSourcePath', async () => {
-    const userData = await tempDir('sentry-platform-stage-');
-    const projectDir = await mkdtemp(join(homedir(), '.sentry-unit-stage-'));
-    roots.push(projectDir);
-    await writeFile(join(projectDir, 'index.js'), 'console.log(1);\n');
-    const stagedTarget = '/opt/sentry/staged-projects/test123';
+  it.skipIf(process.platform === 'win32')(
+    'stages host projects over zero-mount seam and maps back via resolveHostSourcePath',
+    async () => {
+      const userData = await tempDir('sentry-platform-stage-');
+      const projectDir = await mkdtemp(join(homedir(), '.sentry-unit-stage-'));
+      roots.push(projectDir);
+      await writeFile(join(projectDir, 'index.js'), 'console.log(1);\n');
+      const stagedTarget = '/opt/sentry/staged-projects/test123';
 
-    const platform = createMacosLimaPlatform({
-      instance: 'sentry-linux',
-      runtimeEntry: DEFAULT_GUEST_RUNTIME_ENTRY,
-      dataRoot: undefined,
-      userDataDir: userData,
-      isProduction: true,
-      requireStrictNetwork: true,
-      requireHostLoopbackIsolation: true,
-      inspectInstance: async () => ({
-        name: 'sentry-linux',
-        status: 'Running',
-        vmType: 'vz',
-        config: {
+      const platform = createMacosLimaPlatform({
+        instance: 'sentry-linux',
+        runtimeEntry: DEFAULT_GUEST_RUNTIME_ENTRY,
+        dataRoot: undefined,
+        userDataDir: userData,
+        isProduction: true,
+        requireStrictNetwork: true,
+        requireHostLoopbackIsolation: true,
+        inspectInstance: async () => ({
+          name: 'sentry-linux',
+          status: 'Running',
           vmType: 'vz',
-          mounts: [],
-          portForwards: [
-            { guestIP: '0.0.0.0', guestIPMustBeZero: false, proto: 'any', ignore: true },
-          ],
-          networkOpts: { hostLoopback: false },
-        },
-      }),
-      stageSourcePath: async () => stagedTarget,
-    });
+          config: {
+            vmType: 'vz',
+            mounts: [],
+            portForwards: [
+              { guestIP: '0.0.0.0', guestIPMustBeZero: false, proto: 'any', ignore: true },
+            ],
+            networkOpts: { hostLoopback: false },
+          },
+        }),
+        stageSourcePath: async () => stagedTarget,
+      });
 
-    await platform.createRuntimeClient();
-    const prepared = await platform.prepareSourcePath(projectDir);
-    expect(prepared).toBe(stagedTarget);
-    await expect(platform.resolveHostSourcePath?.(prepared)).resolves.toBe(
-      await import('node:fs').then((fs) => fs.realpathSync.native(projectDir)),
-    );
-  });
+      await platform.createRuntimeClient();
+      const prepared = await platform.prepareSourcePath(projectDir);
+      expect(prepared).toBe(stagedTarget);
+      await expect(platform.resolveHostSourcePath?.(prepared)).resolves.toBe(
+        await import('node:fs').then((fs) => fs.realpathSync.native(projectDir)),
+      );
+    },
+  );
 
   it('generates hardened provisioning YAML with bwrap AppArmor and passwordlessSudo disabled', () => {
     const yaml = generateSentryLimaConfig({
