@@ -38,17 +38,27 @@ jobs:
           }
       - name: Build and extract unsigned candidate (never publish)
         run: pnpm distribution:build windows-x64
-      # Proves which workflow built the ZIP, so `sentry update` can check the publisher with `gh attestation verify`.
+      # The setup wizard wraps exactly the extracted, verified archive above.
+      - name: Build the setup wizard (SentrySetup.exe)
+        shell: powershell
+        run: |
+          choco install innosetup -y --no-progress
+          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup could not be installed' }
+          pnpm distribution:installer
+      # Proves which workflow built the ZIP and the setup wizard, so `sentry update` can check the publisher with `gh attestation verify`.
       - uses: actions/attest-build-provenance@v2
         if: github.event_name != 'pull_request'
         with:
-          subject-path: dist/distributions/*.zip
+          subject-path: |
+            dist/distributions/*.zip
+            dist/distributions/*.exe
       # Private workflow artifacts are review candidates, not GitHub Releases.
       - uses: actions/upload-artifact@v4
         with:
           name: unsigned-review-windows-x64-${{ github.event.pull_request.head.sha || github.sha }}
           path: |
             dist/distributions/*.zip
+            dist/distributions/*.exe
             dist/distributions/*.sha256
           if-no-files-found: error
           retention-days: 7
