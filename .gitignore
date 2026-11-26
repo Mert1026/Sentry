@@ -192,3 +192,6 @@ qa-runs/
 workspaces/
 *.sarif
 *.ndjson.log
+
+# Local video renders and media work; not part of the product (the project was removed from the repository in 2.0.4).
+sentry-video/
