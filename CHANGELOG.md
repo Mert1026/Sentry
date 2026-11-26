@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+## [2.0.3] - 2026-11-22
+
+Update from 2.0.2. The CLI has full access to the app (provider settings and write-only keys, account sign-ins,
+runtime, system information, language and custom add-ons). No database migration, and the runtime protocol stays 1.
+See the [release notes](docs/releases/v2.0.3.md).
+
 - **The CLI has full access to the app.** New commands read and change everything Desktop can: `provider status|set|clear|
 forget-all|forget-file|persist|detect-binaries` (provider modes, models, endpoints and keys), `account
 status|login|logout|cancel <openai|claude>` and `account code claude <code>`, `runtime status|distros|select|
@@ -11,6 +17,11 @@ reclaim-space`, `system info|runs|environment|broker`, `app language`, and `tool
   dialogs and switching the broker off stay in Desktop. The broker has no password, so a process running as your
   user can now change your keys: the Local CLI Broker switch stays the control. See the
   [CLI reference](docs/beta/cli.md).
+
+- **CI no longer fails when the two Claude suites run together.** The GLM and Claude release-prompt tests kept their
+  workspace directly in the system temp folder, so every test in both packages shared one disposable Claude home and
+  collided when the suites ran in parallel. Each test now has its own, and the tests step the fake clock so a late
+  timer cannot hang them. No product code changed.
 
 - **CI no longer fails on slow runners.** The release-prompt tests of the GLM and Claude harnesses run the real adapter
   against scripted turns and could pass the default 5 second limit on a busy runner, which failed a healthy run
