@@ -6,6 +6,7 @@ import { ReactFlowProvider } from '@xyflow/react';
 import React from 'react';
 import {
   AgentCanvasNode,
+  LIVE_DETAIL_CLAMP_CHARS,
   splitLiveLine,
 } from '../../src/renderer/components/nodes/AgentCanvasNode.js';
 import { makeAgentNodeView } from '../fixtures.js';
@@ -415,5 +416,76 @@ describe('canvas node components', () => {
     expect(render({ state: 'found' })).toContain('Secrets found');
     expect(render({ state: 'clear' })).toContain('secrets-light clear');
     expect(render({ state: 'unclear' })).toContain('secrets-light unclear');
+  });
+});
+
+describe('live line "Show more"', () => {
+  const node = (title: string) =>
+    withFlow(
+      React.createElement(AgentCanvasNode, {
+        id: 'agent-x',
+        type: 'agentNode',
+        selected: false,
+        zIndex: 1,
+        isConnectable: false,
+        xPos: 0,
+        yPos: 0,
+        dragging: false,
+        data: {
+          label: 'OpenCode',
+          status: 'running',
+          kind: 'agent',
+          payload: {
+            view: makeAgentNodeView({
+              status: 'running',
+              currentOperation: { kind: 'lifecycle', title, timestamp: '2026-11-26T09:00:00Z' },
+            }),
+            agentStackId: 'stack_opencode_main',
+          },
+        },
+      } as never),
+    );
+
+  it('opens and closes a detail too long for two lines, inside a capped box', async () => {
+    const { render, fireEvent, screen, cleanup } = await import('@testing-library/react');
+    const detail =
+      'FALSIFY packages/runtime-core/src/renderer.ts patchKeyedChildren via runtime-test createRenderer';
+    expect(detail.length).toBeGreaterThan(LIVE_DETAIL_CLAMP_CHARS);
+    const { container } = render(node('OpenCode is investigating check 1/6: ' + detail));
+    const more = screen.getByRole('button', { name: 'Show more' });
+    expect(more.getAttribute('aria-expanded')).toBe('false');
+    const text = container.querySelector('.live-line-detail') as HTMLElement;
+    expect(text.className).not.toContain('expanded');
+    fireEvent.click(more);
+    expect(text.className).toContain('expanded');
+    // a long command can scroll inside the node without the canvas zooming
+    expect(text.className).toContain('nowheel');
+    const less = screen.getByRole('button', { name: 'Show less' });
+    expect(less.className).toContain('nodrag');
+    fireEvent.click(less);
+    expect(text.className).not.toContain('expanded');
+    cleanup();
+  });
+
+  it('shows no toggle when the detail fits, and none for a line without a detail', async () => {
+    const { render, screen, cleanup } = await import('@testing-library/react');
+    render(node('Tool started: bash'));
+    expect(screen.queryByRole('button', { name: 'Show more' })).toBeNull();
+    cleanup();
+    render(node('OpenCode is executing the frozen plan.'));
+    expect(screen.queryByRole('button', { name: 'Show more' })).toBeNull();
+    cleanup();
+  });
+
+  it('caps the opened detail', () => {
+    const css = readFileSync(resolve(process.cwd(), 'src/renderer/styles.css'), 'utf8');
+    expect(css).toMatch(/\.live-line-detail\.expanded \{[^}]*max-height: calc\(1\.35em \* 7\)/);
+    expect(css).toMatch(/\.live-line-detail\.expanded \{[^}]*overflow-y: auto/);
+  });
+
+  it('translates the toggle', async () => {
+    const { translateText } = await import('../../src/renderer/lib/i18n.js');
+    expect(translateText('Show more', 'bg')).toBe('Покажи още');
+    expect(translateText('Show less', 'bg')).toBe('Покажи по-малко');
   });
 });

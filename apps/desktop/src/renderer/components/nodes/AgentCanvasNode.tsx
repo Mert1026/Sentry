@@ -57,6 +57,46 @@ export function splitLiveLine(line: string): { full: string; step: string; detai
     : { full, step: full.slice(0, colon), detail };
 }
 
+/** A detail longer than this does not fit the node's two clamped lines, so it gets "Show more". */
+export const LIVE_DETAIL_CLAMP_CHARS = 70;
+
+/**
+ * The live line: the step in full, the detail clamped to two lines. "Show more" opens the whole
+ * detail inside the node; a very long one (a command, a long check) scrolls inside a capped box
+ * instead of stretching the node down the canvas.
+ */
+function LiveLine({ line }: { line: { full: string; step: string; detail?: string } }) {
+  const { t } = useI18n();
+  const [expanded, setExpanded] = React.useState(false);
+  const long = (line.detail?.length ?? 0) > LIVE_DETAIL_CLAMP_CHARS;
+  return (
+    <div className="node-sub live-line" title={line.full}>
+      <span className="live-line-text">
+        <span className="live-line-step">{line.step}</span>
+        {line.detail === undefined ? null : (
+          <span className={'live-line-detail' + (expanded ? ' expanded nowheel' : '')}>
+            {line.detail}
+          </span>
+        )}
+        {long ? (
+          <button
+            type="button"
+            className="live-line-more nodrag nopan"
+            aria-expanded={expanded}
+            onClick={(event) => {
+              // A click on the toggle must not select or drag the node.
+              event.stopPropagation();
+              setExpanded((open) => !open);
+            }}
+          >
+            {t(expanded ? 'Show less' : 'Show more')}
+          </button>
+        ) : null}
+      </span>
+    </div>
+  );
+}
+
 export function AgentCanvasNode({ data }: NodeProps): React.JSX.Element {
   const { t } = useI18n();
   const payload = data['payload'] as { view?: AgentNodeView; agentStackId?: string } | undefined;
@@ -165,16 +205,7 @@ export function AgentCanvasNode({ data }: NodeProps): React.JSX.Element {
           </span>
         )}
       </div>
-      {liveLine !== undefined ? (
-        <div className="node-sub live-line" title={liveLine.full}>
-          <span className="live-line-text">
-            <span className="live-line-step">{liveLine.step}</span>
-            {liveLine.detail === undefined ? null : (
-              <span className="live-line-detail">{liveLine.detail}</span>
-            )}
-          </span>
-        </div>
-      ) : null}
+      {liveLine !== undefined ? <LiveLine line={liveLine} /> : null}
       <div className="node-stats">
         <div className="node-stat" title="Findings reported by this agent">
           <strong>{formatCount(view.findingsCount)}</strong>

@@ -1793,6 +1793,30 @@ textarea:focus {
   overflow-wrap: anywhere;
   color: var(--text-muted);
 }
+/* Opened with "Show more": the whole detail, but a very long one (a command) scrolls inside a
+   box of about seven lines instead of stretching the node down the canvas. */
+.flow-node.agent-node .live-line-detail.expanded {
+  display: block;
+  -webkit-line-clamp: unset;
+  max-height: calc(1.35em * 7);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.flow-node.agent-node .live-line-more {
+  align-self: flex-start;
+  min-height: 0;
+  height: auto;
+  margin-top: 2px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font-size: 11px;
+  cursor: pointer;
+}
+.flow-node.agent-node .live-line-more:hover {
+  text-decoration: underline;
+}
 /* Three equal cells: the number first, the word under it. */
 .flow-node.agent-node .node-stats {
   display: grid;
