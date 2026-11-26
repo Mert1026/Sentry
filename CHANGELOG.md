@@ -2,6 +2,38 @@
 
 ## [Unreleased]
 
+## [2.0.4] - 2026-11-26
+
+Update from 2.0.3. Sharper planning and investigation, a per-agent switch that ends the extra rounds once they stop
+finding anything, installs that work in the Claude Code sandbox, and a reworked dashboard and run screens. No
+database migration, and the runtime protocol stays 1. See the [release notes](docs/releases/v2.0.4.md).
+
+- **Plans read the source and rank by risk.** Checks, critical flows and weak points are ordered from most to least
+  risky and kept narrow (one module, at most three operations); every critical flow gets a check that runs it with
+  boundary inputs, and code comments that say a case is handled are tested, not trusted.
+- **Critical flows are explored end to end** in the extra round (up to five, riskiest first), and every extra turn
+  has its own status line.
+- **Root causes reach the report.** Each reproduced defect gets a `Root cause:` line, kept through deepening, which
+  the report copies into the finding.
+- **Severity rubric** for libraries (a silent wrong result from a documented API is at least medium) and for
+  injection of project-owned values (low).
+- **Fewer wasted turns:** leads are product anomalies only (no "none other", no setup problems); a proven fixture
+  error is fixed and the probe rerun; plans after long notes or with object entries are accepted.
+- **Stop extra rounds when idle** (Settings → Providers, per agent, off by default): two extra turns in a row
+  without a new defect end the extra rounds.
+- **Claude and GLM agents install dependencies into `.qa-tmp/deps`:** Claude Code write-protects the project's
+  `node_modules/.bin`, `package.json` and lockfiles, so `npm ci` there always failed.
+- **Claude agent:** higher per-reply output cap, `.git` placeholder races and slow reports no longer end a run, and
+  a report retry gets the full report contract again.
+- **Dashboard** with workspace statistics, a 14-day run chart, findings by severity and agent, and recent runs.
+- **Run screen:** stages in the real order with warnings tied to the current step, the agent's actual step as
+  the current operation, a wrapping live line with **Show more**, a redesigned and centred Start QA dialog, and
+  **Stopping run…** after a cancel.
+- **Timeline messages** say the time left in minutes or hours, never thousands of minutes.
+- **Bulgarian** for the agents' steps, run and note limits, and labels left in English.
+- **Benchmarks:** the bug-finding benchmark harness is in the repository (`benchmarks/bug-finding`); it is not
+  part of the installed app.
+
 ## [2.0.3] - 2026-11-22
 
 Update from 2.0.2. The CLI has full access to the app (provider settings and write-only keys, account sign-ins,
