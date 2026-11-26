@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { SentryDatabase, SentryRepository, RuntimeInstanceLease } from '@qa/persistence';
 import { ProjectManager } from '@qa/project-manager';
 import { createFakeHarnessRegistry, RunCoordinator } from '../src/index.js';
+import { createRunActivityId, nowIsoTimestamp } from '@qa/shared';
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -62,6 +63,40 @@ describe('export content for Save As', () => {
       const text = Buffer.from(content.contentBase64, 'base64').toString('utf8');
       expect(text).toContain('independent agent results');
       expect(text).toContain('Run status:');
+    } finally {
+      f.database.close();
+    }
+  });
+
+  it('streams large (>100 KiB) JSON exports across write-stream drain without SQLite finalization errors', async () => {
+    const f = await simulatedRun();
+    try {
+      const [agentRun] = [...f.repository.iterateAgentRuns(f.runId)];
+      expect(agentRun).toBeDefined();
+      const ts = nowIsoTimestamp();
+      const padding = 'x'.repeat(240);
+      for (let i = 0; i < 400; i += 1) {
+        f.repository.saveActivity({
+          schemaVersion: 1,
+          id: createRunActivityId(),
+          qaRunId: f.runId,
+          agentRunId: agentRun!.id,
+          source: 'agent',
+          kind: 'tool',
+          status: 'completed',
+          title: `Tool ${i}: ${padding}`,
+          startedAt: ts,
+          completedAt: ts,
+          artifactIds: [],
+        });
+      }
+      // Force fresh export rather than returning the pre-seeded cached export.
+      f.database.connection.prepare('DELETE FROM run_exports WHERE qa_run_id=?').run(f.runId);
+      const content = await f.coordinator.exportContent(f.runId, 'json');
+      const raw = Buffer.from(content.contentBase64, 'base64').toString('utf8');
+      expect(content.sizeBytes).toBeGreaterThan(100_000);
+      const parsed = JSON.parse(raw) as { runActivities: unknown[] };
+      expect(parsed.runActivities.length).toBeGreaterThanOrEqual(400);
     } finally {
       f.database.close();
     }

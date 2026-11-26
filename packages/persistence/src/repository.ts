@@ -69,6 +69,8 @@ function decode<T>(schema: Parser<T>, row: PayloadRow | undefined, label: string
   }
 }
 
+const ITERATE_BATCH_SIZE = 128;
+
 function decodeMany<T>(schema: Parser<T>, rows: readonly PayloadRow[], label: string): T[] {
   return rows.map((row, index) => {
     const value = decode(schema, row, label + '[' + index + ']');
@@ -77,13 +79,29 @@ function decodeMany<T>(schema: Parser<T>, rows: readonly PayloadRow[], label: st
   });
 }
 
-function* decodeRows<T>(schema: Parser<T>, rows: Iterable<PayloadRow>, label: string): Iterable<T> {
+/**
+ * Stream rows in bounded synchronous batches rather than keeping a live `node:sqlite`
+ * `StatementSync.iterate()` cursor open across async `await` yields (e.g. write-stream `drain`),
+ * where Node 22 GC can finalize an unpinned statement mid-export (`ERR_INVALID_STATE`).
+ */
+function* decodeKeysetBatches<T, C>(
+  fetchBatch: (cursor: C | undefined, limit: number) => ReadonlyArray<PayloadRow & { cursor: C }>,
+  schema: Parser<T>,
+  label: string,
+): Iterable<T> {
+  let cursor: C | undefined;
   let index = 0;
-  for (const row of rows) {
-    const value = decode(schema, row, label + '[' + index + ']');
-    if (value === undefined) throw new Error('Unreachable empty persisted row');
-    yield value;
-    index += 1;
+  for (;;) {
+    const batch = fetchBatch(cursor, ITERATE_BATCH_SIZE);
+    if (batch.length === 0) break;
+    for (const row of batch) {
+      const value = decode(schema, row, label + '[' + index + ']');
+      if (value === undefined) throw new Error('Unreachable empty persisted row');
+      yield value;
+      cursor = row.cursor;
+      index += 1;
+    }
+    if (batch.length < ITERATE_BATCH_SIZE) break;
   }
 }
 
@@ -220,11 +238,20 @@ export class SentryRepository {
   }
 
   iterateArtifacts(runId: QARunId): Iterable<Artifact> {
-    return decodeRows(
+    return decodeKeysetBatches(
+      (cursor: string | undefined, limit) =>
+        (cursor === undefined
+          ? this.database.connection
+              .prepare(
+                'SELECT id AS cursor, payload FROM artifacts WHERE qa_run_id=? ORDER BY id LIMIT ?',
+              )
+              .all(runId, limit)
+          : this.database.connection
+              .prepare(
+                'SELECT id AS cursor, payload FROM artifacts WHERE qa_run_id=? AND id>? ORDER BY id LIMIT ?',
+              )
+              .all(runId, cursor, limit)) as unknown as Array<PayloadRow & { cursor: string }>,
       ArtifactSchema,
-      this.database.connection
-        .prepare('SELECT payload FROM artifacts WHERE qa_run_id=? ORDER BY id')
-        .iterate(runId) as Iterable<PayloadRow>,
       'Artifact',
     );
   }
@@ -385,11 +412,20 @@ export class SentryRepository {
   }
 
   iterateAgentRuns(runId: QARunId): Iterable<AgentRun> {
-    return decodeRows(
+    return decodeKeysetBatches(
+      (cursor: string | undefined, limit) =>
+        (cursor === undefined
+          ? this.database.connection
+              .prepare(
+                'SELECT id AS cursor, payload FROM agent_runs WHERE qa_run_id=? ORDER BY id LIMIT ?',
+              )
+              .all(runId, limit)
+          : this.database.connection
+              .prepare(
+                'SELECT id AS cursor, payload FROM agent_runs WHERE qa_run_id=? AND id>? ORDER BY id LIMIT ?',
+              )
+              .all(runId, cursor, limit)) as unknown as Array<PayloadRow & { cursor: string }>,
       AgentRunSchema,
-      this.database.connection
-        .prepare('SELECT payload FROM agent_runs WHERE qa_run_id=? ORDER BY id')
-        .iterate(runId) as Iterable<PayloadRow>,
       'AgentRun',
     );
   }
@@ -583,17 +619,33 @@ export class SentryRepository {
   }
 
   *iterateRunEvents(runId: QARunId): Iterable<StoredHarnessEvent> {
-    const rows = this.database.connection
-      .prepare(
-        'SELECT sequence,payload FROM harness_events WHERE qa_run_id=? ORDER BY agent_run_id,sequence',
-      )
-      .iterate(runId) as Iterable<{ sequence: number; payload: string }>;
+    let lastAgentRunId: string | undefined;
+    let lastSequence = 0;
     let index = 0;
-    for (const row of rows) {
-      const event = decode(HarnessEventSchema, row, 'HarnessEvent ' + runId + '[' + index + ']');
-      if (event === undefined) throw new Error('Unreachable empty event row');
-      yield { sequence: row.sequence, event };
-      index += 1;
+    for (;;) {
+      const batch = (
+        lastAgentRunId === undefined
+          ? this.database.connection
+              .prepare(
+                'SELECT agent_run_id, sequence, payload FROM harness_events WHERE qa_run_id=? ORDER BY agent_run_id, sequence LIMIT ?',
+              )
+              .all(runId, ITERATE_BATCH_SIZE)
+          : this.database.connection
+              .prepare(
+                'SELECT agent_run_id, sequence, payload FROM harness_events WHERE qa_run_id=? AND (agent_run_id > ? OR (agent_run_id = ? AND sequence > ?)) ORDER BY agent_run_id, sequence LIMIT ?',
+              )
+              .all(runId, lastAgentRunId, lastAgentRunId, lastSequence, ITERATE_BATCH_SIZE)
+      ) as Array<{ agent_run_id: string; sequence: number; payload: string }>;
+      if (batch.length === 0) break;
+      for (const row of batch) {
+        const event = decode(HarnessEventSchema, row, 'HarnessEvent ' + runId + '[' + index + ']');
+        if (event === undefined) throw new Error('Unreachable empty event row');
+        yield { sequence: row.sequence, event };
+        lastAgentRunId = row.agent_run_id;
+        lastSequence = row.sequence;
+        index += 1;
+      }
+      if (batch.length < ITERATE_BATCH_SIZE) break;
     }
   }
 
@@ -802,11 +854,16 @@ export class SentryRepository {
       'run_activities',
     ]);
     if (!allowed.has(table)) throw new TypeError('Unsupported repository table');
-    return decodeRows(
+    return decodeKeysetBatches(
+      (cursor: number | undefined, limit) =>
+        this.database.connection
+          .prepare(
+            'SELECT rowid AS cursor, payload FROM ' +
+              table +
+              ' WHERE qa_run_id=? AND rowid > ? ORDER BY rowid LIMIT ?',
+          )
+          .all(runId, cursor ?? 0, limit) as unknown as Array<PayloadRow & { cursor: number }>,
       schema,
-      this.database.connection
-        .prepare('SELECT payload FROM ' + table + ' WHERE qa_run_id=? ORDER BY rowid')
-        .iterate(runId) as Iterable<PayloadRow>,
       label,
     );
   }
