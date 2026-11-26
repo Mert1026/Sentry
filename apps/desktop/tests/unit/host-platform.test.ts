@@ -21,6 +21,32 @@ describe('host platform routing', () => {
     });
   });
 
+  it('routes darwin to managed Lima defaults even without SENTRY_LIMA_INSTANCE', async () => {
+    const host = await createHostPlatform({
+      platform: 'darwin',
+      env: {},
+      inspectLimaInstance: async (name) => ({
+        name,
+        vmType: 'vz',
+        config: {
+          vmType: 'vz',
+          mounts: [],
+          portForwards: [
+            { guestIP: '0.0.0.0', guestIPMustBeZero: false, proto: 'any', ignore: true },
+          ],
+          networkOpts: { hostLoopback: false },
+        },
+      }),
+    });
+    expect(host.hostKind).toBe('macos');
+    expect(host.executionMode).toBe('lima');
+    expect((await host.createRuntimeClient()).status).toMatchObject({
+      hostPlatform: 'macos',
+      executionMode: 'lima',
+      connected: false,
+    });
+  });
+
   it('uses Lima on macOS when explicitly configured', async () => {
     const host = await createHostPlatform({
       platform: 'darwin',

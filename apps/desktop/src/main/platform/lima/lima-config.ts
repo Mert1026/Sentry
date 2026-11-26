@@ -30,6 +30,55 @@ export interface SentryLimaConfigOptions {
   /** Optional cloud-image override (or custom local cached image). */
   readonly imageLocation?: string;
   readonly imageDigest?: string;
+  /** Include system provisioning script for first-boot Linux runtime prerequisites (default false). */
+  readonly includeProvision?: boolean;
+}
+
+export const SENTRY_LIMA_GUEST_NODE_VERSION = '22.14.0';
+export const SENTRY_LIMA_GUEST_PNPM_VERSION = '9.12.3';
+
+function guestProvisionYaml(): string {
+  // Runs once as root during VM creation/first boot; runtime user keeps passwordlessSudo: false.
+  const script = [
+    '#!/bin/bash',
+    'set -euxo pipefail',
+    'export DEBIAN_FRONTEND=noninteractive',
+    'apt-get update -qq',
+    'apt-get install -y -qq curl ca-certificates xz-utils git bubblewrap socat util-linux dbus-user-session systemd-container uidmap',
+    'if command -v apparmor_parser >/dev/null 2>&1 && [ -d /etc/apparmor.d ]; then',
+    "  cat >/etc/apparmor.d/bwrap <<'EOF'",
+    'abi <abi/4.0>,',
+    'include <tunables/global>',
+    'profile bwrap /usr/bin/bwrap flags=(unconfined) {',
+    '  userns,',
+    '  include if exists <local/bwrap>',
+    '}',
+    'EOF',
+    '  apparmor_parser -r /etc/apparmor.d/bwrap || true',
+    'fi',
+    'ARCH=$(uname -m)',
+    'case "$ARCH" in aarch64|arm64) NARCH=arm64 ;; x86_64|amd64) NARCH=x64 ;; *) echo "Unsupported arch $ARCH" >&2; exit 1 ;; esac',
+    `NODE_VER="${SENTRY_LIMA_GUEST_NODE_VERSION}"`,
+    'if [ ! -x /usr/local/bin/node ] || ! /usr/local/bin/node -v | grep -q "^v22\\."; then',
+    '  curl -fsSL --retry 3 "https://nodejs.org/dist/v${NODE_VER}/node-v${NODE_VER}-linux-${NARCH}.tar.xz" -o /tmp/node.tar.xz',
+    '  tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1',
+    '  rm -f /tmp/node.tar.xz',
+    'fi',
+    `if ! command -v pnpm >/dev/null 2>&1 || [ "$(pnpm --version)" != "${SENTRY_LIMA_GUEST_PNPM_VERSION}" ]; then`,
+    `  /usr/local/bin/npm install -g "pnpm@${SENTRY_LIMA_GUEST_PNPM_VERSION}"`,
+    'fi',
+    'GUEST_USER="${LIMA_CIDATA_USER:-}"',
+    'if [ -n "$GUEST_USER" ] && id "$GUEST_USER" >/dev/null 2>&1; then',
+    '  loginctl enable-linger "$GUEST_USER" || true',
+    '  mkdir -p /opt/sentry /opt/sentry/staged-projects',
+    '  chown -R "$GUEST_USER":"$GUEST_USER" /opt/sentry',
+    'fi',
+  ].join('\n');
+  const indented = script
+    .split('\n')
+    .map((line) => '      ' + line)
+    .join('\n');
+  return `\n# First-boot system provisioning (root only at boot; runtime stays unprivileged)\nprovision:\n  - mode: system\n    script: |\n${indented}\n`;
 }
 
 export const DEFAULT_UBUNTU_2404_ARM64_URL =
@@ -136,5 +185,5 @@ hostResolver:
 # User privileges: restricted sudo by default for least privilege
 user:
   passwordlessSudo: ${passwordlessSudo ? 'true' : 'false'}
-`;
+${options.includeProvision === true ? guestProvisionYaml() : ''}`;
 }

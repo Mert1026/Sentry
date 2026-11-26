@@ -13,6 +13,11 @@ import {
   unsupportedDistroError,
 } from './linux/linux-host-info.js';
 import { NativeLinuxPlatform } from './linux/native-linux-platform.js';
+import {
+  DEFAULT_GUEST_RUNTIME_ENTRY,
+  DEFAULT_LIMA_INSTANCE,
+  defaultSentryLimaHome,
+} from './lima/lima-manager.js';
 import type { LimaInstanceInfo } from './lima/lima-types.js';
 import { createMacosLimaPlatform } from './macos-lima-platform.js';
 import { WindowsWslPlatform } from './windows/windows-wsl-platform.js';
@@ -83,7 +88,7 @@ export async function createHostPlatform(
 ): Promise<HostPlatform> {
   const platform = options.platform ?? process.platform;
   const env = options.env ?? process.env;
-  if (platform === 'darwin' && env['SENTRY_LIMA_INSTANCE']) {
+  if (platform === 'darwin') {
     const isProduction = options.isProduction ?? isProductionEnvironment(env);
     // In production builds, strict network and host loopback isolation are MANDATORY.
     // User environment flags cannot downgrade security in production builds.
@@ -95,10 +100,12 @@ export async function createHostPlatform(
       : (options.requireHostLoopbackIsolation ?? env['SENTRY_LIMA_STRICT_LOOPBACK'] === '1');
 
     return createMacosLimaPlatform({
-      instance: env['SENTRY_LIMA_INSTANCE'],
-      runtimeEntry: options.runtimeEntry ?? env['SENTRY_RUNTIME_ENTRY'],
+      instance: env['SENTRY_LIMA_INSTANCE'] || DEFAULT_LIMA_INSTANCE,
+      runtimeEntry:
+        options.runtimeEntry ?? env['SENTRY_RUNTIME_ENTRY'] ?? DEFAULT_GUEST_RUNTIME_ENTRY,
       dataRoot: options.dataRoot,
-      ...(env['SENTRY_LIMA_HOME'] === undefined ? {} : { limaHome: env['SENTRY_LIMA_HOME'] }),
+      limaHome: env['SENTRY_LIMA_HOME'] || defaultSentryLimaHome(),
+      ...(options.userDataDir === undefined ? {} : { userDataDir: options.userDataDir }),
       ...(env['SENTRY_LIMACTL_PATH'] === undefined
         ? {}
         : { limactlExecutable: env['SENTRY_LIMACTL_PATH'] }),
