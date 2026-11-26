@@ -27,6 +27,7 @@ import {
   investigateChecks,
   listHazardCandidates,
   scanHazardFiles,
+  stopExtraRoundsWhenIdle,
   reportAttemptDeadline,
   PhaseDeadlineReached,
   ObservedToolNotes,
@@ -1779,6 +1780,10 @@ export class ClaudeCodeHarnessAdapter implements HarnessAdapter {
         startReportContext,
         cancelled: () => this.cancelled,
         hazardFiles: () => scanHazardFiles(request.workspace.runtimePath, 40, originalSource),
+        // Per-agent setting (Settings → Providers): end the extra rounds once they stop finding defects.
+        stopExtraRoundsWhenIdle: stopExtraRoundsWhenIdle(
+          this.hostEnvironment['SENTRY_GLM_STOP_IDLE'],
+        ),
         isTurnTimeout: (cause) => cause instanceof ClaudeTurnTimeoutError,
         // A spawn failure (E2BIG, EAGAIN, ...) after banked operations, or a
         // sandbox that died mid-run after commands already executed (a

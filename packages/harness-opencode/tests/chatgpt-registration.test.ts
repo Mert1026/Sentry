@@ -52,6 +52,15 @@ describe('ChatGPT agent (OpenCode harness against OpenAI)', () => {
     expect(env['SENTRY_OPENAI_AUTH']).toBe('account');
   });
 
+  it('uses the ChatGPT agent own stop-when-idle choice, never the OpenCode one', () => {
+    const source: NodeJS.ProcessEnv = { SENTRY_OPENCODE_STOP_IDLE: '1' };
+    const env = chatGptEnvironment(source);
+    expect(env['SENTRY_OPENCODE_STOP_IDLE']).toBeUndefined();
+    expect('SENTRY_OPENCODE_STOP_IDLE' in env).toBe(false);
+    source['SENTRY_CHATGPT_STOP_IDLE'] = '1';
+    expect(env['SENTRY_OPENCODE_STOP_IDLE']).toBe('1');
+  });
+
   it('assumes a larger context window than the 200k OpenCode default, with a safe override', () => {
     expect(CHATGPT_CONTEXT_WINDOW_TOKENS).toBeGreaterThan(200_000);
     expect(chatGptContextWindow({})).toBe(CHATGPT_CONTEXT_WINDOW_TOKENS);

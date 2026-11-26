@@ -548,6 +548,42 @@ describe('runtime reasoning effort', () => {
   });
 });
 
+describe('runtime stop extra rounds when idle', () => {
+  it('sets each agent its own variable when on and removes it when off', async () => {
+    const names = [
+      'SENTRY_OPENCODE_STOP_IDLE',
+      'SENTRY_CHATGPT_STOP_IDLE',
+      'SENTRY_GLM_STOP_IDLE',
+      'SENTRY_ANTHROPIC_STOP_IDLE',
+      'SENTRY_DEEPSEEK_STOP_IDLE',
+    ];
+    const saved = names.map((name) => process.env[name]);
+    const host = new SentryRuntimeHost(await tempDataRoot(), () => undefined);
+    try {
+      await host.recover();
+      await host.configure({
+        models: {},
+        providers: {},
+        stopIdle: { claude: true, opencode: true, glm: false, chatgpt: false, deepseek: false },
+      });
+      expect(process.env['SENTRY_ANTHROPIC_STOP_IDLE']).toBe('1');
+      expect(process.env['SENTRY_OPENCODE_STOP_IDLE']).toBe('1');
+      expect(process.env['SENTRY_GLM_STOP_IDLE']).toBeUndefined();
+      await host.configure({ models: {}, providers: {}, stopIdle: { claude: false } });
+      expect(process.env['SENTRY_ANTHROPIC_STOP_IDLE']).toBeUndefined();
+      // an agent not mentioned keeps what it had
+      expect(process.env['SENTRY_OPENCODE_STOP_IDLE']).toBe('1');
+    } finally {
+      host.close();
+      names.forEach((name, index) => {
+        const value = saved[index];
+        if (value === undefined) delete process.env[name];
+        else process.env[name] = value;
+      });
+    }
+  });
+});
+
 describe('runtime Claude agent settings', () => {
   it('keeps the Claude agent credentials, model and effort apart from the GLM agent', async () => {
     const names = [

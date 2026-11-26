@@ -749,6 +749,8 @@
   "smaller, faster Codex model": "по-малък и по-бърз Codex модел",
   "coding-tuned Codex model": "Codex модел, настроен за код",
   "Reasoning effort": "Усилие при разсъждение",
+  "Stop extra rounds when idle": "Спиране на допълнителните кръгове без нови находки",
+  "After the planned checks, a Full run spends extra turns following leads, exploring critical flows, deepening checks and sweeping risky files. When this is on, those extra rounds end as soon as two turns in a row reproduce no new defect, and the report starts. It saves time and usage. The planned checks and the second pass on undecided checks always run. It applies to runs started after you change it.": "След планираните проверки пълното изпълнение прави допълнителни ходове: проследява следи, изследва критичните потоци, задълбочава проверките и преглежда рисковите места. Когато опцията е включена, тези допълнителни кръгове спират, щом два поредни хода не възпроизведат нов дефект, и започва докладът. Това пести време и използване. Планираните проверки и второто преминаване върху нерешените проверки се изпълняват винаги. Важи за изпълненията, стартирани след промяната.",
   "Default (provider setting)": "По подразбиране (на доставчика)",
   "Web access": "Достъп до интернет",
   "Tool and SDK downloads": "Изтегляне на инструменти и SDK",

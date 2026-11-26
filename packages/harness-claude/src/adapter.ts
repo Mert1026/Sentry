@@ -27,6 +27,7 @@ import {
   investigateChecks,
   listHazardCandidates,
   scanHazardFiles,
+  stopExtraRoundsWhenIdle,
   reportAttemptDeadline,
   PhaseDeadlineReached,
   ObservedToolNotes,
@@ -392,7 +393,6 @@ const TRANSIENT_SANDBOX_RACE_LIMIT = 3;
 
 /** How often a status event goes out while the one long report reply is still being written. */
 const REPORT_HEARTBEAT_MS = 60_000;
-
 
 /**
  * A plain-language next step for a sandbox bootstrap failure, or nothing when the first diagnostic line
@@ -1818,6 +1818,10 @@ export class ClaudeAgentHarnessAdapter implements HarnessAdapter {
         startReportContext,
         cancelled: () => this.cancelled,
         hazardFiles: () => scanHazardFiles(request.workspace.runtimePath, 40, originalSource),
+        // Per-agent setting (Settings → Providers): end the extra rounds once they stop finding defects.
+        stopExtraRoundsWhenIdle: stopExtraRoundsWhenIdle(
+          this.hostEnvironment['SENTRY_ANTHROPIC_STOP_IDLE'],
+        ),
         isTurnTimeout: (cause) => cause instanceof ClaudeTurnTimeoutError,
         // A spawn failure (E2BIG, EAGAIN, ...) after banked operations, or a
         // sandbox that died mid-run after commands already executed (a

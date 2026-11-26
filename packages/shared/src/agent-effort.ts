@@ -30,3 +30,22 @@ export function parseAgentEffort(agent: EffortAgent, value: unknown): string | u
   const level = value.trim().toLowerCase();
   return (AGENT_EFFORT_LEVELS[agent] as readonly string[]).includes(level) ? level : undefined;
 }
+
+/**
+ * The setting that turns on "stop extra rounds when idle" for each agent (Settings → Providers). The
+ * same name is the variable the runtime hands the agent's harness ('1' when on, absent when off).
+ */
+export const AGENT_STOP_IDLE_SETTING: Readonly<Record<EffortAgent, string>> = {
+  opencode: 'SENTRY_OPENCODE_STOP_IDLE',
+  chatgpt: 'SENTRY_CHATGPT_STOP_IDLE',
+  glm: 'SENTRY_GLM_STOP_IDLE',
+  claude: 'SENTRY_ANTHROPIC_STOP_IDLE',
+  deepseek: 'SENTRY_DEEPSEEK_STOP_IDLE',
+};
+
+/** Whether a stored "stop extra rounds when idle" value means on. */
+export function isStopIdleOn(value: unknown): boolean {
+  return (
+    typeof value === 'string' && ['1', 'on', 'true', 'yes'].includes(value.trim().toLowerCase())
+  );
+}
