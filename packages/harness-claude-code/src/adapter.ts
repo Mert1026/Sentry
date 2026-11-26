@@ -20,6 +20,7 @@ import {
   describeSchemaIssues,
   parseAgentEffort,
   CLAUDE_SANDBOX_PLACEHOLDER_NOTE,
+  CLAUDE_SANDBOX_INSTALL_NOTE,
 } from '@qa/shared';
 import {
   limitPhase,
@@ -1759,7 +1760,7 @@ export class ClaudeCodeHarnessAdapter implements HarnessAdapter {
           webAccess: webAccessEnabled(request.executionSafeguards),
           toolDownloads: toolDownloadsEnabled(request.executionSafeguards),
           ...browserNetworkOption(),
-          sandboxNotes: [CLAUDE_SANDBOX_PLACEHOLDER_NOTE],
+          sandboxNotes: [CLAUDE_SANDBOX_PLACEHOLDER_NOTE, CLAUDE_SANDBOX_INSTALL_NOTE],
         },
         event: (body) => event(request.agentRunId, body),
         streamTurn: (turnText) =>

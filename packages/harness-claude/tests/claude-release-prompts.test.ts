@@ -340,6 +340,9 @@ describe('Claude ordered stage prompt behavior', () => {
       expect(investigation).toContain('STAGE 2');
       expect(investigation).toContain('INVESTIGATE CHECK check_1');
       expect(investigation).toContain('Work ONLY on this check');
+      // Claude Code write-protects node_modules/.bin and lockfiles: installs go to .qa-tmp/deps
+      expect(investigation).toContain('Installs in this sandbox');
+      expect(investigation).toContain('.qa-tmp/deps');
       expect(investigation).toContain('counterexample');
       expect(investigation).toContain('Small fixture');
       // The sandbox's placeholder entries are explained, so they are not reported as findings or gaps.

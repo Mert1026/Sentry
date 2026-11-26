@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CLAUDE_SANDBOX_INSTALL_NOTE,
   CLAUDE_SANDBOX_PLACEHOLDER_NOTE,
   DEPENDENCY_CACHE_DIRNAME,
   NON_INTERACTIVE_ENVIRONMENT,
@@ -141,5 +142,14 @@ describe('sandbox notes in the investigation prompt', () => {
     expect(CLAUDE_SANDBOX_PLACEHOLDER_NOTE).toContain('pnpm-lock.yaml');
     // A real file with the same name is still read normally.
     expect(CLAUDE_SANDBOX_PLACEHOLDER_NOTE).toContain('read it normally');
+  });
+
+  it('tells Claude Code agents to install outside the write-protected project folder', () => {
+    // run_01M89SBG1PS0: three npm ci attempts failed with EBUSY on the protected node_modules/.bin
+    expect(CLAUDE_SANDBOX_INSTALL_NOTE).toContain('node_modules/.bin');
+    expect(CLAUDE_SANDBOX_INSTALL_NOTE).toContain('Never run one there, not even once');
+    expect(CLAUDE_SANDBOX_INSTALL_NOTE).toContain('.qa-tmp/deps');
+    expect(CLAUDE_SANDBOX_INSTALL_NOTE).toContain('--ignore-scripts');
+    expect(CLAUDE_SANDBOX_INSTALL_NOTE).toContain('Reuse that folder for every later check');
   });
 });
