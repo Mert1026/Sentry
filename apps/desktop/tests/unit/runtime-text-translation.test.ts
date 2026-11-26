@@ -36,6 +36,22 @@ describe('text built at run time is translated as a whole sentence', () => {
     expect(bg('JSON exported')).toBe('JSON е експортиран');
   });
 
+  it('settings sentences and labels shown in the demo screens', () => {
+    expect(bg('A note may be 5,000 characters (the default).')).toBe(
+      'Бележката може да е до 5,000 знака (по подразбиране).',
+    );
+    expect(bg('A note may be 12,000 characters.')).toBe('Бележката може да е до 12,000 знака.');
+    expect(bg('Enter between 500 and 200,000 characters.')).toBe(
+      'Въведете между 500 и 200,000 знака.',
+    );
+    expect(bg('Notes have no length limit.')).toBe('Бележките нямат ограничение за дължина.');
+    expect(bg('Runs have no time limit (at most 7 days).')).toBe(
+      'Изпълненията нямат ограничение във времето (най-много 7 дни).',
+    );
+    for (const word of ['selected', 'Type', 'Timestamp', 'Native Linux'])
+      expect(bg(word), word).not.toBe(word);
+  });
+
   it('every step an agent reports as its current operation', () => {
     expect(bg('OpenCode is creating a frozen investigation plan.')).toBe(
       'OpenCode създава замразен план за проучване.',

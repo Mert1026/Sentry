@@ -337,6 +337,11 @@ function translateCore(trimmed: string): string {
   const runWindow = /^Every run gets a window of (.+?)( \(the default\))?\.$/.exec(trimmed);
   if (runWindow !== null)
     return `Всяко изпълнение получава прозорец от ${translateCore(runWindow[1] ?? '')}${runWindow[2] === undefined ? '' : ' (по подразбиране)'}.`;
+  const noteSize = /^A note may be ([\d,]+) characters( \(the default\))?\.$/.exec(trimmed);
+  if (noteSize !== null)
+    return `Бележката може да е до ${noteSize[1]} знака${noteSize[2] === undefined ? '' : ' (по подразбиране)'}.`;
+  const noteRange = /^Enter between ([\d,]+) and ([\d,]+) characters\.$/.exec(trimmed);
+  if (noteRange !== null) return `Въведете между ${noteRange[1]} и ${noteRange[2]} знака.`;
   const hoursOnly = /^(\d+) hours?$/.exec(trimmed);
   if (hoursOnly !== null) return hoursOnly[1] === '1' ? '1 час' : `${hoursOnly[1]} часа`;
   const minutesOnly = /^(\d+) minutes?$/.exec(trimmed);
