@@ -10,6 +10,9 @@ import {
   EXECUTION_PROOF_RULE,
   QA_SESSION_CONTRACT,
   REPRODUCED_VIOLATION_RULE,
+  ROOT_CAUSE_LINE,
+  buildFlowExplorationPrompt,
+  buildSecondPassPrompt,
 } from '../src/stage-prompts.js';
 import { composeProfileText, profileContextEntry } from '../src/profile.js';
 const request = {
@@ -40,7 +43,28 @@ describe('ordered compact QA stages', () => {
     expect(text).toContain('at most 8 checks');
     expect(text).toContain('one decidable question');
     expect(text).not.toContain('optional review');
-    expect(text.length).toBeLessThan(2800);
+    // The planning prompt asks the planner to read the source of the scope first, to cover every critical
+    // flow with an executing check and to test what code comments claim, so it is longer than it was.
+    expect(text.length).toBeLessThan(4700);
+  });
+  it('makes every critical flow a check and treats code comments as claims', () => {
+    const text = buildQaPlanningPrompt(request);
+    // two fewer flows than checks, so the riskiest weak points keep checks of their own
+    expect(text).toContain('at most 6 criticalFlows');
+    expect(text).toContain('cover EVERY criticalFlows entry with at least one check that EXECUTES');
+    expect(text).toContain('not only the suspects you noticed while reading');
+    expect(text).toContain('code comment that says a case is handled');
+    expect(text).toContain('trace that case through each helper it calls');
+  });
+  it('asks for narrow checks and flows, each list ordered from most to least risky', () => {
+    const text = buildQaPlanningPrompt(request);
+    expect(text).toContain('Keep every check and every criticalFlows entry NARROW');
+    expect(text).toContain('never fold several components or classes into one check or flow');
+    expect(text).toContain('its check uses exactly that input');
+    expect(text).toContain(
+      'Order plannedChecks, criticalFlows and weakPoints each from MOST to LEAST risky',
+    );
+    expect(text).toContain('extra time goes to the first flows');
   });
   it('does not repeat mission or safety, includes prior outcomes and prevents duplicate work', () => {
     const ops = new Map([
@@ -90,6 +114,8 @@ describe('ordered compact QA stages', () => {
     expect(text).toContain('cannot certify it');
     // Failing runs are triaged, never edited green.
     expect(text).toContain('A failing run is signal');
+    // a fixture bug of the agent's own is fixed and the whole probe rerun, so the check has a clean run
+    expect(text).toContain('rerun the WHOLE probe once');
     // Probes live inside the workspace: the write tool and the shell see different /tmp.
     expect(text).toContain('.qa-tmp/probe.mjs');
     expect(text).toContain('never `/tmp`');
@@ -104,6 +130,16 @@ describe('ordered compact QA stages', () => {
     const text = buildQaReportPrompt(plan, new Map());
     expect(text).toContain('Severity rubric');
     expect(text).toContain('never critical');
+  });
+
+  it('rates silent wrong results in a library at least medium and self-sourced injection low', () => {
+    // run_01M88QKYARH572JJ5H8N8Y3X0P rated a wrong slice() result low and a version-string XSS high
+    const text = buildQaReportPrompt(plan, new Map());
+    expect(text).toContain('the users are the developers calling its public API');
+    expect(text).toContain('is at least medium, and high when that input is ordinary');
+    expect(text).toContain('A silently wrong result is never low');
+    expect(text).toContain('only when outside parties can supply the injected value');
+    expect(text).toContain('(a version string, a constant) is low');
   });
 
   it('rates attacker-controlled code execution critical however it was proven, and counts one defect once', () => {
@@ -153,7 +189,7 @@ describe('ordered compact QA stages', () => {
     expect(text).toContain('check_1');
     expect(text).toContain('breaks attempted');
     expect(text).toContain('reproductionSteps');
-    expect(text.length).toBeLessThan(6750);
+    expect(text.length).toBeLessThan(7600);
     // A retry carries the full contract again (a retry that saw only the error list came back in the wrong
     // shape), plus the correction note.
     const retry = buildQaReportPrompt(plan, new Map(), ['Invalid strength']);
@@ -200,13 +236,18 @@ describe('falsification planning and leads', () => {
     const text = planning({ task: { prompt: 'QA', context: {} } });
     expect(text).toContain('FALSIFY');
     expect(text).toContain('transforms or persists data');
-    expect(text.length).toBeLessThan(3400);
+    expect(text.length).toBeLessThan(4600);
   });
 
   it('asks every check turn for a Leads line and follows a lead in its own turn', async () => {
     const { buildLeadPrompt } = await import('../src/index.js');
     const multi = { ...plan, plannedChecks: ['Boundary', 'Isolation'] };
-    expect(buildQaCheckInvestigationPrompt(multi, 0, new Map())).toContain('"Leads:"');
+    const check = buildQaCheckInvestigationPrompt(multi, 0, new Map());
+    expect(check).toContain('"Leads:"');
+    // run_01M89MHNE8: Claude spent four lead turns on its own npm ci and module-loading errors
+    expect(check).toContain('anything suspicious about the PRODUCT');
+    expect(check).toContain('are limitations to state in your conclusion, never leads');
+    expect(check).not.toContain('(an odd error,');
     const lead = buildLeadPrompt(multi, 1, 'import fails on symlinks');
     expect(lead).toContain('LEAD FOLLOW-UP');
     expect(lead).toContain('check_2');
@@ -290,5 +331,30 @@ describe('authorized defensive QA framing', () => {
     const text = buildQaCheckInvestigationPrompt({ plannedChecks: ['Check A'] }, 0, new Map());
     expect(text).toContain('synthetic fixtures inside the workspace');
     expect(text).toContain('defensive tests of the owner');
+  });
+});
+
+describe('root causes reach the report', () => {
+  it('asks every investigation turn for a Root cause: line after Breaks attempted', () => {
+    expect(ROOT_CAUSE_LINE).toContain('"Root cause:" right after your "Breaks attempted:" line');
+    expect(ROOT_CAUSE_LINE).toContain('Root cause: not traced');
+    for (const prompt of [
+      buildQaCheckInvestigationPrompt(plan, 0, new Map()),
+      buildSecondPassPrompt(plan, 0, 'earlier', []),
+      buildDeepeningPrompt(plan, 0, 'earlier', []),
+      buildFlowExplorationPrompt('Map set/get', []),
+      buildLeadPrompt(plan, 0, 'odd result'),
+      buildHazardPrompt('src/a.ts', ['rm']),
+    ])
+      expect(prompt).toContain(ROOT_CAUSE_LINE);
+  });
+
+  it('tells the report to carry each traced cause into rootCause, and never invent one', () => {
+    const text = buildQaReportPrompt(plan, new Map());
+    expect(text).toContain(
+      'give rootCause for every finding whose investigation notes carry a "Root cause:" line',
+    );
+    expect(text).toContain('leave it out only when the notes say "not traced"');
+    expect(text).toContain('Never write a cause the notes do not support');
   });
 });

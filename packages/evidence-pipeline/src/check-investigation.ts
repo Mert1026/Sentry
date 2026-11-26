@@ -7,6 +7,9 @@ import {
   DEEPEN_MIN_REMAINING_FRACTION,
   MAX_APPROACH_ATTEMPTS,
   MAX_DEEPEN_CHECKS,
+  MAX_FLOW_TURNS,
+  EXTRA_ROUND_IDLE_LIMIT,
+  reportsDefect,
   MAX_LEAD_TURNS,
   MAX_SECOND_PASS_CHECKS,
   MAX_SWEEP_TURNS,
@@ -41,7 +44,9 @@ import {
   buildBudgetWrapUpPrompt,
   buildDeepeningPrompt,
   buildExecutionNudgePrompt,
+  buildFlowExplorationPrompt,
   buildHazardPrompt,
+  FLOW_EXPLORATION_PREFIX,
   buildLeadPrompt,
   buildQaCheckInvestigationPrompt,
   buildSecondPassPrompt,
@@ -52,6 +57,16 @@ import {
 const CONCLUSION_CHARS = 1500;
 /** Closing characters kept of each hazard-sweep turn (its conclusion is at the end). */
 const SWEEP_STATEMENT_CHARS = 600;
+
+/** The traced "Root cause:" lines of a note (not "not traced"), bounded, one per line. */
+function earlierRootCauses(note: string): string {
+  return note
+    .split('\n')
+    .filter((line) => /^\s*root cause:/i.test(line) && !/not traced/i.test(line))
+    .map((line) => line.trim().slice(0, 300))
+    .slice(0, 3)
+    .join('\n');
+}
 
 /** What the shared loop needs from an adapter's collected turn. */
 export interface InvestigationTurn {
@@ -71,7 +86,11 @@ export interface CheckInvestigationHooks<T extends InvestigationTurn> {
   /** Display name used in status messages, e.g. "OpenCode". */
   readonly agentLabel: string;
   readonly agentRunId: AgentRunId;
-  readonly plan: { readonly plannedChecks: readonly string[] };
+  readonly plan: {
+    readonly plannedChecks: readonly string[];
+    /** The planner's critical flows; the extension round exercises them end to end. */
+    readonly criticalFlows?: readonly string[] | undefined;
+  };
   /** Undefined outside depth-policy (legacy) runs: no deadline, no salvage. */
   readonly depth: { readonly deadlineAt: number; readonly profile?: 'fast' | 'full' } | undefined;
   /** The adapter's live frozen-ledger map; read after every event. */
@@ -111,6 +130,12 @@ export interface CheckInvestigationHooks<T extends InvestigationTurn> {
    * has no readable project copy; the hazard sweep is then skipped.
    */
   readonly hazardFiles?: () => Promise<readonly HazardFile[]>;
+  /**
+   * End the extra rounds (leads, flows, deepening, hazard sweep) once EXTRA_ROUND_IDLE_LIMIT turns
+   * in a row reproduced no new defect, and go to the report. Off unless the person turned it on for
+   * this agent. The second pass on undecided checks always runs.
+   */
+  readonly stopExtraRoundsWhenIdle?: boolean;
   /** Clock; tests inject one. */
   readonly now?: () => number;
 }
@@ -152,11 +177,15 @@ export async function* investigateChecks<T extends InvestigationTurn>(
   hooks: CheckInvestigationHooks<T>,
 ): AsyncGenerator<HarnessEvent, CheckInvestigationResult> {
   const { plan, depth, operations, contextBudget } = hooks;
-  /** Follow-up passes start fresh sessions, so they need the browser instructions again. */
+  /**
+   * Follow-up passes start fresh sessions, so they need the browser instructions and the agent's own
+   * sandbox notes again (a deepening turn that is not told retries an install its sandbox forbids).
+   */
   const browserHint =
-    hooks.network.browserLauncher === undefined
+    (hooks.network.browserLauncher === undefined
       ? ''
-      : '\n' + browserPromptLine(hooks.network.browserLauncher);
+      : '\n' + browserPromptLine(hooks.network.browserLauncher)) +
+    (hooks.network.sandboxNotes ?? []).map((note) => '\n' + note).join('');
   const blockedChecks: string[] = [];
   const unprovenChecks: string[] = [];
   const redRetryChecks: string[] = [];
@@ -169,6 +198,32 @@ export async function* investigateChecks<T extends InvestigationTurn>(
         leads.push({ index, text });
     }
   };
+  /** Next conclusion slot after the planned checks (flow exploration and hazard sweep notes). */
+  let extensionSlot = plan.plannedChecks.length;
+  // Extra-round turns in a row that reproduced no new defect, across the deepen round and the sweep.
+  let idleExtraTurns = 0;
+  let extraRoundsStopped = false;
+  const countExtraTurn = (statement: string | undefined): void => {
+    idleExtraTurns = statement !== undefined && reportsDefect(statement) ? 0 : idleExtraTurns + 1;
+  };
+  /** True (and says so once) when the idle stop is on and the last turns found nothing new. */
+  async function* extraRoundsIdle(remainingTurns: number): AsyncGenerator<HarnessEvent, boolean> {
+    if (extraRoundsStopped) return true;
+    if (hooks.stopExtraRoundsWhenIdle !== true || idleExtraTurns < EXTRA_ROUND_IDLE_LIMIT)
+      return false;
+    extraRoundsStopped = true;
+    yield hooks.event({
+      type: 'warning',
+      code: 'QA_EXTRA_ROUNDS_STOPPED',
+      message:
+        'The last ' +
+        idleExtraTurns +
+        ' extra turns reproduced no new defect; skipping the rest of the extra rounds (' +
+        remainingTurns +
+        ' turn(s) left in this round, and any later round) and writing the report. Stop extra rounds when idle is on for this agent.',
+    });
+    return true;
+  }
   let usage: AgentUsage | undefined;
   let steps = 0;
   let seed = '';
@@ -251,6 +306,14 @@ export async function* investigateChecks<T extends InvestigationTurn>(
    * several checks undecided. Spend part of what is left on the weakest ones
    * rather than reporting them inconclusive.
    */
+  /** The status line names the turn that is running, so a long extra round never looks stuck on the last check. */
+  const statusEvent = (text: string): HarnessEvent =>
+    hooks.event({
+      type: 'agent.status',
+      status: 'investigating',
+      message: hooks.agentLabel + ' is ' + text.replace(/\s+/g, ' ').slice(0, 200),
+    });
+
   async function* secondPass(): AsyncGenerator<HarnessEvent, void> {
     if (depth === undefined || interrupted()) return;
     const remaining = (): number => investigationDeadline(depth.deadlineAt, now()) - now();
@@ -282,6 +345,16 @@ export async function* investigateChecks<T extends InvestigationTurn>(
         if (left < MIN_SOFT_BUDGET_MS || interrupted()) break;
         checkStartedAt = now();
         softAt = checkStartedAt + checkSoftBudgetMs(left, weak.length - n);
+        yield statusEvent(
+          'giving check ' +
+            (index + 1) +
+            ' a second pass (' +
+            (n + 1) +
+            '/' +
+            weak.length +
+            '): ' +
+            description(index).slice(0, 120),
+        );
         await rotate(plan.plannedChecks.length);
         const own = new Map(
           [...operations].filter(
@@ -360,20 +433,53 @@ export async function* investigateChecks<T extends InvestigationTurn>(
     // Off-check leads come first: something the agent already saw is a better
     // lead than a fresh angle on a check that passed.
     const leadTasks = leads.slice(0, MAX_LEAD_TURNS);
-    if (candidates.length === 0 && leadTasks.length === 0) return;
+    const flows = (plan.criticalFlows ?? [])
+      .map((flow) => flow.trim())
+      .filter((flow) => flow.length > 0)
+      .slice(0, MAX_FLOW_TURNS);
+    if (candidates.length === 0 && leadTasks.length === 0 && flows.length === 0) return;
+    const executedCommands = (): string[] =>
+      [...operations.values()]
+        .filter(isExecutableProofOperation)
+        .flatMap((op) =>
+          typeof op.commandText === 'string' && op.commandText.length > 0 ? [op.commandText] : [],
+        );
     interface ExtensionTask {
-      readonly index: number;
+      /** The planned check the note belongs to; undefined for a flow, which gets its own slot. */
+      readonly index: number | undefined;
       readonly label: string;
+      /** What the status line says while this turn runs. */
+      readonly status: string;
       readonly prompt: () => string;
     }
     const tasks: ExtensionTask[] = [
-      ...leadTasks.map((lead) => ({
+      ...leadTasks.map((lead, n) => ({
         index: lead.index,
         label: 'LEAD (' + lead.text + ')',
+        status:
+          'following up lead ' + (n + 1) + '/' + leadTasks.length + ': ' + lead.text.slice(0, 120),
         prompt: () => buildLeadPrompt(plan, lead.index, lead.text) + browserHint,
       })),
-      ...candidates.map(({ index }) => ({
+      // New ground before new angles: a flow the checks never ran end to end can hide a
+      // defect the planner did not suspect.
+      ...flows.map((flow, n) => ({
+        index: undefined,
+        label: FLOW_EXPLORATION_PREFIX + flow.slice(0, 160),
+        status:
+          'exploring critical flow ' + (n + 1) + '/' + flows.length + ': ' + flow.slice(0, 120),
+        prompt: () => buildFlowExplorationPrompt(flow, executedCommands()) + browserHint,
+      })),
+      ...candidates.map(({ index }, n) => ({
         index,
+        status:
+          'deepening check ' +
+          (index + 1) +
+          ' (' +
+          (n + 1) +
+          '/' +
+          candidates.length +
+          '): ' +
+          description(index).slice(0, 120),
         label:
           'DEEPENING (extra angles; the first-pass verdict above stands unless this reproduced a defect)',
         prompt: () =>
@@ -397,7 +503,9 @@ export async function* investigateChecks<T extends InvestigationTurn>(
         Math.round(remaining() / 60_000) +
         ' minutes of investigation time remain; following up ' +
         leadTasks.length +
-        ' lead(s) and attacking ' +
+        ' lead(s), exercising ' +
+        flows.length +
+        ' critical flow(s) end to end and attacking ' +
         candidates.length +
         ' decided check(s) from new angles in fresh sessions.' +
         (leadTasks.length === 0
@@ -414,8 +522,10 @@ export async function* investigateChecks<T extends InvestigationTurn>(
         const task = tasks[n] as ExtensionTask;
         const left = remaining();
         if (left < MIN_SOFT_BUDGET_MS || interrupted()) break;
+        if (yield* extraRoundsIdle(tasks.length - n)) break;
         checkStartedAt = now();
         softAt = checkStartedAt + checkSoftBudgetMs(left, tasks.length - n);
+        yield statusEvent(task.status);
         await rotate(plan.plannedChecks.length);
         // From here the session may be left stopped or dead (a turn that threw is swallowed
         // below), so the report must start in a fresh context whether or not the turn finished.
@@ -424,18 +534,31 @@ export async function* investigateChecks<T extends InvestigationTurn>(
         seed = '';
         const before = new Set(operations.keys());
         const outcome = yield* guarded(text, before);
+        countExtraTurn(outcome.stopped ? undefined : outcome.value.text);
         if (!outcome.stopped) {
           usage = sumAgentUsage(usage, outcome.value.usage ?? {});
           steps += outcome.value.steps ?? 1;
           const statement = outcome.value.text.trim();
-          if (statement.length > 0 && turnProducedProof(before, operations))
+          if (statement.length === 0 || !turnProducedProof(before, operations)) continue;
+          if (task.index === undefined) {
+            // A flow note sits after the planned checks, like a hazard-sweep note.
+            checkConclusions[extensionSlot] =
+              task.label + ': ' + statement.slice(-SWEEP_STATEMENT_CHARS);
+            extensionSlot += 1;
+          } else {
+            const earlier = checkConclusions[task.index] ?? '';
+            // The earlier note keeps its opening (the verdict), and its traced causes go last so the
+            // trim to the note's end keeps them: a cause found in the first pass must reach the report.
+            const causes = earlierRootCauses(earlier.slice(500));
             checkConclusions[task.index] = (
-              (checkConclusions[task.index] ?? '').slice(0, 500) +
+              earlier.slice(0, 500) +
               '\n' +
               task.label +
               ': ' +
-              statement
+              statement +
+              (causes.length === 0 ? '' : '\n' + causes)
             ).slice(-CONCLUSION_CHARS);
+          }
         }
       }
     } catch (cause) {
@@ -477,7 +600,8 @@ export async function* investigateChecks<T extends InvestigationTurn>(
           b.file.score - a.file.score,
       )
       .slice(0, MAX_SWEEP_TURNS);
-    if (ranked.length === 0) return;
+    // The idle stop already ended the extra rounds in the deepen round: no sweep either.
+    if (ranked.length === 0 || extraRoundsStopped) return;
     yield hooks.event({
       type: 'warning',
       code: 'QA_HAZARD_SWEEP',
@@ -505,14 +629,19 @@ export async function* investigateChecks<T extends InvestigationTurn>(
           idle >= SWEEP_IDLE_TURN_LIMIT
         )
           break;
+        if (yield* extraRoundsIdle(ranked.length - n)) break;
         checkStartedAt = now();
         softAt = checkStartedAt + checkSoftBudgetMs(left, ranked.length - n);
+        yield statusEvent(
+          'running the hazard sweep (' + (n + 1) + '/' + ranked.length + '): ' + file.file,
+        );
         await rotate(plan.plannedChecks.length);
         const text = seed + buildHazardPrompt(file.file, file.hazards) + browserHint;
         seed = '';
         const before = new Set(operations.keys());
         ran = true;
         const outcome = yield* guarded(text, before);
+        countExtraTurn(outcome.stopped ? undefined : outcome.value.text);
         if (outcome.stopped) {
           idle += 1;
           continue;
@@ -533,8 +662,9 @@ export async function* investigateChecks<T extends InvestigationTurn>(
           idle = 0;
           // One entry per file after the planned checks, so a later file never pushes an
           // earlier file's reproduced defect out of the report context.
-          checkConclusions[plan.plannedChecks.length + n] =
+          checkConclusions[extensionSlot] =
             'HAZARD SWEEP of ' + file.file + ': ' + statement.slice(-SWEEP_STATEMENT_CHARS);
+          extensionSlot += 1;
         } else {
           idle += 1;
         }

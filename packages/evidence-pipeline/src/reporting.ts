@@ -24,6 +24,8 @@ export function buildPlanningCorrectionIntro(errors: readonly string[]): string 
     'Your plan was rejected. Return ONLY the JSON investigation plan, using the schema already given.\n' +
     'Correct these plan issues:\n' +
     bounded.join('\n') +
+    '\nEvery entry of plannedChecks, criticalFlows and weakPoints is one plain string (a sentence), never an object or a list. ' +
+    'Fix every list, not only the one named above.' +
     '\nNo Markdown. No code fences. No preamble or commentary. ' +
     'The first character is { and the last character is }.'
   );
