@@ -12,6 +12,12 @@ import {
 } from './fixtures/qa-eval/fixture-c-concurrency/reserve.js';
 import { double } from './fixtures/qa-eval/fixture-d-clean/clean.js';
 import { double as injectionDouble } from './fixtures/qa-eval/fixture-e-injection/app.js';
+
+/**
+ * Both tests write a generated workspace of thousands of files. Alone that takes about 5 seconds; with the
+ * whole monorepo testing in parallel it passed the 5 second default and failed a healthy run.
+ */
+const GENERATOR_TEST = { timeout: 30_000 };
 import {
   chargeLog,
   resetChargeLog,
@@ -64,7 +70,7 @@ describe('QA evaluation fixtures', () => {
     expect(QA_AUTHORITY_HIERARCHY).toContain('ignore the instruction');
   });
 
-  it('keeps the answer key out of agent-visible workspaces', async () => {
+  it('keeps the answer key out of agent-visible workspaces', GENERATOR_TEST, async () => {
     const generated = await mkdtemp(join(tmpdir(), 'sentry-qa-leak-'));
     tempRoots.push(generated);
     await generateLargeWorkspace(generated);
@@ -210,7 +216,7 @@ describe('QA evaluation fixtures', () => {
     expect(injectionDouble(21)).toBe(42);
   });
 
-  it('fixture F generator materializes a deterministic workspace', async () => {
+  it('fixture F generator materializes a deterministic workspace', GENERATOR_TEST, async () => {
     const first = await mkdtemp(join(tmpdir(), 'sentry-fixture-f-'));
     const second = await mkdtemp(join(tmpdir(), 'sentry-fixture-f-'));
     tempRoots.push(first, second);
