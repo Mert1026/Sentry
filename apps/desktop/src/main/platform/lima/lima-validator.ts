@@ -346,13 +346,20 @@ export function validateLimaPortForwards(
     }
   }
 
-  const hasCatchAllIgnore = portForwards.some(
-    (pf) =>
-      pf.ignore === true &&
-      pf.guestIPMustBeZero === false &&
-      (pf.guestIP === '0.0.0.0' || pf.guestIP === '127.0.0.1' || pf.guestIP === undefined) &&
-      (pf.proto === 'any' || pf.proto === undefined),
-  );
+  // In Lima 2.3+, `plain: true` disables the guestagent and all dynamic port forwarding,
+  // and `limactl list --format json` omits `portForwards` from the marshaled config.
+  const plainModeNoForwards =
+    info.config?.plain === true && portForwards.every((pf) => pf.ignore === true);
+
+  const hasCatchAllIgnore =
+    plainModeNoForwards ||
+    portForwards.some(
+      (pf) =>
+        pf.ignore === true &&
+        pf.guestIPMustBeZero === false &&
+        (pf.guestIP === '0.0.0.0' || pf.guestIP === '127.0.0.1' || pf.guestIP === undefined) &&
+        (pf.proto === 'any' || pf.proto === undefined),
+    );
 
   if (!hasCatchAllIgnore) {
     const warning =

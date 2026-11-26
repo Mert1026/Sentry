@@ -35,6 +35,7 @@ export interface LimaPortForward {
 }
 
 export interface LimaInstanceConfig {
+  readonly plain?: boolean;
   readonly vmType?: string;
   readonly os?: string;
   readonly arch?: string;

@@ -67,7 +67,7 @@ function guestProvisionYaml(): string {
     `if ! command -v pnpm >/dev/null 2>&1 || [ "$(pnpm --version)" != "${SENTRY_LIMA_GUEST_PNPM_VERSION}" ]; then`,
     `  /usr/local/bin/npm install -g "pnpm@${SENTRY_LIMA_GUEST_PNPM_VERSION}"`,
     'fi',
-    'GUEST_USER="$(awk -F: \'$3 >= 500 && $3 < 65534 && $1 != "nobody" {print $1; exit}\' /etc/passwd)"',
+    'GUEST_USER="$(awk -F: \'$3 >= 500 && $3 < 65534 && $6 ~ /^\\/home\\// && $7 !~ /(nologin|false)$/ {print $1; exit}\' /etc/passwd)"',
     'if [ -n "$GUEST_USER" ] && id "$GUEST_USER" >/dev/null 2>&1; then',
     '  loginctl enable-linger "$GUEST_USER" || true',
     '  mkdir -p /opt/sentry /opt/sentry/staged-projects',

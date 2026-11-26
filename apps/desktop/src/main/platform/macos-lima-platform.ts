@@ -128,6 +128,7 @@ export function createMacosLimaPlatform(options: LimaOptions): HostPlatform {
       }
 
       const guestShellLaunch =
+        'export PATH="/usr/local/bin:$PATH"; ' +
         'uid=$(id -u); ' +
         'export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$uid}" ' +
         'DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=/run/user/$uid/bus}"; ' +

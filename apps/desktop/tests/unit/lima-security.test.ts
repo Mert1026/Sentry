@@ -286,6 +286,31 @@ describe('Lima Port Forwarding Isolation', () => {
     );
   });
 
+  it('accepts plain mode with omitted portForwards because guestagent port forwarding is disabled', () => {
+    const plainInstance = validVzInstance({
+      config: {
+        plain: true,
+        vmType: 'vz',
+      },
+    });
+    const res = validateLimaPortForwards(plainInstance, { requireStrictNetwork: true });
+    expect(res.ok).toBe(true);
+    expect(res.warnings).toBeUndefined();
+  });
+
+  it('rejects plain mode if a non-ignored explicit portForward rule is configured', () => {
+    const unsafePlainInstance = validVzInstance({
+      config: {
+        plain: true,
+        vmType: 'vz',
+        portForwards: [{ guestPort: 8080, hostPort: 8080, proto: 'tcp' }],
+      },
+    });
+    expect(() =>
+      validateLimaPortForwards(unsafePlainInstance, { requireStrictNetwork: true }),
+    ).toThrowError(LimaSecurityError);
+  });
+
   it('rejects port forwards bound to 0.0.0.0 or LAN interfaces on host', () => {
     const dangerousInstance = validVzInstance({
       config: {
