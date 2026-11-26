@@ -180,6 +180,16 @@ describe('project section navigation', () => {
     );
   });
 
+  it('opens the start confirmation outside the page so it centres on the screen', async () => {
+    fixture();
+    const start = await screen.findByRole('button', { name: 'Start Full QA' });
+    await waitFor(() => expect((start as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(start);
+    const dialog = await screen.findByRole('dialog', { name: 'Confirm start full QA' });
+    // Portaled like the add-project box: a long, animated page can no longer offset it.
+    expect(dialog.parentElement).toBe(document.body);
+  });
+
   it('checks for secrets by default: the switch is on and a start sends no secretsCheck', async () => {
     const f = fixture();
     const start = await screen.findByRole('button', { name: 'Start Full QA' });

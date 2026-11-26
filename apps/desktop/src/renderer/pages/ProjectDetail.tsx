@@ -953,79 +953,82 @@ export function ProjectDetail(): React.JSX.Element {
         </PageSection>
       </ProjectSectionPanel>
       {pendingStart ? (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label={t(
-            confirmStart === 'full' ? 'Confirm start full QA' : 'Confirm start targeted QA',
-          )}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.55)',
-            zIndex: 60,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 16,
-          }}
-          onClick={() => setConfirmStart(undefined)}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') setConfirmStart(undefined);
-          }}
-        >
+        // Portaled out of the animated page so it centres on the screen, like the add-project box.
+        <BlockingOverlay>
           <div
-            className="card"
-            style={{ maxWidth: 420, width: '100%' }}
-            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-label={t(
+              confirmStart === 'full' ? 'Confirm start full QA' : 'Confirm start targeted QA',
+            )}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0,0,0,0.55)',
+              zIndex: 60,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 16,
+            }}
+            onClick={() => setConfirmStart(undefined)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setConfirmStart(undefined);
+            }}
           >
-            <h2 className="section-title">
-              {t(confirmStart === 'full' ? 'Start Full QA?' : 'Start Targeted QA?')}
-            </h2>
-            <p className="body-secondary">
-              {t(
-                `${effectiveStacks.length} ${effectiveStacks.length === 1 ? 'agent' : 'agents'} · uses real provider budget.`,
-              )}
-            </p>
-            {effectiveRevisionId !== undefined ? (
-              <p className="mono metadata">
-                {t('Revision:')}{' '}
-                <span data-no-translate="true">
-                  {shortRevision(effectiveRevisionId)} ·{' '}
-                  {formatRevisionDate(effectiveRevision?.importedAt)}
-                </span>
+            <div
+              className="card"
+              style={{ maxWidth: 420, width: '100%' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h2 className="section-title">
+                {t(confirmStart === 'full' ? 'Start Full QA?' : 'Start Targeted QA?')}
+              </h2>
+              <p className="body-secondary">
+                {t(
+                  `${effectiveStacks.length} ${effectiveStacks.length === 1 ? 'agent' : 'agents'} · uses real provider budget.`,
+                )}
               </p>
-            ) : null}
-            <p className="metadata">
-              {t(
-                `Web access: ${webAccess ? 'on' : 'off'} · tool and SDK downloads: ${toolDownloads ? 'on' : 'off'} · package installs: on`,
-              )}
-            </p>
-            <p className="metadata">
-              {t(depth === 'fast' ? 'Run depth: Fast' : 'Run depth: Full')}
-            </p>
-            {confirmStart === 'targeted' && targetPaths.trim() !== '' ? (
-              <p className="mono metadata">
-                {t('Scope:')} <span data-no-translate="true">{targetPaths}</span>
+              {effectiveRevisionId !== undefined ? (
+                <p className="mono metadata">
+                  {t('Revision:')}{' '}
+                  <span data-no-translate="true">
+                    {shortRevision(effectiveRevisionId)} ·{' '}
+                    {formatRevisionDate(effectiveRevision?.importedAt)}
+                  </span>
+                </p>
+              ) : null}
+              <p className="metadata">
+                {t(
+                  `Web access: ${webAccess ? 'on' : 'off'} · tool and SDK downloads: ${toolDownloads ? 'on' : 'off'} · package installs: on`,
+                )}
               </p>
-            ) : null}
-            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
-              <button className="ghost" onClick={() => setConfirmStart(undefined)}>
-                Cancel
-              </button>
-              <button
-                className="primary"
-                autoFocus
-                disabled={startPending || update.isPending}
-                onClick={() =>
-                  confirmStart === 'full' ? startFull.mutate() : startTargeted.mutate()
-                }
-              >
-                {startPending ? 'Starting…' : 'Start QA'}
-              </button>
+              <p className="metadata">
+                {t(depth === 'fast' ? 'Run depth: Fast' : 'Run depth: Full')}
+              </p>
+              {confirmStart === 'targeted' && targetPaths.trim() !== '' ? (
+                <p className="mono metadata">
+                  {t('Scope:')} <span data-no-translate="true">{targetPaths}</span>
+                </p>
+              ) : null}
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
+                <button className="ghost" onClick={() => setConfirmStart(undefined)}>
+                  Cancel
+                </button>
+                <button
+                  className="primary"
+                  autoFocus
+                  disabled={startPending || update.isPending}
+                  onClick={() =>
+                    confirmStart === 'full' ? startFull.mutate() : startTargeted.mutate()
+                  }
+                >
+                  {startPending ? 'Starting…' : 'Start QA'}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        </BlockingOverlay>
       ) : null}
       {update.isPending ? (
         <BlockingOverlay>
