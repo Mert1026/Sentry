@@ -33,6 +33,8 @@ UsePreviousAppDir=no
 DisableDirPage=yes
 DisableProgramGroupPage=yes
 DisableReadyPage=no
+; The welcome page explains what will happen (admin prompt, possible restart, time).
+DisableWelcomePage=no
 ; The archive checks its own file list, so the uninstaller lives outside it.
 UninstallFilesDir={localappdata}\Sentry\uninstall\{#Sha12}
 UninstallDisplayIcon={app}\desktop\Sentry.exe
@@ -43,6 +45,9 @@ ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0.22000
 SetupIconFile=..\..\..\apps\desktop\assets\sentry-icon.ico
 WizardStyle=modern
+WizardSmallImageFile=..\..\..\apps\desktop\assets\sentry-icon.png
+; The Sentry logo on a light panel, 2x the 164x314 side area for high-DPI screens.
+WizardImageFile=wizard-side.png
 Compression=lzma2/max
 SolidCompression=yes
 OutputDir={#OutputDir}

@@ -33,6 +33,28 @@ setup/open does not require invoking disk reclamation. See the
 [Phase 6.5 correction handoff](https://github.com/Mert1026/Sentry/blob/v1.0.0/docs/releases/v1-phase-6-5-wsl-helper-hardening.md)
 for the original security fixtures; the stable handoff records integration checks.
 
+## Setup wizard (SentrySetup.exe)
+
+`SentrySetup-<version>-<sha12>-windows-x64.exe` is a click-through alternative to the
+steps below. It holds exactly the files of the matching ZIP and installs them in the same
+per-version folder (`%LOCALAPPDATA%\Sentry\distributions\<sha12>\…`). It then runs the
+archive's own setup one step at a time:
+
+1. check the PC (Windows 11 x64, hardware virtualization, WSL, disk space);
+2. install WSL2 (one administrator prompt; Windows usually needs one restart, after which
+   the wizard continues by itself at the next sign-in);
+3. install Ubuntu and create its Linux account, named after the Windows user, so Ubuntu's
+   first-run prompt never appears (the account has no password; set one with
+   `wsl -d Ubuntu -u root passwd <name>` if you need `sudo`);
+4. install Linux Node 22, pnpm, systemd, bubblewrap and socat as root inside WSL;
+5. run `sentry.ps1 setup`, then 6. `sentry.ps1 tools`.
+
+Every step is skipped when it is already done, so running the wizard again resumes after a
+failure. Its log is `%LOCALAPPDATA%\Sentry\logs\setup-wizard.log`. The wizard is unsigned:
+Windows SmartScreen may show "Windows protected your PC"; choose **More info → Run anyway**
+after checking the `.sha256` and attestation like the ZIP's. Uninstalling it from Windows
+Settings removes the program folder and keeps your Sentry data in WSL.
+
 ## Obtain, verify and extract
 
 The published Windows Stable archive is available on the
