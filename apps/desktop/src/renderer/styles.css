@@ -491,6 +491,24 @@ textarea:focus {
   align-items: center;
   gap: 8px;
 }
+/* The strip's content (icon, status dot, text) sits on one centred line; in the collapsed sidebar
+   it is only the icon or dot, centred in a square box. */
+.sidebar .active-strip > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sidebar.collapsed .active-strip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  aspect-ratio: 1;
+}
+.sidebar.collapsed .active-strip > span,
+.sidebar.collapsed .active-strip a {
+  justify-content: center;
+}
 .main {
   flex: 1;
   display: flex;

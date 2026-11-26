@@ -337,6 +337,17 @@ function translateCore(trimmed: string): string {
   const runWindow = /^Every run gets a window of (.+?)( \(the default\))?\.$/.exec(trimmed);
   if (runWindow !== null)
     return `Всяко изпълнение получава прозорец от ${translateCore(runWindow[1] ?? '')}${runWindow[2] === undefined ? '' : ' (по подразбиране)'}.`;
+  // Dashboard statistics notes.
+  const lastWeek = /^(\d+) in the last 7 days$/.exec(trimmed);
+  if (lastWeek !== null) return `${lastWeek[1]} за последните 7 дни`;
+  const ofFinished = /^(\d+) of (\d+) finished$/.exec(trimmed);
+  if (ofFinished !== null) return `${ofFinished[1]} от ${ofFinished[2]} приключили`;
+  const confirmedCount = /^(\d+) confirmed$/.exec(trimmed);
+  if (confirmedCount !== null) return `${confirmedCount[1]} потвърдени`;
+  const minutesShort = /^(\d+) min$/.exec(trimmed);
+  if (minutesShort !== null) return `${minutesShort[1]} мин`;
+  const hoursShort = /^(\d+) h$/.exec(trimmed);
+  if (hoursShort !== null) return `${hoursShort[1]} ч`;
   const agentsInvestigate = /^(\d+) agents investigate this revision independently\.$/.exec(
     trimmed,
   );
