@@ -6,4 +6,5 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
-export const DEFAULT_WORK = process.env.BENCH_WORK ?? (process.platform === 'win32' ? 'C:/bench-work' : join(here, '.work'));
+export const DEFAULT_WORK =
+  process.env.BENCH_WORK ?? (process.platform === 'win32' ? 'C:/bench-work' : join(here, '.work'));

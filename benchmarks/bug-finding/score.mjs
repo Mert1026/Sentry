@@ -31,10 +31,11 @@ function findClaude() {
   for (const a of readdirSync(base)) {
     const cc = join(base, a, 'claude-code');
     if (!existsSync(cc)) continue;
-    for (const v of readdirSync(cc)) for (const h of readdirSync(join(cc, v))) {
-      const exe = join(cc, v, h, 'claude.exe');
-      if (existsSync(exe)) hits.push({ v, exe });
-    }
+    for (const v of readdirSync(cc))
+      for (const h of readdirSync(join(cc, v))) {
+        const exe = join(cc, v, h, 'claude.exe');
+        if (existsSync(exe)) hits.push({ v, exe });
+      }
   }
   hits.sort((x, y) => x.v.localeCompare(y.v, undefined, { numeric: true }));
   return hits.at(-1).exe;
@@ -70,8 +71,24 @@ function scoreOne(file) {
   if (run.result?.is_error || !text) {
     judgeError = 'run produced no report';
   } else {
-    const p = spawnSync(findClaude(), ['-p', judgePrompt(task, text), '--output-format', 'json', '--model', process.env.BENCH_JUDGE_MODEL ?? 'sonnet',
-      '--tools', '', '--setting-sources', 'project', '--disable-slash-commands', '--no-session-persistence'], { encoding: 'utf8', cwd: work, maxBuffer: 1 << 26 });
+    const p = spawnSync(
+      findClaude(),
+      [
+        '-p',
+        judgePrompt(task, text),
+        '--output-format',
+        'json',
+        '--model',
+        process.env.BENCH_JUDGE_MODEL ?? 'sonnet',
+        '--tools',
+        '',
+        '--setting-sources',
+        'project',
+        '--disable-slash-commands',
+        '--no-session-persistence',
+      ],
+      { encoding: 'utf8', cwd: work, maxBuffer: 1 << 26 },
+    );
     try {
       const out = JSON.parse(p.stdout).result;
       judged = JSON.parse(out.slice(out.indexOf('{'), out.lastIndexOf('}') + 1));
@@ -81,26 +98,40 @@ function scoreOne(file) {
   }
   const claims = judged.claims ?? [];
   return {
-    taskId: run.taskId, arm: run.arm, rep: run.rep, model: run.model,
+    taskId: run.taskId,
+    arm: run.arm,
+    rep: run.rep,
+    model: run.model,
     hit: claims.some((c) => c.matches_fix === true),
-    claims: claims.length, otherClaims: claims.filter((c) => !c.matches_fix).length,
-    durationMs: run.durationMs, costUsd: run.result?.total_cost_usd ?? null, turns: run.result?.num_turns ?? null,
-    judgeError, detail: claims,
+    claims: claims.length,
+    otherClaims: claims.filter((c) => !c.matches_fix).length,
+    durationMs: run.durationMs,
+    costUsd: run.result?.total_cost_usd ?? null,
+    turns: run.result?.num_turns ?? null,
+    judgeError,
+    detail: claims,
   };
 }
 
 if (argv.includes('--table')) {
-  const rows = readdirSync(scoresDir).map((f) => JSON.parse(readFileSync(join(scoresDir, f), 'utf8')));
+  const rows = readdirSync(scoresDir).map((f) =>
+    JSON.parse(readFileSync(join(scoresDir, f), 'utf8')),
+  );
   const arms = [...new Set(rows.map((r) => r.arm))];
   console.log('arm | runs | hits | recall | other claims/run | avg s | avg $');
   for (const a of arms) {
     const r = rows.filter((x) => x.arm === a && !x.judgeError);
     const n = r.length || 1;
     const hits = r.filter((x) => x.hit).length;
-    console.log(`${a} | ${r.length} | ${hits} | ${(hits / n * 100).toFixed(0)}% | ${(r.reduce((s, x) => s + x.otherClaims, 0) / n).toFixed(1)} | ${(r.reduce((s, x) => s + x.durationMs, 0) / n / 1000).toFixed(0)} | ${(r.reduce((s, x) => s + (x.costUsd ?? 0), 0) / n).toFixed(2)}`);
+    console.log(
+      `${a} | ${r.length} | ${hits} | ${((hits / n) * 100).toFixed(0)}% | ${(r.reduce((s, x) => s + x.otherClaims, 0) / n).toFixed(1)} | ${(r.reduce((s, x) => s + x.durationMs, 0) / n / 1000).toFixed(0)} | ${(r.reduce((s, x) => s + (x.costUsd ?? 0), 0) / n).toFixed(2)}`,
+    );
   }
   const bad = rows.filter((x) => x.judgeError);
-  if (bad.length) console.log(`unscored: ${bad.length} (${bad.map((b) => `${b.taskId}/${b.arm}/r${b.rep}`).join(', ')})`);
+  if (bad.length)
+    console.log(
+      `unscored: ${bad.length} (${bad.map((b) => `${b.taskId}/${b.arm}/r${b.rep}`).join(', ')})`,
+    );
 } else {
   mkdirSync(scoresDir, { recursive: true });
   for (const f of readdirSync(resultsDir)) {
@@ -108,6 +139,8 @@ if (argv.includes('--table')) {
     if (existsSync(out)) continue;
     const s = scoreOne(join(resultsDir, f));
     writeFileSync(out, JSON.stringify(s, null, 1));
-    console.log(`${f}: hit=${s.hit} claims=${s.claims}${s.judgeError ? ' ERROR ' + s.judgeError : ''}`);
+    console.log(
+      `${f}: hit=${s.hit} claims=${s.claims}${s.judgeError ? ' ERROR ' + s.judgeError : ''}`,
+    );
   }
 }

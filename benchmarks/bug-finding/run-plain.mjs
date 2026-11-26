@@ -16,7 +16,8 @@ const here = dirname(fileURLToPath(import.meta.url));
 const [id, arm, rep = '1', ...rest] = process.argv.slice(2);
 const workIdx = rest.indexOf('--work');
 const work = resolve(workIdx >= 0 ? rest[workIdx + 1] : DEFAULT_WORK);
-if (!id || !['bare', 'crafted'].includes(arm)) throw new Error('usage: run-plain.mjs <task-id> <bare|crafted> <rep>');
+if (!id || !['bare', 'crafted'].includes(arm))
+  throw new Error('usage: run-plain.mjs <task-id> <bare|crafted> <rep>');
 
 function findClaude() {
   if (process.env.BENCH_CLAUDE) return process.env.BENCH_CLAUDE;
@@ -25,10 +26,11 @@ function findClaude() {
   for (const a of readdirSync(base)) {
     const cc = join(base, a, 'claude-code');
     if (!existsSync(cc)) continue;
-    for (const v of readdirSync(cc)) for (const h of readdirSync(join(cc, v))) {
-      const exe = join(cc, v, h, 'claude.exe');
-      if (existsSync(exe)) hits.push({ v, exe });
-    }
+    for (const v of readdirSync(cc))
+      for (const h of readdirSync(join(cc, v))) {
+        const exe = join(cc, v, h, 'claude.exe');
+        if (existsSync(exe)) hits.push({ v, exe });
+      }
   }
   hits.sort((x, y) => x.v.localeCompare(y.v, undefined, { numeric: true }));
   if (!hits.length) throw new Error('no claude.exe found; set BENCH_CLAUDE');
@@ -39,7 +41,11 @@ const task = JSON.parse(readFileSync(join(here, 'tasks.json'), 'utf8')).find((t)
 if (!task) throw new Error(`unknown task ${id}`);
 // The plain agents read instruction files (CLAUDE.md, AGENTS.md) from every parent folder, so their
 // workspace lives OUTSIDE this repository, whose own CLAUDE.md would otherwise reach them.
-const ws = join(process.env.BENCH_PLAIN_WS_ROOT ?? (process.platform === 'win32' ? 'C:/bench-ws' : join(homedir(), 'bench-workspaces')), id);
+const ws = join(
+  process.env.BENCH_PLAIN_WS_ROOT ??
+    (process.platform === 'win32' ? 'C:/bench-ws' : join(homedir(), 'bench-workspaces')),
+  id,
+);
 if (!existsSync(ws)) throw new Error(`workspace missing, run prepare.mjs ${id}`);
 
 const prompt = arm === 'bare' ? bareBugPrompt(task.scope) : craftedBugPrompt(task.scope);
@@ -47,19 +53,45 @@ const prompt = arm === 'bare' ? bareBugPrompt(task.scope) : craftedBugPrompt(tas
 // three arms use the same model and effort.
 const model = process.env.BENCH_MODEL ?? 'claude-haiku-5-5';
 const args = [
-  '-p', prompt,
-  '--output-format', 'json',
-  '--model', model,
-  '--effort', process.env.BENCH_EFFORT ?? 'high',
+  '-p',
+  prompt,
+  '--output-format',
+  'json',
+  '--model',
+  model,
+  '--effort',
+  process.env.BENCH_EFFORT ?? 'high',
   // Bash is scoped so the plain arms can run code like Sentry does, without network or installs
   // (Sentry's own runs have no dependency downloads either).
-  '--allowedTools', 'Read', 'Grep', 'Glob', 'Bash(node:*)', 'Bash(ls:*)', 'Bash(cat:*)', 'Bash(grep:*)', 'Bash(find:*)', 'Bash(head:*)', 'Bash(wc:*)',
-  '--disallowedTools', 'Bash(npm:*)', 'Bash(npx:*)', 'Bash(yarn:*)', 'Bash(pnpm:*)', 'Bash(curl:*)', 'Bash(wget:*)', 'Bash(git:*)', 'WebFetch', 'WebSearch',
-  '--permission-mode', 'dontAsk',
-  '--setting-sources', 'project',
+  '--allowedTools',
+  'Read',
+  'Grep',
+  'Glob',
+  'Bash(node:*)',
+  'Bash(ls:*)',
+  'Bash(cat:*)',
+  'Bash(grep:*)',
+  'Bash(find:*)',
+  'Bash(head:*)',
+  'Bash(wc:*)',
+  '--disallowedTools',
+  'Bash(npm:*)',
+  'Bash(npx:*)',
+  'Bash(yarn:*)',
+  'Bash(pnpm:*)',
+  'Bash(curl:*)',
+  'Bash(wget:*)',
+  'Bash(git:*)',
+  'WebFetch',
+  'WebSearch',
+  '--permission-mode',
+  'dontAsk',
+  '--setting-sources',
+  'project',
   '--disable-slash-commands',
   '--no-session-persistence',
-  '--max-budget-usd', process.env.BENCH_MAX_USD ?? '5',
+  '--max-budget-usd',
+  process.env.BENCH_MAX_USD ?? '5',
 ];
 
 const started = Date.now();
@@ -73,14 +105,38 @@ const code = await new Promise((r) => child.on('close', r));
 clearTimeout(timer);
 
 let parsed = null;
-try { parsed = JSON.parse(out); } catch { /* keep raw */ }
+try {
+  parsed = JSON.parse(out);
+} catch {
+  /* keep raw */
+}
 const failedRun = code !== 0 || !parsed || parsed.is_error || !parsed.result;
 const outDir = failedRun ? 'failed' : 'results'; // failures are infrastructure noise, never scored
 mkdirSync(join(work, outDir), { recursive: true });
 const file = join(work, outDir, `${id}__${arm}__r${rep}${failedRun ? `__${Date.now()}` : ''}.json`);
-writeFileSync(file, JSON.stringify({
-  taskId: id, arm, rep: Number(rep), model, exitCode: code,
-  durationMs: Date.now() - started, prompt, result: parsed, rawStdout: parsed ? undefined : out, stderr: err.slice(-2000),
-}, null, 1));
-if (failedRun) { console.log(`${id} ${arm} r${rep} FAILED exit=${code}`); process.exitCode = 1; }
-else console.log(`${id} ${arm} r${rep} exit=${code} ${(Date.now() - started) / 1000}s cost=${parsed?.total_cost_usd ?? '?'} -> ${file}`);
+writeFileSync(
+  file,
+  JSON.stringify(
+    {
+      taskId: id,
+      arm,
+      rep: Number(rep),
+      model,
+      exitCode: code,
+      durationMs: Date.now() - started,
+      prompt,
+      result: parsed,
+      rawStdout: parsed ? undefined : out,
+      stderr: err.slice(-2000),
+    },
+    null,
+    1,
+  ),
+);
+if (failedRun) {
+  console.log(`${id} ${arm} r${rep} FAILED exit=${code}`);
+  process.exitCode = 1;
+} else
+  console.log(
+    `${id} ${arm} r${rep} exit=${code} ${(Date.now() - started) / 1000}s cost=${parsed?.total_cost_usd ?? '?'} -> ${file}`,
+  );

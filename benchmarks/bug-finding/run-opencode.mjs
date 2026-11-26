@@ -20,7 +20,8 @@ const here = dirname(fileURLToPath(import.meta.url));
 const [id, base, rep = '1', ...rest] = process.argv.slice(2);
 const wi = rest.indexOf('--work');
 const work = resolve(wi >= 0 ? rest[wi + 1] : DEFAULT_WORK);
-if (!id || !['bare', 'crafted'].includes(base)) throw new Error('usage: run-opencode.mjs <task-id> <bare|crafted> <rep>');
+if (!id || !['bare', 'crafted'].includes(base))
+  throw new Error('usage: run-opencode.mjs <task-id> <bare|crafted> <rep>');
 const arm = `${base}-muse`;
 
 const task = JSON.parse(readFileSync(join(here, 'tasks.json'), 'utf8')).find((t) => t.id === id);
@@ -29,7 +30,8 @@ if (!task) throw new Error(`unknown task ${id}`);
 const wsRoot = process.env.BENCH_PLAIN_WS_ROOT ?? 'C:/bench-ws';
 const ws = join(wsRoot, id);
 if (!existsSync(ws)) throw new Error(`workspace missing, run prepare.mjs ${id}`);
-const wslPath = (p) => p.replace(/\\/g, '/').replace(/^([A-Za-z]):/, (_, d) => `/mnt/${d.toLowerCase()}`);
+const wslPath = (p) =>
+  p.replace(/\\/g, '/').replace(/^([A-Za-z]):/, (_, d) => `/mnt/${d.toLowerCase()}`);
 
 const prompt = base === 'bare' ? bareBugPrompt(task.scope) : craftedBugPrompt(task.scope);
 const model = process.env.BENCH_OC_MODEL ?? 'opencode-go/muse-spark-1.3-contributor';
@@ -39,15 +41,30 @@ const promptFile = join(work, 'tmp', `${id}__${arm}__r${rep}.prompt.txt`);
 writeFileSync(promptFile, prompt);
 
 const permission = {
-  edit: 'deny', webfetch: 'deny', websearch: 'deny', task: 'deny',
-  bash: { 'node *': 'allow', 'ls *': 'allow', ls: 'allow', 'cat *': 'allow', 'grep *': 'allow', 'find *': 'allow', 'head *': 'allow', 'wc *': 'allow', '*': 'deny' },
+  edit: 'deny',
+  webfetch: 'deny',
+  websearch: 'deny',
+  task: 'deny',
+  bash: {
+    'node *': 'allow',
+    'ls *': 'allow',
+    ls: 'allow',
+    'cat *': 'allow',
+    'grep *': 'allow',
+    'find *': 'allow',
+    'head *': 'allow',
+    'wc *': 'allow',
+    '*': 'deny',
+  },
 };
 const config = JSON.stringify({ permission });
 const bin = '$HOME/.local/share/sentry/tools/opencode/node_modules/.bin/opencode';
 const script = `cd '${wslPath(ws)}' && export OPENCODE_CONFIG_CONTENT='${config}' && ${bin} run --pure --format json -m '${model}' --variant '${variant}' --dir '${wslPath(ws)}' "$(cat '${wslPath(promptFile)}')"`;
 
 const started = Date.now();
-const child = spawn('wsl.exe', ['-d', 'Ubuntu', '--', 'bash', '-lc', script], { stdio: ['ignore', 'pipe', 'pipe'] });
+const child = spawn('wsl.exe', ['-d', 'Ubuntu', '--', 'bash', '-lc', script], {
+  stdio: ['ignore', 'pipe', 'pipe'],
+});
 let out = '';
 let err = '';
 child.stdout.on('data', (d) => (out += d));
@@ -65,7 +82,11 @@ let toolCalls = 0;
 let streamError = '';
 for (const line of out.split('\n')) {
   let e;
-  try { e = JSON.parse(line); } catch { continue; }
+  try {
+    e = JSON.parse(line);
+  } catch {
+    continue;
+  }
   const part = e.part ?? e;
   if (e.type === 'text' && typeof part.text === 'string') text += part.text;
   if (e.type === 'tool_use') toolCalls += 1;
@@ -74,7 +95,12 @@ for (const line of out.split('\n')) {
     steps += 1;
     if (part.cost) cost += part.cost;
     const t = part.tokens;
-    if (t) tokens = { input: (tokens?.input ?? 0) + (t.input ?? 0), output: (tokens?.output ?? 0) + (t.output ?? 0), reasoning: (tokens?.reasoning ?? 0) + (t.reasoning ?? 0) };
+    if (t)
+      tokens = {
+        input: (tokens?.input ?? 0) + (t.input ?? 0),
+        output: (tokens?.output ?? 0) + (t.output ?? 0),
+        reasoning: (tokens?.reasoning ?? 0) + (t.reasoning ?? 0),
+      };
   }
 }
 text = text.trim();
@@ -84,12 +110,36 @@ const failedRun = code !== 0 || !text || streamError !== '' || haltedByPermissio
 const outDir = failedRun ? 'failed' : 'results';
 mkdirSync(join(work, outDir), { recursive: true });
 const file = join(work, outDir, `${id}__${arm}__r${rep}${failedRun ? `__${Date.now()}` : ''}.json`);
-writeFileSync(file, JSON.stringify({
-  taskId: id, arm, rep: Number(rep), model: `${model} (variant ${variant})`, exitCode: code,
-  durationMs: Date.now() - started, prompt, usage: tokens,
-  result: { result: text, is_error: failedRun, total_cost_usd: cost > 0 ? cost : null, num_turns: toolCalls || steps },
-  streamError: streamError || undefined,
-  rawStdoutTail: failedRun ? out.slice(-3000) : undefined, stderr: err.slice(-2000),
-}, null, 1));
-if (failedRun) { console.log(`${id} ${arm} r${rep} FAILED exit=${code} ${streamError}`); process.exitCode = 1; }
-else console.log(`${id} ${arm} r${rep} exit=${code} ${(Date.now() - started) / 1000}s tokens=${JSON.stringify(tokens)} -> ${file}`);
+writeFileSync(
+  file,
+  JSON.stringify(
+    {
+      taskId: id,
+      arm,
+      rep: Number(rep),
+      model: `${model} (variant ${variant})`,
+      exitCode: code,
+      durationMs: Date.now() - started,
+      prompt,
+      usage: tokens,
+      result: {
+        result: text,
+        is_error: failedRun,
+        total_cost_usd: cost > 0 ? cost : null,
+        num_turns: toolCalls || steps,
+      },
+      streamError: streamError || undefined,
+      rawStdoutTail: failedRun ? out.slice(-3000) : undefined,
+      stderr: err.slice(-2000),
+    },
+    null,
+    1,
+  ),
+);
+if (failedRun) {
+  console.log(`${id} ${arm} r${rep} FAILED exit=${code} ${streamError}`);
+  process.exitCode = 1;
+} else
+  console.log(
+    `${id} ${arm} r${rep} exit=${code} ${(Date.now() - started) / 1000}s tokens=${JSON.stringify(tokens)} -> ${file}`,
+  );
