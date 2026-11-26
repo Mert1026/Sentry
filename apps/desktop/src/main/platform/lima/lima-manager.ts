@@ -588,11 +588,19 @@ export async function ensureManagedLimaRuntime(
       includeProvision: true,
     });
     await writeFile(yamlPath, yaml, 'utf8');
-    await runCommand(
-      resolved.executable,
-      ['create', '--name', options.instance, '--tty=false', yamlPath],
-      { env, timeoutMs: 600_000 },
-    );
+    try {
+      await runCommand(
+        resolved.executable,
+        ['create', '--name', options.instance, '--tty=false', yamlPath],
+        { env, timeoutMs: 600_000 },
+      );
+    } catch (error) {
+      throw new LimaSecurityError(
+        'LIMA_PROVISION_FAILED',
+        error instanceof Error ? error.message : String(error),
+        { instance: options.instance },
+      );
+    }
     info = await queryLimaInstance(options.instance, {
       limactlExecutable: resolved.executable,
       limaHome: options.limaHome,
@@ -611,10 +619,18 @@ export async function ensureManagedLimaRuntime(
   });
 
   if (info.status !== 'Running') {
-    await runCommand(resolved.executable, ['start', '--tty=false', options.instance], {
-      env,
-      timeoutMs: 600_000,
-    });
+    try {
+      await runCommand(resolved.executable, ['start', '--tty=false', options.instance], {
+        env,
+        timeoutMs: 600_000,
+      });
+    } catch (error) {
+      throw new LimaSecurityError(
+        'LIMA_PROVISION_FAILED',
+        error instanceof Error ? error.message : String(error),
+        { instance: options.instance },
+      );
+    }
     info = await queryLimaInstance(options.instance, {
       limactlExecutable: resolved.executable,
       limaHome: options.limaHome,

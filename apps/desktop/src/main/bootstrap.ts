@@ -94,7 +94,17 @@ export async function bootstrapDesktop(dataRootOverride?: string): Promise<Boots
     userDataDir: dir,
     ...(linuxOverride === undefined ? {} : { dataRoot: linuxOverride }),
   });
-  const client = await host.createRuntimeClient();
+  let client: RuntimeClient;
+  try {
+    client = await host.createRuntimeClient();
+  } catch (error) {
+    if (typeof error === 'object' && error !== null) {
+      const record = error as Record<string, unknown>;
+      if (record['hostPlatform'] === undefined) record['hostPlatform'] = host.hostKind;
+      if (record['executionMode'] === undefined) record['executionMode'] = host.executionMode;
+    }
+    throw error;
+  }
   let hello;
   try {
     hello = await client.start();

@@ -46,7 +46,8 @@ export function classifyBootFailure(
   if (
     limaByStructure ||
     code.startsWith('LIMA_') ||
-    (code === 'HOST_PLATFORM_UNSUPPORTED' && process.platform === 'darwin')
+    (code === 'HOST_PLATFORM_UNSUPPORTED' && process.platform === 'darwin') ||
+    /lima|limactl|virtualization\.framework/i.test(message)
   ) {
     kind = 'lima-runtime-offline';
   } else if (
