@@ -9,6 +9,7 @@ import {
   MAX_DEEPEN_CHECKS,
   MAX_FLOW_TURNS,
   EXTRA_ROUND_IDLE_LIMIT,
+  timeLeftClause,
   reportsDefect,
   MAX_LEAD_TURNS,
   MAX_SECOND_PASS_CHECKS,
@@ -57,6 +58,9 @@ import {
 const CONCLUSION_CHARS = 1500;
 /** Closing characters kept of each hazard-sweep turn (its conclusion is at the end). */
 const SWEEP_STATEMENT_CHARS = 600;
+
+/** A clause as the start of a message: its first letter upper-case. */
+const sentenceStart = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1);
 
 /** The traced "Root cause:" lines of a note (not "not traced"), bounded, one per line. */
 function earlierRootCauses(note: string): string {
@@ -333,9 +337,9 @@ export async function* investigateChecks<T extends InvestigationTurn>(
       code: 'QA_SECOND_PASS',
       message:
         weak.length +
-        ' check(s) stayed undecided and about ' +
-        Math.round(remaining() / 60_000) +
-        ' minutes of investigation time remain; giving them a second pass in fresh sessions.',
+        ' check(s) stayed undecided and ' +
+        timeLeftClause(remaining()) +
+        '; giving them a second pass in fresh sessions.',
     });
     let ran = false;
     try {
@@ -499,9 +503,8 @@ export async function* investigateChecks<T extends InvestigationTurn>(
       type: 'warning',
       code: 'QA_DEEPEN_PASS',
       message:
-        'About ' +
-        Math.round(remaining() / 60_000) +
-        ' minutes of investigation time remain; following up ' +
+        sentenceStart(timeLeftClause(remaining())) +
+        '; following up ' +
         leadTasks.length +
         ' lead(s), exercising ' +
         flows.length +
@@ -606,9 +609,8 @@ export async function* investigateChecks<T extends InvestigationTurn>(
       type: 'warning',
       code: 'QA_HAZARD_SWEEP',
       message:
-        'About ' +
-        Math.round(remaining() / 60_000) +
-        ' minutes remain; probing up to ' +
+        sentenceStart(timeLeftClause(remaining())) +
+        '; probing up to ' +
         ranked.length +
         ' source file(s) flagged for risky operations: ' +
         ranked

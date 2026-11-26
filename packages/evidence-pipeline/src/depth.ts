@@ -354,6 +354,19 @@ export const MAX_FLOW_TURNS = 5;
  */
 export const EXTRA_ROUND_IDLE_LIMIT = 2;
 
+/**
+ * The investigation time left, as a clause a person reads in the run timeline. "No limit" in
+ * Settings is a 7-day window, and the old "about 10058 minutes remain" read as nonsense; a window
+ * that long is described as having no practical limit, and a long one in hours.
+ */
+export function timeLeftClause(ms: number): string {
+  const minutes = Math.max(0, Math.round(ms / 60_000));
+  if (minutes >= 48 * 60) return 'the run has no practical time limit';
+  if (minutes >= 120)
+    return 'about ' + Math.round(minutes / 60) + ' hours of investigation time remain';
+  return 'about ' + minutes + ' minutes of investigation time remain';
+}
+
 /** A closing note that reports at least one reproduced defect ("Root cause: …", traced or not). */
 export function reportsDefect(statement: string): boolean {
   return /^\s*root cause:/im.test(statement);
