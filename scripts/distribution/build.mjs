@@ -1,19 +1,42 @@
 // Native build only. No publishing, tagging or access credentials.
 import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { cp, mkdir, readFile, writeFile, chmod, stat } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import {
+  cp,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+  chmod,
+  stat,
+} from 'node:fs/promises';
+import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve, posix } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 import { inventory, parseIdentity, sha256, validate } from './contract.mjs';
 import { bundleCli } from './bundle-cli.mjs';
 
+const LIMA_VERSION = '2.3.0';
+const LIMA_DARWIN_ARM64_SHA256 = 'b7af444bd8f91d3c307477e562f2cf3bd7595d62b9429185e4fa841563578cfc';
+const LIMA_DARWIN_ARM64_URL =
+  'https://github.com/lima-vm/lima/releases/download/v2.3.0/lima-2.3.0-Darwin-arm64.tar.gz';
+
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const target = process.argv[2];
-if (!['windows-x64', 'cachyos-x64'].includes(target))
-  throw new Error('Usage: node scripts/distribution/build.mjs windows-x64|cachyos-x64');
-if (process.arch !== 'x64' || process.platform !== (target === 'windows-x64' ? 'win32' : 'linux'))
-  throw new Error('Native x64 build host required');
+if (!['windows-x64', 'cachyos-x64', 'macos-arm64'].includes(target))
+  throw new Error('Usage: node scripts/distribution/build.mjs windows-x64|cachyos-x64|macos-arm64');
+const expectedHost =
+  target === 'windows-x64'
+    ? process.platform === 'win32' && process.arch === 'x64'
+    : target === 'cachyos-x64'
+      ? process.platform === 'linux' && process.arch === 'x64'
+      : process.platform === 'darwin' && process.arch === 'arm64';
+if (!expectedHost) throw new Error(`Native ${target} build host required`);
+
 const git = (...args) => execFileSync('git', args, { cwd: repo, encoding: 'utf8' }).trim();
 if (git('status', '--porcelain', '--untracked-files=all'))
   throw new Error('Artifacts require a clean committed build input');
@@ -26,10 +49,40 @@ function assertBuildInput() {
     throw new Error('Build input changed during packaging; discard this candidate and rebuild');
 }
 if (!process.env['npm_execpath']) throw new Error('Invoke through pnpm distribution:build');
+
+async function resolveOrFetchLimaBundle() {
+  const candidates = [
+    process.env['SENTRY_LIMA_BUNDLE_DIR'],
+    join(homedir(), '.cache', `sentry-lima-${LIMA_VERSION}`, 'root'),
+    join(homedir(), 'Library', 'Application Support', 'Sentry', 'lima-bin'),
+  ].filter(Boolean);
+  for (const dir of candidates) {
+    if (
+      existsSync(join(dir, 'bin', 'limactl')) &&
+      existsSync(join(dir, 'share', 'lima', 'lima-guestagent.Linux-aarch64.gz'))
+    ) {
+      return dir;
+    }
+  }
+  const cacheBase = join(homedir(), '.cache', `sentry-lima-${LIMA_VERSION}`);
+  const tgz = join(cacheBase, `lima-${LIMA_VERSION}-Darwin-arm64.tar.gz`);
+  const rootDir = join(cacheBase, 'root');
+  await mkdir(rootDir, { recursive: true });
+  execFileSync('curl', ['-fsSL', '--retry', '3', '-o', tgz, LIMA_DARWIN_ARM64_URL], {
+    stdio: 'inherit',
+  });
+  const actualHash = sha256(await readFile(tgz));
+  if (actualHash !== LIMA_DARWIN_ARM64_SHA256) {
+    throw new Error(`Lima tarball checksum mismatch: got ${actualHash}`);
+  }
+  execFileSync('tar', ['-xzf', tgz, '-C', rootDir], { stdio: 'inherit' });
+  return rootDir;
+}
+
 // Compile the committed input, rather than trusting arbitrary ignored dist files.
 execFileSync(
   process.execPath,
-  [process.env['npm_execpath'], 'exec', 'turbo', 'run', 'build', '--force'],
+  [process.execPath ? process.env['npm_execpath'] : '', 'exec', 'turbo', 'run', 'build', '--force'],
   { cwd: repo, stdio: 'inherit' },
 );
 const pkg = JSON.parse(await readFile(join(repo, 'package.json'), 'utf8'));
@@ -44,10 +97,44 @@ const identity = parseIdentity({
 if (desktopPkg.version !== pkg.version) throw new Error('Desktop version mismatch');
 const name = `sentry-${pkg.version}-${identity.sourceCommit.slice(0, 12)}-${target}`;
 const output = join(repo, 'dist/distributions', name);
-// Refuse overwrite: reruns use a new external output directory or remove only
-// the reviewed generated directory. Never recurse over caller-provided paths.
 await mkdir(dirname(output), { recursive: true });
 await mkdir(output, { recursive: false });
+
+// Select tracked runtime/launcher/distribution files once so macOS can also embed runtime-source inside .app.
+const trackedPaths = git('ls-files', '-z').split('\0').filter(Boolean);
+const roots = new Set([
+  'package.json',
+  'pnpm-lock.yaml',
+  'pnpm-workspace.yaml',
+  '.nvmrc',
+  'tsconfig.base.json',
+  'turbo.json',
+  'eslint.config.js',
+  'prettier.config.js',
+]);
+
+async function writeRuntimeSource(destRoot) {
+  for (const path of trackedPaths) {
+    const runtimeSource =
+      roots.has(path) ||
+      /^(apps\/runtime|packages\/[^/]+)\/(src\/.*|package\.json|tsconfig[^/]*\.json)$/.test(path) ||
+      path === 'scripts/distribution/runtime-check.mjs' ||
+      path === 'scripts/distribution/contract.mjs';
+    if (!runtimeSource) continue;
+    const dest = join(destRoot, path);
+    if (!(await stat(join(repo, path))).isFile()) throw new Error('Non-file source input');
+    await mkdir(dirname(dest), { recursive: true });
+    await writeFile(
+      dest,
+      execFileSync('git', ['show', `${identity.sourceCommit}:${path}`], {
+        cwd: repo,
+        maxBuffer: 16 * 1024 * 1024,
+      }),
+    );
+  }
+  await writeFile(join(destRoot, 'build-identity.json'), JSON.stringify(identity, null, 2) + '\n');
+}
+
 const app = join(output, '.app-stage');
 await mkdir(join(app, 'dist/main'), { recursive: true });
 const meta = await build({
@@ -69,7 +156,11 @@ for (const file of Object.values(meta.metafile.outputs))
 for (const path of ['dist/preload', 'dist/renderer', 'assets'])
   await cp(join(repo, 'apps/desktop', path), join(app, path), {
     recursive: true,
-    filter: (p) => !p.endsWith('.map') && !p.endsWith('.icns'),
+    filter: (p) => {
+      if (p.endsWith('.map')) return false;
+      if (target === 'macos-arm64') return !p.endsWith('.ico');
+      return !p.endsWith('.icns');
+    },
   });
 await writeFile(
   join(app, 'package.json'),
@@ -88,14 +179,46 @@ await writeFile(
   ) + '\n',
 );
 await writeFile(join(app, 'build-identity.json'), JSON.stringify(identity, null, 2) + '\n');
+
+const extraResources = [];
+let limaBundleDir;
+let stagedAppRuntimeSource;
+if (target === 'macos-arm64') {
+  limaBundleDir = await resolveOrFetchLimaBundle();
+  const limaStage = join(output, '.lima-stage');
+  await mkdir(join(limaStage, 'bin'), { recursive: true });
+  await mkdir(join(limaStage, 'share', 'lima'), { recursive: true });
+  await cp(join(limaBundleDir, 'bin', 'limactl'), join(limaStage, 'bin', 'limactl'));
+  await chmod(join(limaStage, 'bin', 'limactl'), 0o755);
+  await cp(
+    join(limaBundleDir, 'share', 'lima', 'lima-guestagent.Linux-aarch64.gz'),
+    join(limaStage, 'share', 'lima', 'lima-guestagent.Linux-aarch64.gz'),
+  );
+  if (existsSync(join(limaBundleDir, 'share', 'lima', 'templates'))) {
+    await cp(
+      join(limaBundleDir, 'share', 'lima', 'templates'),
+      join(limaStage, 'share', 'lima', 'templates'),
+      { recursive: true },
+    );
+  }
+  stagedAppRuntimeSource = join(output, '.app-runtime-source-stage');
+  await writeRuntimeSource(stagedAppRuntimeSource);
+  extraResources.push(
+    { from: limaStage, to: 'lima' },
+    { from: stagedAppRuntimeSource, to: 'runtime-source' },
+  );
+}
+
 // electron-builder runs with a separate dependency-free application directory.
 const desktopRequire = createRequire(join(repo, 'apps/desktop/package.json'));
 const builder = desktopRequire('electron-builder');
 await builder.build({
   targets: (target === 'windows-x64'
     ? builder.Platform.WINDOWS
-    : builder.Platform.LINUX
-  ).createTarget('dir', builder.Arch.x64),
+    : target === 'cachyos-x64'
+      ? builder.Platform.LINUX
+      : builder.Platform.MAC
+  ).createTarget('dir', target === 'macos-arm64' ? builder.Arch.arm64 : builder.Arch.x64),
   projectDir: join(repo, 'apps/desktop'),
   config: {
     appId: 'io.sentry.qa.desktop',
@@ -107,6 +230,7 @@ await builder.build({
       buildResources: join(repo, 'apps/desktop/assets'),
     },
     files: ['dist/**/*', 'assets/**/*', 'build-identity.json', 'package.json'],
+    ...(extraResources.length > 0 ? { extraResources } : {}),
     asar: false,
     npmRebuild: false,
     win: {
@@ -119,32 +243,69 @@ await builder.build({
       executableName: 'sentry',
       icon: join(repo, 'apps/desktop/assets/sentry-icon.png'),
     },
+    mac: {
+      target: 'dir',
+      icon: join(repo, 'apps/desktop/assets/sentry-icon.icns'),
+      category: 'public.app-category.developer-tools',
+      identity: null,
+    },
   },
   publish: 'never',
 });
 const unpacked = join(
   output,
   '.electron-stage',
-  target === 'windows-x64' ? 'win-unpacked' : 'linux-unpacked',
+  target === 'windows-x64'
+    ? 'win-unpacked'
+    : target === 'cachyos-x64'
+      ? 'linux-unpacked'
+      : 'mac-arm64',
 );
-await cp(unpacked, join(output, 'desktop'), { recursive: true });
+await cp(unpacked, join(output, 'desktop'), { recursive: true, verbatimSymlinks: true });
+
+let dmgName;
+if (target === 'macos-arm64') {
+  const builtApp = join(output, 'desktop', 'Sentry.app');
+  // Preserve limactl virtualization entitlements while ensuring local ad-hoc verification passes.
+  const limactlInApp = join(builtApp, 'Contents', 'Resources', 'lima', 'bin', 'limactl');
+  const ents = execFileSync('codesign', ['-d', '--entitlements', ':-', limactlInApp], {
+    encoding: 'utf8',
+  });
+  if (!ents.includes('com.apple.security.virtualization')) {
+    throw new Error('Bundled limactl lost com.apple.security.virtualization entitlement');
+  }
+  execFileSync('codesign', ['--force', '--sign', '-', builtApp], { stdio: 'inherit' });
+  execFileSync('codesign', ['--verify', '--deep', '--strict', builtApp], { stdio: 'inherit' });
+
+  const dmgStage = await mkdtemp(join(tmpdir(), 'sentry-dmg-stage-'));
+  try {
+    await cp(builtApp, join(dmgStage, 'Sentry.app'), { recursive: true, verbatimSymlinks: true });
+    await symlink('/Applications', join(dmgStage, 'Applications'));
+    dmgName = `Sentry-${pkg.version}-arm64.dmg`;
+    execFileSync(
+      'hdiutil',
+      [
+        'create',
+        '-volname',
+        'Sentry',
+        '-srcfolder',
+        dmgStage,
+        '-ov',
+        '-format',
+        'UDZO',
+        join(output, dmgName),
+      ],
+      { stdio: 'inherit' },
+    );
+  } finally {
+    await rm(dmgStage, { recursive: true, force: true });
+  }
+}
+
 await bundleCli(repo, output, pkg.version);
-// Payload is selected from tracked build input, never by recursive checkout copy.
-const paths = git('ls-files', '-z').split('\0').filter(Boolean);
-const roots = new Set([
-  'package.json',
-  'pnpm-lock.yaml',
-  'pnpm-workspace.yaml',
-  '.nvmrc',
-  'tsconfig.base.json',
-  'turbo.json',
-  'eslint.config.js',
-  'prettier.config.js',
-]);
-for (const path of paths) {
-  const runtimeSource =
-    roots.has(path) ||
-    /^(apps\/runtime|packages\/[^/]+)\/(src\/.*|package.json|tsconfig[^/]*\.json)$/.test(path);
+await writeRuntimeSource(join(output, 'runtime-source'));
+
+for (const path of trackedPaths) {
   const launcher =
     /^scripts\/launcher\/(linux\/.*|[^/]+\.(ps1|psm1|mjs))$/.test(path) &&
     !path.includes('/tests/');
@@ -153,14 +314,8 @@ for (const path of paths) {
     !path.endsWith('build.mjs') &&
     !path.endsWith('bundle-cli.mjs') &&
     !path.endsWith('smoke.mjs');
-  if (
-    !runtimeSource &&
-    !launcher &&
-    !distribution &&
-    path !== 'apps/runtime/scripts/deploy-inner.sh'
-  )
-    continue;
-  const dest = join(output, runtimeSource ? 'runtime-source' : '', path);
+  if (!launcher && !distribution && path !== 'apps/runtime/scripts/deploy-inner.sh') continue;
+  const dest = join(output, path);
   if (!(await stat(join(repo, path))).isFile()) throw new Error('Non-file source input');
   await mkdir(dirname(dest), { recursive: true });
   await writeFile(
@@ -172,12 +327,16 @@ for (const path of paths) {
   );
 }
 await writeFile(join(output, 'build-identity.json'), JSON.stringify(identity, null, 2) + '\n');
-await writeFile(
-  join(output, 'runtime-source/build-identity.json'),
-  JSON.stringify(identity, null, 2) + '\n',
-);
 await cp(
-  join(repo, 'scripts/distribution', target === 'windows-x64' ? 'release.ps1' : 'release.sh'),
+  join(
+    repo,
+    'scripts/distribution',
+    target === 'windows-x64'
+      ? 'release.ps1'
+      : target === 'cachyos-x64'
+        ? 'release.sh'
+        : 'release-macos.sh',
+  ),
   join(output, target === 'windows-x64' ? 'sentry.ps1' : 'sentry'),
 );
 if (target !== 'windows-x64') await chmod(join(output, 'sentry'), 0o755);
@@ -188,8 +347,8 @@ for (const [source, destination] of [
 ]) {
   const guide = (await readFile(join(repo, source), 'utf8')).replace(
     /\]\((?!https?:|#)([^)]+)\)/g,
-    (_, target) => {
-      const [path, fragment] = target.split('#');
+    (_, linkTarget) => {
+      const [path, fragment] = linkTarget.split('#');
       const resolved = posix.normalize(posix.join(posix.dirname(source), path));
       const suffix = fragment ? '#' + fragment : '';
       if (resolved === 'docs/beta/cli.md') return `](CLI.md${suffix})`;
@@ -199,43 +358,55 @@ for (const [source, destination] of [
   );
   await writeFile(join(output, destination), guide);
 }
-// Generated staging is outside the artifact root before inventory/extraction.
-const { rm } = await import('node:fs/promises');
 await rm(app, { recursive: true });
 await rm(join(output, '.electron-stage'), { recursive: true });
+if (target === 'macos-arm64') {
+  await rm(join(output, '.lima-stage'), { recursive: true });
+  await rm(join(output, '.app-runtime-source-stage'), { recursive: true });
+}
 assertBuildInput();
 const manifest = {
   ...identity,
   buildPlatform: process.platform + '-' + process.arch,
   targetPlatform: target,
   artifactType: 'versioned-archive',
+  ...(dmgName !== undefined ? { dmg: dmgName } : {}),
   toolchain: {
     node: process.version,
     pnpm: pkg.packageManager,
     electron: desktopPkg.devDependencies.electron,
     electronBuilder: desktopPkg.devDependencies['electron-builder'],
     esbuild: '0.21.5',
+    ...(target === 'macos-arm64' ? { lima: LIMA_VERSION } : {}),
   },
   components: [
     'Electron Desktop',
     'production CLI frontend (included runtime)',
     'Linux runtime source bootstrap',
+    ...(target === 'macos-arm64' ? ['bundled Lima 2.3.0 VZ runtime', 'macOS DMG installer'] : []),
     'platform launcher',
     'application assets',
   ],
-  prerequisites: [
-    'Linux Node >=22',
-    'Linux pnpm 9.12.3',
-    'internet for frozen dependencies and provider tooling',
-    'systemd user services',
-    'bubblewrap',
-    'socat',
-    ...(target === 'windows-x64'
-      ? ['Windows 11 x64', 'WSL2 (Ubuntu preferred)']
-      : ['native CachyOS x64', 'graphical session', 'pacman']),
-  ],
+  prerequisites:
+    target === 'macos-arm64'
+      ? [
+          'macOS Apple Silicon (arm64)',
+          'Apple Virtualization.framework (vz)',
+          'internet for first-launch Ubuntu cloud image and frozen guest dependencies',
+        ]
+      : [
+          'Linux Node >=22',
+          'Linux pnpm 9.12.3',
+          'internet for frozen dependencies and provider tooling',
+          'systemd user services',
+          'bubblewrap',
+          'socat',
+          ...(target === 'windows-x64'
+            ? ['Windows 11 x64', 'WSL2 (Ubuntu preferred)']
+            : ['native CachyOS x64', 'graphical session', 'pacman']),
+        ],
   checksumAlgorithm: 'SHA256',
-  files: await inventory(output),
+  files: await inventory(output, '', { allowAppBundle: target === 'macos-arm64' }),
 };
 await writeFile(join(output, 'distribution.json'), JSON.stringify(manifest, null, 2) + '\n');
 await validate(output);
@@ -259,6 +430,7 @@ assertBuildInput();
 console.log(
   JSON.stringify({
     archive,
+    ...(dmgName !== undefined ? { dmg: join(output, dmgName) } : {}),
     sourceCommit: identity.sourceCommit,
     checksum: sha256(await readFile(archive)),
     extractionVerified: true,
