@@ -7,7 +7,7 @@
  * the historical WSL UI so nothing silently disappears on old runtimes.
  */
 
-export type RuntimeHostViewKind = 'windows' | 'linux' | 'unknown';
+export type RuntimeHostViewKind = 'windows' | 'linux' | 'macos' | 'unknown';
 
 export interface RuntimeHostFacts {
   readonly hostPlatform?: string | undefined;
@@ -39,6 +39,15 @@ export function deriveRuntimeHostView(status: unknown, distros: unknown): Runtim
   const secondary = factsOf(distros);
   const executionMode = primary.executionMode ?? secondary.executionMode;
   const hostPlatform = primary.hostPlatform ?? secondary.hostPlatform;
+  if (executionMode === 'lima' || hostPlatform === 'macos') {
+    return {
+      kind: 'macos',
+      showDistroSelector: false,
+      hostLabel: 'macOS',
+      executionLabel: 'Lima (Linux)',
+      distroLabel: undefined,
+    };
+  }
   if (executionMode === 'native-linux' || hostPlatform === 'linux') {
     const distribution = primary.distribution ?? secondary.distribution ?? undefined;
     const prettyName = distribution?.prettyName;

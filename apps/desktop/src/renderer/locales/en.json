@@ -400,5 +400,12 @@
   "No profile": "No profile",
   "Checked at run time": "Checked at run time",
   "Profile will be used": "Profile will be used",
-  "Profile needs rebuilding": "Profile needs rebuilding"
+  "Profile needs rebuilding": "Profile needs rebuilding",
+  "Sentry executes QA inside the configured Lima virtual machine.": "Sentry executes QA inside the configured Lima virtual machine.",
+  "Lima Runtime": "Lima Runtime",
+  "Lima runtime": "Lima runtime",
+  "Sentry runs QA inside an isolated Virtualization.framework Linux VM managed via Lima.": "Sentry runs QA inside an isolated Virtualization.framework Linux VM managed via Lima.",
+  "Lima connected": "Lima connected",
+  "Lima instance:": "Lima instance:",
+  "Linux connected": "Linux connected"
 }

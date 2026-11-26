@@ -4,9 +4,8 @@
  * Desktop owns one runtime, one Stable Core, one CLI contract, and one
  * renderer. Only the host-specific edges vary: how the runtime process is
  * launched, how project source paths reach Linux, and which host facts
- * the UI/CLI may display. This contract is that edge — two small
- * implementations exist (Windows/WSL2, native CachyOS Linux), never a
- * second Desktop application.
+ * the UI/CLI may display. Windows uses WSL2, CachyOS launches Node
+ * directly, and macOS runs inside an isolated Lima Virtualization.framework guest.
  */
 import type {
   ExecutionMode,
@@ -29,6 +28,10 @@ export interface HostRuntimeInfo {
   readonly runtimeEntry?: string;
   /** Resolved standalone Node binary (native Linux only). */
   readonly node?: { readonly executable: string; readonly version: string };
+  /** Lima virtualization backend (macOS Lima only). */
+  readonly vmType?: string;
+  /** Lima instance name (macOS Lima only). */
+  readonly instance?: string;
 }
 
 /**
@@ -48,6 +51,12 @@ export interface HostPlatform {
    * validates absolute Linux paths unchanged (including /mnt/*).
    */
   prepareSourcePath(path: string): Promise<string>;
+
+  /**
+   * Translate a stored project source path back to a host-side directory for
+   * native file pickers when the runtime operates on staged guest copies.
+   */
+  resolveHostSourcePath?(path: string): Promise<string>;
 
   /** Host facts for diagnostics, status, and the CLI surface. */
   runtimeEnvironmentInfo(): Promise<HostRuntimeInfo>;

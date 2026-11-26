@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# sentry — native Linux launcher entry point (CachyOS).
-# Usage: ./sentry setup | open | update | stop | status | doctor | version | help
+# sentry — native Linux launcher and opt-in macOS/Lima source launcher.
+# Run ./sentry help for commands on the current platform.
 # After setup, ~/.local/bin/sentry allows the same from any directory.
 # Provider credentials are NEVER requested here; use Desktop Settings -> Providers.
 set -euo pipefail
@@ -8,5 +8,55 @@ set -euo pipefail
 SELF="$(readlink -f "${BASH_SOURCE[0]}")"
 REPO_ROOT="$(cd "$(dirname "$SELF")" && pwd)"
 export SENTRY_REPO_ROOT="$REPO_ROOT"
+if [[ "$(uname -s)" == Darwin ]]; then
+  case "${1:-help}" in
+    open)
+      INSTANCE="${SENTRY_LIMA_INSTANCE:-sentry-linux}"
+      if [[ ! "$INSTANCE" =~ ^[a-zA-Z0-9][a-zA-Z0-9_.-]*$ ]]; then
+        printf '%s\n' 'Invalid SENTRY_LIMA_INSTANCE.' >&2
+        exit 2
+      fi
+      export SENTRY_LIMA_INSTANCE="$INSTANCE"
+      LIMACTL="${SENTRY_LIMACTL_PATH:-limactl}"
+      if [[ -n "${SENTRY_LIMA_HOME:-}" ]]; then
+        export LIMA_HOME="$SENTRY_LIMA_HOME"
+      fi
+      if command -v "$LIMACTL" >/dev/null 2>&1; then
+        LIMA_JSON="$("$LIMACTL" list --format json "$INSTANCE" 2>/dev/null || true)"
+        if [[ -n "$LIMA_JSON" ]]; then
+          VM_TYPE="$(node -e 'try { const d = JSON.parse(process.argv[1]); process.stdout.write((d.vmType || d.config?.vmType || "").toLowerCase()); } catch {}' "$LIMA_JSON")"
+          if [[ -n "$VM_TYPE" && "$VM_TYPE" != "vz" ]]; then
+            printf '%s\n' "Security Error: Lima instance '$INSTANCE' uses unsupported backend '$VM_TYPE'. Sentry strictly requires Apple Virtualization.framework ('vz')." >&2
+            exit 1
+          fi
+        fi
+      fi
+      ELECTRON="$(node -p 'require(process.argv[1])' "$REPO_ROOT/apps/desktop/node_modules/electron")"
+      OPEN_ENV=(--env "PATH=$PATH" --env "SENTRY_LIMA_INSTANCE=$INSTANCE")
+      for var in SENTRY_LIMA_HOME SENTRY_LIMACTL_PATH SENTRY_RUNTIME_ENTRY SENTRY_DATA_ROOT; do
+        if [[ -n "${!var:-}" ]]; then
+          OPEN_ENV+=(--env "$var=${!var}")
+        fi
+      done
+      exec /usr/bin/open -n -a "${ELECTRON%/Contents/MacOS/Electron}" "${OPEN_ENV[@]}" \
+        --args "$REPO_ROOT/apps/desktop"
+      ;;
+    stop)
+      exec "$REPO_ROOT/apps/desktop/node_modules/.bin/electron" "$REPO_ROOT/apps/desktop" --sentry-control=stop
+      ;;
+    cli)
+      shift
+      exec node --disable-warning=ExperimentalWarning "$REPO_ROOT/apps/cli/dist/index.js" "$@"
+      ;;
+    help|-h|--help)
+      printf '%s\n' 'Usage on macOS: [SENTRY_LIMA_INSTANCE=<guest>] ./sentry open | ./sentry cli <command> | ./sentry stop'
+      ;;
+    *)
+      printf '%s\n' 'Use ./sentry help for the macOS source launcher.' >&2
+      exit 2
+      ;;
+  esac
+  exit 0
+fi
 exec bash "$REPO_ROOT/scripts/launcher/linux/launcher.sh" "$@"
 

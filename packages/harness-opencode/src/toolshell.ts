@@ -146,11 +146,24 @@ export async function windowsHiddenPaths(
 }
 
 /**
- * Compute the tool-namespace hide list. Hiding the workspace PARENT covers
- * sibling workspaces and everything above it (including the Sentry data
- * root) regardless of layout depth; the workspace itself is re-bound
- * read-write afterwards. Roots, empty paths, duplicates, and paths that
- * must stay visible are dropped.
+ * Recover the Sentry data root from a canonical agent workspace path
+ * (`<dataRoot>/projects/<id>/runs/<id>/agents/<id>/workspace/project`).
+ * Hiding only the workspace parent leaves sibling projects and runtime DBs
+ * under `<dataRoot>/projects/` visible from a model-controlled shell.
+ */
+export function inferDataRoot(workspace: string): string | undefined {
+  const normalized = normalizeHidePath(workspace);
+  if (normalized === undefined) return undefined;
+  const match = /^(.+?)\/projects\/[^/]+\/runs\/[^/]+\/agents\/[^/]+\/workspace\/project$/.exec(
+    normalized,
+  );
+  return match?.[1] === undefined ? undefined : normalizeHidePath(match[1]);
+}
+
+/**
+ * Compute the tool-namespace hide list. Hiding the data root (when canonical)
+ * and workspace parent covers sibling workspaces and runtime databases; the
+ * workspace itself is re-bound read-write afterwards.
  */
 export function computeToolHiddenPaths(input: {
   readonly scopeDir: string;
@@ -158,15 +171,21 @@ export function computeToolHiddenPaths(input: {
   readonly realHome?: string;
   /** Further existing paths to hide, such as the Windows drive mounts under WSL. */
   readonly extra?: readonly string[];
+  /** Sentry data root; inferred from canonical workspace path when omitted. */
+  readonly dataRoot?: string;
 }): readonly string[] {
   const workspace = normalizeHidePath(input.workspace);
   const scopeDir = normalizeHidePath(input.scopeDir);
   if (workspace === undefined || scopeDir === undefined) return [];
   const slash = workspace.lastIndexOf('/');
   const parent = slash > 0 ? workspace.slice(0, slash) : undefined;
+  const dataRoot =
+    input.dataRoot === undefined ? inferDataRoot(workspace) : normalizeHidePath(input.dataRoot);
+  const underDataRoot = (path: string): boolean =>
+    dataRoot !== undefined && path.toLowerCase().startsWith(dataRoot.toLowerCase() + '/');
   const candidates: Array<string | undefined> = [
-    scopeDir,
-    parent,
+    dataRoot,
+    ...[scopeDir, parent].map((p) => (p !== undefined && underDataRoot(p) ? undefined : p)),
     ...(input.extra ?? []).map(normalizeHidePath),
   ];
   const home =

@@ -1061,5 +1061,20 @@
   "Download CLI commands (.md)": "Изтегли командите на CLI (.md)",
   "Save a Markdown file with every CLI command and what it does": "Запази Markdown файл с всяка команда на CLI и какво прави тя",
   "A Markdown file with every `sentry cli` command, its options and what it does: projects, runs, settings, models, exports and toolchains. Keep it next to your scripts, or give it to a coding assistant so it knows how to drive Sentry.": "Markdown файл с всяка команда `sentry cli`, нейните опции и какво прави: проекти, изпълнения, настройки, модели, експорти и набори от инструменти. Дръжте го до скриптовете си или го дайте на асистент за програмиране, за да знае как да управлява Sentry.",
-  "Saved to": "Запазено в"
+  "Saved to": "Запазено в",
+  "Sentry executes QA inside the configured Lima virtual machine.": "Sentry изпълнява QA в конфигурираната виртуална машина Lima.",
+  "Lima Runtime": "Среда Lima",
+  "Lima runtime": "Среда Lima",
+  "Sentry runs QA inside an isolated Virtualization.framework Linux VM managed via Lima.": "Sentry изпълнява QA в изолирана Linux виртуална машина чрез Virtualization.framework и Lima.",
+  "Lima connected": "Lima е свързана",
+  "Lima instance:": "Инстанция на Lima:",
+  "Linux connected": "Linux е свързан",
+  "QA execution is disabled until the Lima Linux runtime reconnects.": "Изпълнението на QA е деактивирано, докато Linux средата в Lima не се свърже отново.",
+  "QA execution is disabled until the native Linux runtime reconnects.": "Изпълнението на QA е деактивирано, докато native Linux средата не се свърже отново.",
+  "QA execution is disabled until the WSL2 runtime reconnects.": "Изпълнението на QA е деактивирано, докато WSL2 средата не се свърже отново.",
+  "A saved credential does not imply the provider works until a non-billable doctor verifies it inside the Lima Linux runtime.": "Запазеният ключ не означава, че доставчикът работи, докато неплатена проверка не го потвърди в Linux средата на Lima.",
+  "A saved credential does not imply the provider works until a non-billable doctor verifies it inside the WSL runtime.": "Запазеният ключ не означава, че доставчикът работи, докато неплатена проверка не го потвърди в WSL средата.",
+  "Production only — FULL and TARGETED runs execute inside the Lima Linux runtime and consume provider budget.": "Само продукционен режим — ПЪЛНИТЕ и ЦЕЛЕВИТЕ изпълнения се извършват в Linux средата на Lima и изразходват бюджет на доставчика.",
+  "Production only — FULL and TARGETED runs execute inside the native Linux runtime and consume provider budget.": "Само продукционен режим — ПЪЛНИТЕ и ЦЕЛЕВИТЕ изпълнения се извършват в native Linux средата и изразходват бюджет на доставчика.",
+  "Production only — FULL and TARGETED runs execute inside the WSL2 runtime and consume provider budget.": "Само продукционен режим — ПЪЛНИТЕ и ЦЕЛЕВИТЕ изпълнения се извършват в WSL2 средата и изразходват бюджет на доставчика."
 }

@@ -10,7 +10,8 @@ import type { ExecutionMode, HostKind } from './runtime/runtime-client.js';
 import { toSafeError, type SafeErrorOptions } from './desktop-command-router.js';
 import { translateMainCopy, type AppLanguage } from './app-locale.js';
 
-export type FatalScreenKind = 'wsl-runtime-offline' | 'native-runtime-offline' | 'data-store';
+export type FatalScreenKind =
+  'wsl-runtime-offline' | 'native-runtime-offline' | 'lima-runtime-offline' | 'data-store';
 
 export interface BootFailureClassification {
   readonly kind: FatalScreenKind;
@@ -40,8 +41,15 @@ export function classifyBootFailure(
   const executionMode = errorField(error, 'executionMode') as ExecutionMode | undefined;
   const nativeByStructure = hostPlatform === 'linux' || executionMode === 'native-linux';
   const wslByStructure = hostPlatform === 'windows' || executionMode === 'wsl2';
+  const limaByStructure = hostPlatform === 'macos' || executionMode === 'lima';
   let kind: FatalScreenKind;
   if (
+    limaByStructure ||
+    code.startsWith('LIMA_') ||
+    (code === 'HOST_PLATFORM_UNSUPPORTED' && process.platform === 'darwin')
+  ) {
+    kind = 'lima-runtime-offline';
+  } else if (
     code === 'LINUX_DISTRO_UNSUPPORTED' ||
     code === 'LINUX_NODE_UNAVAILABLE' ||
     code === 'LINUX_NODE_UNSUPPORTED' ||
@@ -84,6 +92,18 @@ export function fatalScreenCopy(
   language: AppLanguage = 'en',
 ): FatalScreenCopy {
   const t = (source: string): string => translateMainCopy(source, language);
+  if (kind === 'lima-runtime-offline') {
+    return {
+      title: t('Sentry — runtime offline'),
+      heading: t('Sentry Runtime Offline'),
+      intro: t(
+        'Sentry Desktop is running, but the macOS Lima Linux execution runtime could not start.',
+      ),
+      help: t(
+        'QA execution is disabled. Verify Lima 2.3+ and Virtualization.framework availability, then retry.',
+      ),
+    };
+  }
   if (kind === 'native-runtime-offline') {
     return {
       title: t('Sentry — runtime offline'),

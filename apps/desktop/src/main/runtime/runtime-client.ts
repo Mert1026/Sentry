@@ -13,8 +13,8 @@ import type { RuntimeHelloResult } from '@qa/runtime-protocol';
 /** Hello payload validated by the runtime; single source of truth is the protocol package. */
 export type RuntimeHello = RuntimeHelloResult;
 
-export type HostKind = 'windows' | 'linux';
-export type ExecutionMode = 'wsl2' | 'native-linux';
+export type HostKind = 'windows' | 'linux' | 'macos';
+export type ExecutionMode = 'wsl2' | 'native-linux' | 'lima';
 
 export interface HostDistributionInfo {
   readonly id: string;

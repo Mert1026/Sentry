@@ -1,6 +1,9 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { access, constants } from 'node:fs/promises';
+import { dirname, posix } from 'node:path';
+import { OpenCodeHarnessError } from './errors.js';
+import { inferDataRoot } from './toolshell.js';
 
 /**
  * Resolve the first executable candidate (absolute paths checked for
@@ -411,4 +414,128 @@ export async function probeSystemdUser(
     });
   if (!(await runBounded('systemctl', ['--user', 'show-environment']))) return false;
   return runBounded('systemd-run', ['--user', '--pipe', '--wait', '--collect', '/usr/bin/true']);
+}
+
+/**
+ * Find an executable on an explicit path list or PATH without optimistic bare-name fallback.
+ */
+export async function findExecutableOnPath(
+  candidates: readonly string[],
+  environment: NodeJS.ProcessEnv = process.env,
+): Promise<string | undefined> {
+  const pathDirs = (environment['PATH'] ?? '').split(':').filter((d) => d.length > 0);
+  for (const candidate of candidates) {
+    if (candidate.includes('/') || candidate.includes('\\')) {
+      try {
+        await access(candidate, constants.X_OK);
+        return candidate;
+      } catch {
+        continue;
+      }
+    }
+    for (const dir of pathDirs) {
+      const full = posix.join(dir, candidate);
+      try {
+        await access(full, constants.X_OK);
+        return full;
+      } catch {
+        continue;
+      }
+    }
+  }
+  return undefined;
+}
+
+export interface OpenCodeNamespaceInput {
+  readonly executable: string;
+  readonly argv: readonly string[];
+  readonly cwd: string;
+  readonly env: NodeJS.ProcessEnv;
+}
+
+export function openCodeScopeDirFromEnv(env: NodeJS.ProcessEnv): string | undefined {
+  const home = env['HOME'];
+  if (home === undefined || !home.startsWith('/')) return undefined;
+  const dir = dirname(home);
+  return /\/\.sentry-opencode-[A-Za-z0-9_-]+$/.test(dir) ? dir : undefined;
+}
+
+/**
+ * Build bubblewrap mount-namespace argv for the OpenCode parent process (F-08):
+ * hides `<dataRoot>`, `/mnt`, and `/tmp`, while binding only this run's workspace,
+ * scope directory, and explicit egress socket paths back in.
+ */
+export function buildOpenCodeNamespaceArgv(
+  input: OpenCodeNamespaceInput,
+  extraBinds: readonly string[] = [],
+): string[] {
+  const dataRoot = inferDataRoot(input.cwd);
+  const scopeDir = openCodeScopeDirFromEnv(input.env);
+  if (dataRoot === undefined || scopeDir === undefined) {
+    throw new OpenCodeHarnessError(
+      'OPENCODE_SANDBOX_UNAVAILABLE',
+      'OpenCode filesystem isolation cannot be established: the run workspace is not in the canonical Sentry data layout.',
+    );
+  }
+  const argv: string[] = [
+    '--die-with-parent',
+    '--ro-bind',
+    '/',
+    '/',
+    '--dev',
+    '/dev',
+    '--proc',
+    '/proc',
+    '--tmpfs',
+    '/tmp',
+    '--tmpfs',
+    '/mnt',
+    '--tmpfs',
+    dataRoot,
+  ];
+  if (input.executable.startsWith(dataRoot + '/')) {
+    argv.push('--ro-bind', input.executable, input.executable);
+  }
+  argv.push('--bind', input.cwd, input.cwd, '--bind', scopeDir, scopeDir);
+  for (const raw of extraBinds) {
+    const normalized = posix.normalize(raw);
+    if (
+      !normalized.startsWith('/tmp/') ||
+      normalized.includes('..') ||
+      !/^\/tmp\/[A-Za-z0-9_.-]+$/.test(normalized)
+    ) {
+      throw new OpenCodeHarnessError(
+        'OPENCODE_SANDBOX_UNAVAILABLE',
+        'Refusing unsafe extra bind for OpenCode parent namespace: ' + raw,
+      );
+    }
+    argv.push('--bind', normalized, normalized);
+  }
+  argv.push('--chdir', input.cwd, '--', input.executable, ...input.argv);
+  return argv;
+}
+
+export class NamespacedOpenCodeProcessLauncher implements OpenCodeProcessLauncher {
+  private readonly inner: OpenCodeProcessLauncher;
+
+  constructor(
+    private readonly bwrap: string,
+    inner?: OpenCodeProcessLauncher,
+    private readonly extraBinds: readonly string[] = [],
+  ) {
+    this.inner = inner ?? new DirectOpenCodeProcessLauncher();
+  }
+
+  get kind(): OwnedOpenCodeProcess['kind'] {
+    return this.inner.kind;
+  }
+
+  withExtraBinds(extraBinds: readonly string[]): NamespacedOpenCodeProcessLauncher {
+    return new NamespacedOpenCodeProcessLauncher(this.bwrap, this.inner, extraBinds);
+  }
+
+  launch(input: OpenCodeNamespaceInput): OwnedOpenCodeProcess {
+    const argv = buildOpenCodeNamespaceArgv(input, this.extraBinds);
+    return this.inner.launch({ executable: this.bwrap, argv, cwd: input.cwd, env: input.env });
+  }
 }

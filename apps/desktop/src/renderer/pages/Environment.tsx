@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Bot, Brain, Cpu, Info, KeyRound, PackageCheck, ShieldCheck, Terminal } from 'lucide-react';
 import { sentryApi } from '../lib/sentry-api.js';
 import { runtimeConnectionState, useRuntimeStatus } from '../lib/use-runtime-status.js';
+import { deriveRuntimeHostView } from '../lib/runtime-host-view.js';
 import { PageHeader, PageSection } from '../components/ui/PageHeader.js';
 import { StatusPill } from '../components/ui/StatusPill.js';
 import { InfoTile } from '../components/InfoTile.js';
@@ -14,6 +15,9 @@ import { selectedEffort } from '../lib/agent-effort.js';
 interface RuntimeStatus {
   connected: boolean;
   distro: string | undefined;
+  hostPlatform?: string;
+  executionMode?: string;
+  instance?: string;
   hello:
     | {
         protocolVersion: number;
@@ -81,6 +85,9 @@ export function Environment(): React.JSX.Element {
       }
     | undefined;
   const status = runtime.data as RuntimeStatus | undefined;
+  const hostView = deriveRuntimeHostView(status, undefined);
+  const isMacos = hostView.kind === 'macos';
+  const isNativeLinux = hostView.kind === 'linux';
   const hello = data?.runtime ?? status?.hello;
   const connection = runtimeConnectionState(runtime);
   const connected = connection === 'connected';
@@ -105,8 +112,13 @@ export function Environment(): React.JSX.Element {
       <PageHeader title="Environment" subtitle="Runtime and agent health." />
       {connection === 'unavailable' ? (
         <div className="error-box" style={{ marginBottom: 12 }} role="alert">
-          <strong>Sentry Runtime Offline.</strong> QA execution is disabled until the WSL2 runtime
-          reconnects. {status?.lastError ?? ''}{' '}
+          <strong>Sentry Runtime Offline.</strong>{' '}
+          {isMacos
+            ? 'QA execution is disabled until the Lima Linux runtime reconnects.'
+            : isNativeLinux
+              ? 'QA execution is disabled until the native Linux runtime reconnects.'
+              : 'QA execution is disabled until the WSL2 runtime reconnects.'}{' '}
+          {status?.lastError ?? ''}{' '}
           <button className="compact ghost" onClick={() => void runtime.refetch()}>
             Retry
           </button>
@@ -126,9 +138,13 @@ export function Environment(): React.JSX.Element {
               }
               pulse={connected}
             />
-            <span className="metadata">
-              WSL distribution: {status?.distro ?? hello?.distro ?? '—'}
-            </span>
+            {isMacos ? (
+              <span className="metadata">Lima instance: {status?.instance ?? 'sentry-linux'}</span>
+            ) : !isNativeLinux ? (
+              <span className="metadata">
+                WSL distribution: {status?.distro ?? hello?.distro ?? '—'}
+              </span>
+            ) : null}
             <span className="info-row-spacer" />
             <InfoPopover title="Advanced details">
               <dl className="kv" style={{ marginTop: 8 }}>
@@ -208,8 +224,9 @@ export function Environment(): React.JSX.Element {
                 <Bot size={18} aria-hidden="true" style={{ color: 'var(--text-secondary)' }} />
                 <span className="grow card-title">{stack.displayName}</span>
                 <InfoPopover title={stack.displayName + ' readiness'}>
-                  A saved credential does not imply the provider works until a non-billable doctor
-                  verifies it inside the WSL runtime.
+                  {isMacos
+                    ? 'A saved credential does not imply the provider works until a non-billable doctor verifies it inside the Lima Linux runtime.'
+                    : 'A saved credential does not imply the provider works until a non-billable doctor verifies it inside the WSL runtime.'}
                 </InfoPopover>
               </div>
               <div style={{ marginTop: 8 }}>
@@ -285,8 +302,11 @@ export function Environment(): React.JSX.Element {
       <PageSection title="Execution">
         <div className="card">
           <p className="body-secondary" style={{ margin: 0 }}>
-            Production only — FULL and TARGETED runs execute inside the WSL2 runtime and consume
-            provider budget.
+            {isMacos
+              ? 'Production only — FULL and TARGETED runs execute inside the Lima Linux runtime and consume provider budget.'
+              : isNativeLinux
+                ? 'Production only — FULL and TARGETED runs execute inside the native Linux runtime and consume provider budget.'
+                : 'Production only — FULL and TARGETED runs execute inside the WSL2 runtime and consume provider budget.'}
           </p>
         </div>
       </PageSection>

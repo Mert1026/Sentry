@@ -50,6 +50,18 @@ describe('runtime host view', () => {
     expect(view.showDistroSelector).toBe(false);
   });
 
+  it('hides the selector and shows macOS / Lima (Linux) on macOS', () => {
+    const view = deriveRuntimeHostView(
+      { connected: true, hostPlatform: 'macos', executionMode: 'lima' },
+      { distros: [], preferred: null, selected: null },
+    );
+    expect(view.kind).toBe('macos');
+    expect(view.showDistroSelector).toBe(false);
+    expect(view.hostLabel).toBe('macOS');
+    expect(view.executionLabel).toBe('Lima (Linux)');
+    expect(view.distroLabel).toBeUndefined();
+  });
+
   it('keeps the legacy WSL UI when host fields are absent', () => {
     const view = deriveRuntimeHostView({ connected: true }, { distros: [], preferred: null });
     expect(view.kind).toBe('unknown');
