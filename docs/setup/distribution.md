@@ -52,8 +52,22 @@ archive's own setup one step at a time:
 Every step is skipped when it is already done, so running the wizard again resumes after a
 failure. Its log is `%LOCALAPPDATA%\Sentry\logs\setup-wizard.log`. The wizard is unsigned:
 Windows SmartScreen may show "Windows protected your PC"; choose **More info → Run anyway**
-after checking the `.sha256` and attestation like the ZIP's. Uninstalling it from Windows
-Settings removes the program folder and keeps your Sentry data in WSL.
+after checking the `.sha256` and attestation like the ZIP's.
+
+Uninstall it from **Settings → Apps → Installed apps → Sentry**. The uninstaller stops
+Sentry and removes the program folder, the shortcuts and the `sentry` command (when it
+starts this install). It then asks, every answer defaulting to **No**:
+
+- delete your Sentry data: `~/.local/share/sentry` in WSL (runtime, projects, runs,
+  findings, agent tools) and `%APPDATA%\@qa\desktop` (settings and saved provider keys),
+  shared by every Sentry version on the PC;
+- remove the Ubuntu that the wizard installed (`wsl --unregister`: everything inside it
+  is deleted);
+- remove WSL itself (`wsl --uninstall`, one administrator prompt), when the wizard
+  installed it and no other distribution is left.
+
+Ubuntu and WSL that were already on the PC are never offered for removal. Its log is
+`%LOCALAPPDATA%\Sentry\logs\uninstall.log`.
 
 ## Obtain, verify and extract
 
