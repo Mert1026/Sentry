@@ -132,6 +132,9 @@ try {
         Write-WizardLine ('WSL installer exit=' + $proc.ExitCode)
         if (($proc.ExitCode -ne 0) -and ($proc.ExitCode -ne 3010)) { Stop-Wizard 'WslFailed' @([string]$proc.ExitCode) }
       } finally { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }
+      # Remembered so the uninstaller may offer to remove WSL again; never offered for a WSL the
+      # person already had.
+      Set-SentryLauncherConfig @{ wizardInstalledWsl = $true }
       # Turning WSL on for the first time needs a restart before a distribution can start.
       Write-WizardMessage 'WslRestart'
       $code = 75
@@ -141,6 +144,9 @@ try {
       $usable = @((Get-SentryDistroClass @(Get-SentryWslDistros)).Usable)
       if ($usable.Count -eq 0) {
         Write-WizardMessage 'UbuntuInstalling'
+        # Remembered so the uninstaller may offer to remove this Ubuntu again; a distro the person
+        # already had is never offered.
+        Set-SentryLauncherConfig @{ wizardInstalledDistro = 'Ubuntu' }
         $r = Invoke-SentryNative -FilePath 'wsl.exe' -Arguments @('--install', '-d', 'Ubuntu', '--no-launch') -TimeoutSec 1800
         Write-WizardLine ('wsl --install -d Ubuntu exit=' + $r.ExitCode)
         # Store-packaged Ubuntu registers only after its own installer runs once.

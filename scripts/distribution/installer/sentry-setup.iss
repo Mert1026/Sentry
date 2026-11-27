@@ -72,6 +72,9 @@ Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdi
 Name: "{userprograms}\Sentry"; Filename: "{app}\desktop\Sentry.exe"; Parameters: "--sentry-app"; WorkingDir: "{app}\desktop"; IconFilename: "{app}\desktop\resources\app\assets\sentry-icon.ico"
 Name: "{userdesktop}\Sentry"; Filename: "{app}\desktop\Sentry.exe"; Parameters: "--sentry-app"; WorkingDir: "{app}\desktop"; IconFilename: "{app}\desktop\resources\app\assets\sentry-icon.ico"; Tasks: desktopicon
 
+[UninstallDelete]
+Type: dirifempty; Name: "{localappdata}\Sentry\distributions\{#Sha12}"
+
 [Run]
 Filename: "{app}\desktop\Sentry.exe"; Parameters: "--sentry-app"; WorkingDir: "{app}\desktop"; Description: "{cm:LaunchSentry}"; Flags: postinstall nowait skipifsilent; Check: SetupFinished
 
@@ -121,6 +124,13 @@ en.WCoreFailed=The Sentry runtime could not be installed.
 en.WToolsInstalling=Installing the agent tools (OpenCode, DeepSeek, Claude Code)…
 en.WToolsFailed=The agent tools could not be installed.
 en.WUnexpected=An unexpected error occurred.
+; Uninstaller questions (every one defaults to No).
+en.UnDeleteData=Also delete your Sentry data?%n%nThis removes your projects, runs, findings, the agent tools and your saved provider keys, for every Sentry version on this PC. It cannot be undone.%n%nChoose No to keep them; installing Sentry again brings them back.
+en.UnRemoveDistro=Also remove %1, which Sentry setup installed?%n%nEverything inside %1 is deleted, including any files you created there yourself. It cannot be undone.
+en.UnRemoveWsl=Also remove WSL, which Sentry setup installed?%n%nNo other Linux distribution is left on this PC. Windows asks for administrator approval.
+en.UnCleaning=Removing Sentry's files and settings…
+en.UnIncomplete=Sentry was removed, but some items could not be. Details are in:%n%1
+en.UnWslCancelled=WSL was kept because the administrator prompt was cancelled. You can remove it later in Settings → Apps.
 bg.WelcomeExtra=Този съветник инсталира Sentry и всичко необходимо: WSL2, Ubuntu, инструментите за Linux и инструментите на агентите.%n%nНа нов компютър отнема от 10 до 30 минути и изисква интернет връзка. Windows ще поиска еднократно администраторско одобрение и може да се наложи един рестарт; след това инсталацията продължава сама.
 bg.StepCheck=Проверка на компютъра
 bg.StepWsl=Инсталиране на WSL2
@@ -165,6 +175,12 @@ bg.WCoreFailed=Средата на Sentry не можа да бъде инста
 bg.WToolsInstalling=Инсталиране на инструментите на агентите (OpenCode, DeepSeek, Claude Code)…
 bg.WToolsFailed=Инструментите на агентите не можаха да бъдат инсталирани.
 bg.WUnexpected=Възникна неочаквана грешка.
+bg.UnDeleteData=Да се изтрият ли и данните на Sentry?%n%nТова премахва проектите, проверките, откритите проблеми, инструментите на агентите и запазените ключове на доставчиците за всички версии на Sentry на този компютър. Действието е необратимо.%n%nИзберете „Не“, за да ги запазите; при повторно инсталиране на Sentry те се връщат.
+bg.UnRemoveDistro=Да се премахне ли и %1, инсталиран от Sentry?%n%nВсичко в %1 се изтрива, включително файлове, които сте създали сами. Действието е необратимо.
+bg.UnRemoveWsl=Да се премахне ли и WSL, инсталиран от Sentry?%n%nНа този компютър не е останала друга Linux дистрибуция. Windows ще поиска администраторско одобрение.
+bg.UnCleaning=Премахване на файловете и настройките на Sentry…
+bg.UnIncomplete=Sentry беше премахнат, но някои елементи не можаха да бъдат премахнати. Подробности има в:%n%1
+bg.UnWslCancelled=WSL беше запазен, защото администраторският прозорец беше отказан. Можете да го премахнете по-късно от Настройки → Приложения.
 
 [Code]
 const
@@ -312,6 +328,11 @@ begin
   Names[4] := 'core';   Titles[4] := 'StepCore';
   Names[5] := 'tools';  Titles[5] := 'StepTools';
   RegDeleteValue(HKEY_CURRENT_USER, RunOnceKey, ResumeValue);
+#ifdef SkipSetupSteps
+  { Test builds only (ISCC /DSkipSetupSteps): install the files without running the steps. }
+  Finished := True;
+  Exit;
+#endif
   ProgressPage.Show;
   try
     for I := 0 to StepCount - 1 do
@@ -366,5 +387,88 @@ begin
       WizardForm.FinishedLabel.Caption := CustomMessage('FinishedOk')
     else
       WizardForm.FinishedLabel.Caption := CustomMessage('FinishedFailed');
+  end;
+end;
+
+{ ---- Uninstaller ---------------------------------------------------------------------------- }
+
+var
+  UnDeleteData, UnRemoveDistro, UnRemoveWsl, UnOwnWsl: Boolean;
+  UnOwnDistro: String;
+  UnOtherDistros: Integer;
+
+function UninstallScriptParams(const Mode: String): String;
+begin
+  Result := '-NoProfile -ExecutionPolicy Bypass -File "' + ExpandConstant('{app}\scripts\distribution\uninstall.ps1') + '" -Mode ' + Mode;
+end;
+
+{ What may be removed: only the Ubuntu and WSL that Sentry setup installed itself. }
+procedure ReadUninstallPlan;
+var
+  Output: TExecOutput;
+  Code, I: Integer;
+  Line: String;
+begin
+  UnOwnDistro := '';
+  UnOwnWsl := False;
+  UnOtherDistros := 1;
+  if not ExecAndCaptureOutput('powershell.exe', UninstallScriptParams('plan'), ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, Code, Output) then
+    Exit;
+  if Code <> 0 then
+    Exit;
+  for I := 0 to GetArrayLength(Output.StdOut) - 1 do
+  begin
+    Line := Trim(Output.StdOut[I]);
+    if Pos('PLAN ownDistro=', Line) = 1 then
+      UnOwnDistro := Copy(Line, 16, Length(Line))
+    else if Line = 'PLAN ownWsl=1' then
+      UnOwnWsl := True
+    else if Pos('PLAN otherDistros=', Line) = 1 then
+      UnOtherDistros := StrToIntDef(Copy(Line, 19, Length(Line)), 1);
+  end;
+end;
+
+{ Every question defaults to No; a silent uninstall keeps all data. }
+procedure AskWhatToRemove;
+begin
+  ReadUninstallPlan;
+  UnDeleteData := MsgBox(CustomMessage('UnDeleteData'), mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES;
+  if UnDeleteData and (UnOwnDistro <> '') then
+    UnRemoveDistro := MsgBox(FmtMessage(CustomMessage('UnRemoveDistro'), [UnOwnDistro]), mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES;
+  if UnRemoveDistro and UnOwnWsl and (UnOtherDistros = 0) then
+    UnRemoveWsl := MsgBox(CustomMessage('UnRemoveWsl'), mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES;
+end;
+
+procedure RunUninstallCleanup;
+var
+  Params: String;
+  Code: Integer;
+begin
+  Params := UninstallScriptParams('clean');
+  if UnDeleteData then
+    Params := Params + ' -DeleteData';
+  if UnRemoveDistro then
+    Params := Params + ' -RemoveDistro';
+  if UnRemoveWsl then
+    Params := Params + ' -RemoveWsl';
+  UninstallProgressForm.StatusLabel.Caption := CustomMessage('UnCleaning');
+  if not Exec('powershell.exe', Params, ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, Code) then
+    Code := 1;
+  if UninstallSilent then
+    Exit;
+  if Code = 10 then
+    MsgBox(CustomMessage('UnWslCancelled'), mbInformation, MB_OK)
+  else if Code <> 0 then
+    MsgBox(FmtMessage(CustomMessage('UnIncomplete'), [ExpandConstant('{localappdata}\Sentry\logs\uninstall.log')]), mbError, MB_OK);
+end;
+
+{ Runs after the person confirmed the uninstall and before the program files are deleted. }
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep = usUninstall then
+  begin
+    if not UninstallSilent then
+      AskWhatToRemove;
+    RunUninstallCleanup;
   end;
 end;
