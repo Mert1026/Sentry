@@ -37,7 +37,9 @@ DisableReadyPage=no
 DisableWelcomePage=no
 ; The archive checks its own file list, so the uninstaller lives outside it.
 UninstallFilesDir={localappdata}\Sentry\uninstall\{#Sha12}
-UninstallDisplayIcon={app}\desktop\Sentry.exe
+; Sentry.exe keeps Electron's icon (the archive build does not edit the executable), so the
+; shortcuts and the Windows apps list use the Sentry logo shipped inside the app instead.
+UninstallDisplayIcon={app}\desktop\resources\app\assets\sentry-icon.ico
 UninstallDisplayName=Sentry {#AppVersion}
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
@@ -52,7 +54,9 @@ Compression=lzma2/max
 SolidCompression=yes
 OutputDir={#OutputDir}
 OutputBaseFilename=SentrySetup-{#AppVersion}-{#Sha12}-windows-x64
-ShowLanguageDialog=auto
+; Always ask: English or Bulgarian, preselected from the Windows language. After a restart the
+; resumed wizard keeps the chosen language (/LANG).
+ShowLanguageDialog=yes
 
 [Languages]
 Name: "en"; MessagesFile: "compiler:Default.isl"
@@ -65,8 +69,8 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 
 [Icons]
-Name: "{userprograms}\Sentry"; Filename: "{app}\desktop\Sentry.exe"; Parameters: "--sentry-app"; WorkingDir: "{app}\desktop"
-Name: "{userdesktop}\Sentry"; Filename: "{app}\desktop\Sentry.exe"; Parameters: "--sentry-app"; WorkingDir: "{app}\desktop"; Tasks: desktopicon
+Name: "{userprograms}\Sentry"; Filename: "{app}\desktop\Sentry.exe"; Parameters: "--sentry-app"; WorkingDir: "{app}\desktop"; IconFilename: "{app}\desktop\resources\app\assets\sentry-icon.ico"
+Name: "{userdesktop}\Sentry"; Filename: "{app}\desktop\Sentry.exe"; Parameters: "--sentry-app"; WorkingDir: "{app}\desktop"; IconFilename: "{app}\desktop\resources\app\assets\sentry-icon.ico"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\desktop\Sentry.exe"; Parameters: "--sentry-app"; WorkingDir: "{app}\desktop"; Description: "{cm:LaunchSentry}"; Flags: postinstall nowait skipifsilent; Check: SetupFinished
