@@ -833,8 +833,10 @@ export class SentryRuntimeHost {
     return process.env['SENTRY_IMPORT_INCLUDE_ALL'] === '1';
   }
 
-  async addProject(sourcePath: string): Promise<unknown> {
+  async addProject(sourcePath: string, name?: string): Promise<unknown> {
     const input = z.string().min(1).max(2000).parse(sourcePath);
+    const displayName =
+      name === undefined ? undefined : z.string().trim().min(1).max(200).parse(name);
     const translated = translateWindowsPath(input);
     await assertReadableDir(translated);
     const controller = new AbortController();
@@ -843,6 +845,7 @@ export class SentryRuntimeHost {
       return await this.projects.addProject(translated, {
         signal: controller.signal,
         ...(this.importIncludeAll() ? { includeAll: true as const } : {}),
+        ...(displayName === undefined ? {} : { name: displayName }),
       });
     } finally {
       this.activeImports.delete(controller);
@@ -1773,7 +1776,7 @@ export class SentryRuntimeHost {
       case 'projects.list':
         return this.listProjects();
       case 'projects.add':
-        return this.addProject(requireString(params, 'sourcePath'));
+        return this.addProject(requireString(params, 'sourcePath'), optionalString(params, 'name'));
       case 'projects.cancelAdd':
         return this.cancelAddProject();
       case 'projects.cancelUpdate':

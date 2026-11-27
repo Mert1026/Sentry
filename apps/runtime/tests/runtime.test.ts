@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
@@ -615,6 +615,27 @@ describe('runtime Claude agent settings', () => {
         if (value === undefined) delete process.env[name];
         else process.env[name] = value;
       });
+    }
+  });
+});
+
+describe('runtime projects.add naming', () => {
+  it('stores explicit display name instead of staged directory hash basename', async () => {
+    const dataRoot = await tempDataRoot();
+    const stagedDir = join(dataRoot, '..', '03a099b9e27ed3f5');
+    await mkdir(stagedDir, { recursive: true });
+    await writeFile(join(stagedDir, 'README.md'), '# Sample\n', 'utf8');
+    const host = new SentryRuntimeHost(dataRoot, () => undefined);
+    try {
+      await host.recover();
+      const record = (await host.dispatch('projects.add', {
+        sourcePath: stagedDir,
+        name: 'ArthurLabs-Raea',
+      })) as { project: { name: string; sourcePath: string } };
+      expect(record.project.name).toBe('ArthurLabs-Raea');
+      expect(record.project.sourcePath).toBe(stagedDir);
+    } finally {
+      host.close();
     }
   });
 });

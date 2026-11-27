@@ -61,6 +61,8 @@ export interface ProjectOperationOptions {
   /** Opt out of the default import exclusion set (copies+hashes everything).
    *  Recorded on the revision via hashVersion absence (legacy version 1). */
   readonly includeAll?: boolean;
+  /** Optional display name when `sourcePath` is a host-staged guest path. */
+  readonly name?: string;
 }
 
 export type ProjectMutationStage =
@@ -235,10 +237,14 @@ export class ProjectManager {
         ...(exclude === undefined ? {} : { exclude }),
       });
       await rename(staging, paths.workingCopy);
+      const trimmedName = options.name?.trim();
+      const projectName = (
+        trimmedName !== undefined && trimmedName.length > 0 ? trimmedName : basename(source)
+      ).slice(0, 200);
       const project = ProjectSchema.parse({
         schemaVersion: 1,
         id: projectId,
-        name: basename(source),
+        name: projectName,
         sourcePath: source,
         createdAt: timestamp,
         updatedAt: timestamp,

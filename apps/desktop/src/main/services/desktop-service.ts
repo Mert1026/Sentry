@@ -93,6 +93,19 @@ function sanitizeError(
   return toSafeError(error, redactSecrets === undefined ? {} : { redactSecrets });
 }
 
+function hostFolderName(sourcePath: string): string | undefined {
+  const leaf = sourcePath
+    .trim()
+    .replace(/[\\/]+$/, '')
+    .split(/[\\/]/)
+    .pop()
+    ?.trim();
+  if (leaf === undefined || leaf.length === 0 || leaf === '.' || leaf === '..') {
+    return undefined;
+  }
+  return leaf.slice(0, 200);
+}
+
 function toError(code: string, message: string): Error {
   return Object.assign(new Error(message), { code });
 }
@@ -152,8 +165,12 @@ export class DesktopApplicationService {
 
   async addProject(sourcePath: string): Promise<unknown> {
     const input = z.string().min(1).max(2000).parse(sourcePath);
+    const name = hostFolderName(input);
     const translated = await this.translateSourcePath(input);
-    return this.call('projects.add', { sourcePath: translated });
+    return this.call('projects.add', {
+      sourcePath: translated,
+      ...(name === undefined ? {} : { name }),
+    });
   }
 
   cancelAddProject(): Promise<unknown> {

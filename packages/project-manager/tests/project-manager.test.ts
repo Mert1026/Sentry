@@ -692,4 +692,15 @@ describe('managed project lifecycle', () => {
       f.database.close();
     });
   });
+
+  it('uses explicit display name when provided and falls back to source basename otherwise', async () => {
+    const f = await fixture();
+    const named = await f.manager.addProject(f.source, { name: '  ArthurLabs-Raea  ' });
+    expect(named.project.name).toBe('ArthurLabs-Raea');
+    expect(named.project.sourcePath).toBe(f.source);
+
+    const fallback = await f.manager.addProject(f.source, { name: '   ' });
+    expect(fallback.project.name).toBe('Source Project ü');
+    f.database.close();
+  });
 });

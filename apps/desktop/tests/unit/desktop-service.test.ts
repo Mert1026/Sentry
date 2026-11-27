@@ -356,4 +356,38 @@ describe('findings export through the service', () => {
     // Nothing reached the runtime for a request that was refused.
     expect(h.seen).toHaveLength(before);
   });
+
+  it('sends the original host folder name when addProject translates to a staged guest path', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'sentry-desktop-stage-name-'));
+    roots.push(root);
+    const credentials = new ProviderCredentialService({
+      filePath: join(root, 'providers.json'),
+      safeStorage: fakeSafeStorage(),
+    });
+    const seen: Array<{ method: string; params: Record<string, unknown> }> = [];
+    const { runtime } = fakeService(seen);
+    const host: HostPlatform = {
+      hostKind: 'macos',
+      executionMode: 'lima',
+      createRuntimeClient: () => {
+        throw new Error('test seam: no runtime launch');
+      },
+      prepareSourcePath: () => Promise.resolve('/opt/sentry/staged-projects/03a099b9e27ed3f5'),
+      runtimeEnvironmentInfo: () =>
+        Promise.resolve({ hostPlatform: 'darwin', executionMode: 'lima' }),
+      runtimeDistros: () => Promise.resolve({ distros: [], preferred: null, selected: null }),
+      runtimeSelectDistro: () => Promise.reject(new Error('unsupported')),
+    };
+    const service = new DesktopApplicationService({
+      runtime: runtime as never,
+      host,
+      credentials,
+      agentStacks: [...INITIAL_AGENT_STACKS],
+    });
+    await service.addProject('/Users/kaloyannikolov/Projects/ArthurLabs-Raea/');
+    expect(seen.filter((c) => c.method === 'projects.add').at(-1)?.params).toEqual({
+      sourcePath: '/opt/sentry/staged-projects/03a099b9e27ed3f5',
+      name: 'ArthurLabs-Raea',
+    });
+  });
 });
