@@ -446,24 +446,32 @@ describe('live line "Show more"', () => {
       } as never),
     );
 
-  it('opens and closes a detail too long for two lines, inside a capped box', async () => {
+  it('opens a detail too long for two lines in a dialog with the whole line', async () => {
     const { render, fireEvent, screen, cleanup } = await import('@testing-library/react');
     const detail =
       'FALSIFY packages/runtime-core/src/renderer.ts patchKeyedChildren via runtime-test createRenderer';
     expect(detail.length).toBeGreaterThan(LIVE_DETAIL_CLAMP_CHARS);
-    const { container } = render(node('OpenCode is investigating check 1/6: ' + detail));
+    const { rerender } = render(node('OpenCode is investigating check 1/6: ' + detail));
     const more = screen.getByRole('button', { name: 'Show more' });
-    expect(more.getAttribute('aria-expanded')).toBe('false');
-    const text = container.querySelector('.live-line-detail') as HTMLElement;
-    expect(text.className).not.toContain('expanded');
+    expect(more.className).toContain('nodrag');
+    expect(screen.queryByRole('dialog')).toBeNull();
     fireEvent.click(more);
-    expect(text.className).toContain('expanded');
-    // a long command can scroll inside the node without the canvas zooming
-    expect(text.className).toContain('nowheel');
-    const less = screen.getByRole('button', { name: 'Show less' });
-    expect(less.className).toContain('nodrag');
-    fireEvent.click(less);
-    expect(text.className).not.toContain('expanded');
+    const dialog = screen.getByRole('dialog', { name: 'Current step' });
+    expect(dialog.querySelector('.live-line-dialog-agent')?.textContent).toBe('OpenCode');
+    expect(dialog.querySelector('.live-line-dialog-step')?.textContent).toBe(
+      'OpenCode is investigating check 1/6',
+    );
+    expect(dialog.querySelector('.live-line-dialog-detail')?.textContent).toBe(detail);
+    // The dialog keeps the clicked line while the agent moves on to its next step.
+    rerender(node('OpenCode is investigating check 2/6: something else'));
+    expect(dialog.querySelector('.live-line-dialog-detail')?.textContent).toBe(detail);
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    // Escape closes it too.
+    rerender(node('OpenCode is investigating check 1/6: ' + detail));
+    fireEvent.click(screen.getByRole('button', { name: 'Show more' }));
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
     cleanup();
   });
 
@@ -477,15 +485,17 @@ describe('live line "Show more"', () => {
     cleanup();
   });
 
-  it('caps the opened detail', () => {
+  it('scrolls a very long line inside the dialog', () => {
     const css = readFileSync(resolve(process.cwd(), 'src/renderer/styles.css'), 'utf8');
-    expect(css).toMatch(/\.live-line-detail\.expanded \{[^}]*max-height: calc\(1\.35em \* 7\)/);
-    expect(css).toMatch(/\.live-line-detail\.expanded \{[^}]*overflow-y: auto/);
+    expect(css).toMatch(/\.live-line-dialog-detail \{[^}]*max-height: 50vh/);
+    expect(css).toMatch(/\.live-line-dialog-detail \{[^}]*overflow-y: auto/);
   });
 
-  it('translates the toggle', async () => {
+  it('translates the button and the dialog', async () => {
     const { translateText } = await import('../../src/renderer/lib/i18n.js');
     expect(translateText('Show more', 'bg')).toBe('Покажи още');
-    expect(translateText('Show less', 'bg')).toBe('Покажи по-малко');
+    expect(translateText('Current step', 'bg')).toBe('Текуща стъпка');
+    expect(translateText('Close', 'bg')).toBe('Затвори');
+    expect(translateText('Copy', 'bg')).toBe('Копирай');
   });
 });

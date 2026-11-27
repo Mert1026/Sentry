@@ -13,6 +13,8 @@ import {
   stageDisplayLabel,
 } from '../../lib/agent-telemetry.js';
 import { SECRETS_LABEL } from '../../lib/secrets-light.js';
+import { BlockingOverlay } from '../BlockingOverlay.js';
+import { Check, Copy } from 'lucide-react';
 
 const SEVERITY_ORDER = ['critical', 'high', 'medium', 'low', 'info'] as const;
 
@@ -60,36 +62,32 @@ export function splitLiveLine(line: string): { full: string; step: string; detai
 /** A detail longer than this does not fit the node's two clamped lines, so it gets "Show more". */
 export const LIVE_DETAIL_CLAMP_CHARS = 70;
 
+type LiveLineParts = { full: string; step: string; detail?: string };
+
 /**
- * The live line: the step in full, the detail clamped to two lines. "Show more" opens the whole
- * detail inside the node; a very long one (a command, a long check) scrolls inside a capped box
- * instead of stretching the node down the canvas.
+ * The live line: the step in full, the detail clamped to two lines. A detail that does not fit
+ * gets "Show more", which opens the whole line in a dialog.
  */
-function LiveLine({ line }: { line: { full: string; step: string; detail?: string } }) {
+function LiveLine({ line, onShowMore }: { line: LiveLineParts; onShowMore: () => void }) {
   const { t } = useI18n();
-  const [expanded, setExpanded] = React.useState(false);
   const long = (line.detail?.length ?? 0) > LIVE_DETAIL_CLAMP_CHARS;
   return (
     <div className="node-sub live-line" title={line.full}>
       <span className="live-line-text">
         <span className="live-line-step">{line.step}</span>
-        {line.detail === undefined ? null : (
-          <span className={'live-line-detail' + (expanded ? ' expanded nowheel' : '')}>
-            {line.detail}
-          </span>
-        )}
+        {line.detail === undefined ? null : <span className="live-line-detail">{line.detail}</span>}
         {long ? (
           <button
             type="button"
             className="live-line-more nodrag nopan"
-            aria-expanded={expanded}
+            aria-haspopup="dialog"
             onClick={(event) => {
-              // A click on the toggle must not select or drag the node.
+              // A click on the button must not select or drag the node.
               event.stopPropagation();
-              setExpanded((open) => !open);
+              onShowMore();
             }}
           >
-            {t(expanded ? 'Show less' : 'Show more')}
+            {t('Show more')}
           </button>
         ) : null}
       </span>
@@ -97,8 +95,71 @@ function LiveLine({ line }: { line: { full: string; step: string; detail?: strin
   );
 }
 
+/**
+ * The whole live line in a dialog, outside the canvas. It keeps the line that was clicked, so it
+ * stays readable while the agent moves on to its next step.
+ */
+function LiveLineDialog({
+  agent,
+  line,
+  onClose,
+}: {
+  agent: string;
+  line: LiveLineParts;
+  onClose: () => void;
+}) {
+  const { t } = useI18n();
+  const [copied, setCopied] = React.useState(false);
+  const closeRef = React.useRef<HTMLButtonElement>(null);
+  React.useEffect(() => closeRef.current?.focus(), []);
+  return (
+    <BlockingOverlay>
+      <div
+        className="live-line-backdrop"
+        role="dialog"
+        aria-modal="true"
+        aria-label={t('Current step')}
+        onClick={onClose}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape') onClose();
+        }}
+      >
+        <div className="card live-line-dialog" onClick={(event) => event.stopPropagation()}>
+          <div className="live-line-dialog-head">
+            <span className="live-line-dialog-agent" data-no-translate="true">
+              {agent}
+            </span>
+            <span className="live-line-dialog-kicker">{t('Current step')}</span>
+          </div>
+          <p className="live-line-dialog-step">{line.step}</p>
+          {line.detail === undefined ? null : (
+            <div className="live-line-dialog-detail">{line.detail}</div>
+          )}
+          <div className="live-line-dialog-actions">
+            <button
+              type="button"
+              className="ghost"
+              onClick={() => {
+                void navigator.clipboard?.writeText(line.full).then(() => setCopied(true));
+              }}
+            >
+              {copied ? <Check size={14} /> : <Copy size={14} />}
+              {t(copied ? 'Copied' : 'Copy')}
+            </button>
+            <button ref={closeRef} type="button" className="primary" onClick={onClose}>
+              {t('Close')}
+            </button>
+          </div>
+        </div>
+      </div>
+    </BlockingOverlay>
+  );
+}
+
 export function AgentCanvasNode({ data }: NodeProps): React.JSX.Element {
   const { t } = useI18n();
+  // The line "Show more" opened; kept here so the dialog outlives the line it came from.
+  const [openLine, setOpenLine] = React.useState<LiveLineParts | undefined>(undefined);
   const payload = data['payload'] as { view?: AgentNodeView; agentStackId?: string } | undefined;
   const view = payload?.view;
   const accent = ACCENTS[payload?.agentStackId ?? ''] ?? 'var(--accent)';
@@ -205,7 +266,12 @@ export function AgentCanvasNode({ data }: NodeProps): React.JSX.Element {
           </span>
         )}
       </div>
-      {liveLine !== undefined ? <LiveLine line={liveLine} /> : null}
+      {liveLine !== undefined ? (
+        <LiveLine line={liveLine} onShowMore={() => setOpenLine(liveLine)} />
+      ) : null}
+      {openLine !== undefined ? (
+        <LiveLineDialog agent={title} line={openLine} onClose={() => setOpenLine(undefined)} />
+      ) : null}
       <div className="node-stats">
         <div className="node-stat" title="Findings reported by this agent">
           <strong>{formatCount(view.findingsCount)}</strong>
