@@ -19,10 +19,12 @@
       <rect x="150" y="80" width="100" height="40" rx="8" />
       <rect x="150" y="150" width="100" height="40" rx="8" />
       <path d="M200 50v30M200 120v30" />
-      <path d="M200 190 C200 220 70 210 70 240M200 190v50M200 190 C200 220 330 210 330 240" stroke="#d4c00b" />
-      <rect x="20" y="240" width="100" height="50" rx="8" />
-      <rect x="150" y="240" width="100" height="50" rx="8" />
-      <rect x="280" y="240" width="100" height="50" rx="8" />
+      <path d="M200 190 C200 218 40 212 40 240 M200 190 C200 218 120 212 120 240 M200 190v50 M200 190 C200 218 280 212 280 240 M200 190 C200 218 360 212 360 240" stroke="#d4c00b" />
+      <rect x="8" y="240" width="64" height="50" rx="8" />
+      <rect x="88" y="240" width="64" height="50" rx="8" />
+      <rect x="168" y="240" width="64" height="50" rx="8" />
+      <rect x="248" y="240" width="64" height="50" rx="8" />
+      <rect x="328" y="240" width="64" height="50" rx="8" />
     </g>
   </svg>
   <div class="meta">
@@ -75,8 +77,8 @@
     <div class="card">
       <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="6" cy="7" r="3"/><circle cx="18" cy="7" r="3"/><circle cx="12" cy="18" r="3"/></svg></div>
       <h4>Независими агенти</h4>
-      <p>OpenCode, DeepSeek, GLM, ChatGPT и Claude работят едновременно, всеки в своя изолирана среда, без да
-        вижда другите. Два агента с еднакъв резултат са две независими потвърждения.</p>
+      <p>Пет агента — OpenCode, DeepSeek, GLM, ChatGPT и Claude — работят едновременно, без да виждат
+        другите.</p>
     </div>
     <div class="card">
       <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M4 12l5 5L20 6"/></svg></div>
@@ -94,47 +96,57 @@
 
   <h3>Как работи — накратко</h3>
   <figure class="diagram">
-    <svg viewBox="0 0 760 190" font-family="Segoe UI" font-size="12" style="width:88%;margin:0 auto">
+    <svg viewBox="0 0 760 272" font-family="Segoe UI" font-size="12" style="width:76%;margin:0 auto">
       <defs>
         <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#4e7d48"/></marker>
       </defs>
       <g fill="#fbfcfa" stroke="#cfd8ca">
-        <rect x="4" y="60" width="120" height="66" rx="10"/>
-        <rect x="150" y="60" width="120" height="66" rx="10"/>
-        <rect x="296" y="60" width="120" height="66" rx="10"/>
+        <rect x="4" y="103" width="120" height="66" rx="10"/>
+        <rect x="150" y="103" width="120" height="66" rx="10"/>
+        <rect x="296" y="103" width="120" height="66" rx="10"/>
       </g>
       <g fill="#0d100d">
-        <rect x="446" y="8" width="138" height="46" rx="10"/>
-        <rect x="446" y="70" width="138" height="46" rx="10"/>
-        <rect x="446" y="132" width="138" height="46" rx="10"/>
+        <rect x="446" y="12" width="138" height="40" rx="10"/>
+        <rect x="446" y="64" width="138" height="40" rx="10"/>
+        <rect x="446" y="116" width="138" height="40" rx="10"/>
+        <rect x="446" y="168" width="138" height="40" rx="10"/>
+        <rect x="446" y="220" width="138" height="40" rx="10"/>
       </g>
-      <rect x="614" y="52" width="142" height="82" rx="10" fill="#eef3ea" stroke="#4e7d48" stroke-width="1.5"/>
+      <rect x="614" y="95" width="142" height="82" rx="10" fill="#eef3ea" stroke="#4e7d48" stroke-width="1.5"/>
       <g fill="none" stroke="#4e7d48" stroke-width="1.8" marker-end="url(#a1)">
-        <path d="M124 93h24"/><path d="M270 93h24"/>
-        <path d="M416 93 C430 93 430 31 444 31"/><path d="M416 93h28"/><path d="M416 93 C430 93 430 155 444 155"/>
-        <path d="M584 31 C600 31 598 80 612 80"/><path d="M584 93h28"/><path d="M584 155 C600 155 598 108 612 108"/>
+        <path d="M124 136h24"/><path d="M270 136h24"/>
+        <path d="M416 136 C430 136 430 32 444 32"/><path d="M416 136 C430 136 430 84 444 84"/><path d="M416 136 C430 136 430 136 444 136"/><path d="M416 136 C430 136 430 188 444 188"/><path d="M416 136 C430 136 430 240 444 240"/>
+        <path d="M584 32 C600 32 598 105 612 105"/><path d="M584 84 C600 84 598 120 612 120"/><path d="M584 136 C600 136 598 136 612 136"/><path d="M584 188 C600 188 598 152 612 152"/><path d="M584 240 C600 240 598 167 612 167"/>
       </g>
       <g fill="#1b211a" font-weight="700" text-anchor="middle">
-        <text x="64" y="88">Вашата папка</text>
-        <text x="210" y="88">Ревизия</text>
-        <text x="356" y="88">Снимка</text>
-        <text x="685" y="86">Констатации</text>
-        <text x="685" y="104">+ доказателства</text>
+        <text x="64" y="131">Вашата папка</text>
+        <text x="210" y="131">Ревизия</text>
+        <text x="356" y="131">Снимка</text>
+        <text x="685" y="129">Констатации</text>
+        <text x="685" y="147">+ доказателства</text>
       </g>
       <g fill="#7b8478" text-anchor="middle" font-size="10.5">
-        <text x="64" y="106">оригиналът не се пипа</text>
-        <text x="210" y="106">копие в Sentry</text>
-        <text x="356" y="106">замразено състояние</text>
-        <text x="685" y="122">доклад · експорт</text>
+        <text x="64" y="149">оригиналът не се пипа</text>
+        <text x="210" y="149">копие в Sentry</text>
+        <text x="356" y="149">замразено състояние</text>
+        <text x="685" y="165">доклад · експорт</text>
       </g>
       <g fill="#eef1eb" font-weight="700" text-anchor="middle">
-        <text x="515" y="30">Агент 1</text><text x="515" y="92">Агент 2</text><text x="515" y="154">Агент 3</text>
+        <text x="515" y="30">OpenCode</text>
+        <text x="515" y="82">DeepSeek</text>
+        <text x="515" y="134">GLM</text>
+        <text x="515" y="186">ChatGPT</text>
+        <text x="515" y="238">Claude</text>
       </g>
       <g fill="#8eae82" text-anchor="middle" font-size="10">
-        <text x="515" y="45">своя среда</text><text x="515" y="107">своя среда</text><text x="515" y="169">своя среда</text>
+        <text x="515" y="44">своя среда</text>
+        <text x="515" y="96">своя среда</text>
+        <text x="515" y="148">своя среда</text>
+        <text x="515" y="200">своя среда</text>
+        <text x="515" y="252">своя среда</text>
       </g>
     </svg>
-    <figcaption><b>Пътят на една проверка.</b> Sentry прави копие на папката (ревизия), замразява го (снимка) и дава на всеки избран агент собствено работно пространство. Агентите работят едновременно и независимо.</figcaption>
+    <figcaption><b>Пътят на една проверка.</b> Sentry прави копие на папката (ревизия), замразява го (снимка) и дава на всеки избран агент собствена среда.</figcaption>
   </figure>
 
   <div class="cols">
