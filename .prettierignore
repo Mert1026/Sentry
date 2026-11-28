@@ -7,3 +7,4 @@ pnpm-lock.yaml
 
 # Hand-laid-out print source of the user guide (commands, diagrams and markers depend on exact whitespace).
 docs/guide/guide.bg.html
+docs/guide/guide.en.html

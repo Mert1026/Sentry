@@ -1,0 +1,1175 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Sentry — User Guide</title>
+<link rel="stylesheet" href="guide.css" />
+<link rel="stylesheet" href="guide.en.css" />
+</head>
+<body>
+
+<!-- ============================== COVER ============================== -->
+<section class="cover">
+  <div class="brand"><img src="img/sentry-icon.png" alt="" /><span>SENTRY</span></div>
+  <h1>User<br /><em>Guide</em></h1>
+  <p class="lead">How to install Sentry, run a QA check on your project with AI agents, and understand what the
+    agents do at every step — and why.</p>
+  <svg class="grid" viewBox="0 0 400 300" aria-hidden="true">
+    <g fill="none" stroke="#4e7d48" stroke-width="1.4">
+      <rect x="150" y="10" width="100" height="40" rx="8" />
+      <rect x="150" y="80" width="100" height="40" rx="8" />
+      <rect x="150" y="150" width="100" height="40" rx="8" />
+      <path d="M200 50v30M200 120v30" />
+      <path d="M200 190 C200 218 40 212 40 240 M200 190 C200 218 120 212 120 240 M200 190v50 M200 190 C200 218 280 212 280 240 M200 190 C200 218 360 212 360 240" stroke="#d4c00b" />
+      <rect x="8" y="240" width="64" height="50" rx="8" />
+      <rect x="88" y="240" width="64" height="50" rx="8" />
+      <rect x="168" y="240" width="64" height="50" rx="8" />
+      <rect x="248" y="240" width="64" height="50" rx="8" />
+      <rect x="328" y="240" width="64" height="50" rx="8" />
+    </g>
+  </svg>
+  <div class="meta">
+    <div><b>Version 2.0.5</b>Windows 11 · WSL2</div>
+    <div><b>November 2026</b>English edition</div>
+    <div><b>Sentry</b>Independent QA agents</div>
+  </div>
+</section>
+
+<!-- ============================== CONTENTS ============================== -->
+<section class="toc">
+  <h2>Contents</h2>
+  <ol>
+    <li><div><b>What Sentry is and why we use it</b><span>The problem it solves and how it works in short</span></div></li>
+    <li><div><b>Installing</b><span>Manual WSL preparation (recommended), the setup wizard and uninstalling</span></div></li>
+    <li><div><b>A first look at the app</b><span>The dashboard and navigation</span></div></li>
+    <li><div><b>Adding a project</b><span>Managed copy, revisions and updating</span></div></li>
+    <li><div><b>Starting a QA run</b><span>Scope, depth, agents, notes and options</span></div></li>
+    <li><div><b>What an agent does during a run</b><span>Stages and rounds — planning, checks, critical flows, the hazard sweep</span></div></li>
+    <li><div><b>The kinds of runs compared</b><span>Full and Targeted QA, Fast and Full depth, Re-test</span></div></li>
+    <li><div><b>Following a run</b><span>The canvas, the agent card and the details panel</span></div></li>
+    <li><div><b>Results</b><span>Findings, evidence, export and re-testing</span></div></li>
+    <li><div><b>Settings and runtime</b><span>Providers, application, the WSL runtime and toolchains</span></div></li>
+    <li><div><b>When something goes wrong</b><span>Common problems, and Ubuntu opening as root</span></div></li>
+    <li><div><b>Glossary</b><span>The app's terms in one place</span></div></li>
+  </ol>
+</section>
+
+<!-- ============================== 01 PURPOSE ============================== -->
+<section class="chapter" id="ch-purpose">
+  <header class="chapter-head">
+    <div class="num">01</div>
+    <div>
+      <h2>What Sentry is and why we use it</h2>
+      <p>One page, so you know what the app does before you press the first button.</p>
+    </div>
+  </header>
+
+  <p class="lede">Sentry is a desktop app that checks the quality of a software project with <strong>AI
+    agents</strong>. You pick the project folder; the agents read the code on their own, plan checks, run real
+    commands and tests, and return a list of problems they found — each one backed by evidence.</p>
+
+  <h3>The problem it solves</h3>
+  <p>Manual testing takes hours, and ordinary AI assistants often "find" problems that don't exist or miss the real
+    ones. Sentry is built so that an agent can't just say "there is a bug here": every finding has to point to a
+    specific file and line and be confirmed by a command the agent <em>actually</em> ran.</p>
+
+  <div class="cards">
+    <div class="card">
+      <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="6" cy="7" r="3"/><circle cx="18" cy="7" r="3"/><circle cx="12" cy="18" r="3"/></svg></div>
+      <h4>Independent agents</h4>
+      <p>Five agents — OpenCode, DeepSeek, GLM, ChatGPT and Claude — work at the same time without seeing each
+        other.</p>
+    </div>
+    <div class="card">
+      <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><path d="M4 12l5 5L20 6"/></svg></div>
+      <h4>Evidence, not opinions</h4>
+      <p>Every finding has a place in the code (file and line), a severity and evidence — the commands the agent ran
+        and their output.</p>
+    </div>
+    <div class="card">
+      <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></div>
+      <h4>Safe for your project</h4>
+      <p>The agents work on a copy of the project in an isolated Linux environment (WSL). Your original files are
+        never changed.</p>
+    </div>
+  </div>
+
+  <h3>How it works, in short</h3>
+  <figure class="diagram">
+    <svg viewBox="0 0 760 272" font-family="Segoe UI" font-size="12" style="width:76%;margin:0 auto">
+      <defs>
+        <marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#4e7d48"/></marker>
+      </defs>
+      <g fill="#fbfcfa" stroke="#cfd8ca">
+        <rect x="4" y="103" width="120" height="66" rx="10"/>
+        <rect x="150" y="103" width="120" height="66" rx="10"/>
+        <rect x="296" y="103" width="120" height="66" rx="10"/>
+      </g>
+      <g fill="#0d100d">
+        <rect x="446" y="12" width="138" height="40" rx="10"/>
+        <rect x="446" y="64" width="138" height="40" rx="10"/>
+        <rect x="446" y="116" width="138" height="40" rx="10"/>
+        <rect x="446" y="168" width="138" height="40" rx="10"/>
+        <rect x="446" y="220" width="138" height="40" rx="10"/>
+      </g>
+      <rect x="614" y="95" width="142" height="82" rx="10" fill="#eef3ea" stroke="#4e7d48" stroke-width="1.5"/>
+      <g fill="none" stroke="#4e7d48" stroke-width="1.8" marker-end="url(#a1)">
+        <path d="M124 136h24"/><path d="M270 136h24"/>
+        <path d="M416 136 C430 136 430 32 444 32"/><path d="M416 136 C430 136 430 84 444 84"/><path d="M416 136 C430 136 430 136 444 136"/><path d="M416 136 C430 136 430 188 444 188"/><path d="M416 136 C430 136 430 240 444 240"/>
+        <path d="M584 32 C600 32 598 105 612 105"/><path d="M584 84 C600 84 598 120 612 120"/><path d="M584 136 C600 136 598 136 612 136"/><path d="M584 188 C600 188 598 152 612 152"/><path d="M584 240 C600 240 598 167 612 167"/>
+      </g>
+      <g fill="#1b211a" font-weight="700" text-anchor="middle">
+        <text x="64" y="131">Your folder</text>
+        <text x="210" y="131">Revision</text>
+        <text x="356" y="131">Snapshot</text>
+        <text x="685" y="129">Findings</text>
+        <text x="685" y="147">+ evidence</text>
+      </g>
+      <g fill="#7b8478" text-anchor="middle" font-size="10.5">
+        <text x="64" y="149">never touched</text>
+        <text x="210" y="149">copy in Sentry</text>
+        <text x="356" y="149">frozen state</text>
+        <text x="685" y="165">report · export</text>
+      </g>
+      <g fill="#eef1eb" font-weight="700" text-anchor="middle">
+        <text x="515" y="30">OpenCode</text>
+        <text x="515" y="82">DeepSeek</text>
+        <text x="515" y="134">GLM</text>
+        <text x="515" y="186">ChatGPT</text>
+        <text x="515" y="238">Claude</text>
+      </g>
+      <g fill="#8eae82" text-anchor="middle" font-size="10">
+        <text x="515" y="44">own environment</text>
+        <text x="515" y="96">own environment</text>
+        <text x="515" y="148">own environment</text>
+        <text x="515" y="200">own environment</text>
+        <text x="515" y="252">own environment</text>
+      </g>
+    </svg>
+    <figcaption><b>The path of one run.</b> Sentry copies the folder (a revision), freezes it (a snapshot) and gives every selected agent its own environment.</figcaption>
+  </figure>
+
+  <div class="cols">
+    <div>
+      <h3>Who it is for</h3>
+      <p>Developers and QA teams who want a quick independent check before a release; students who want to check
+        their project before handing it in; teachers who grade many projects.</p>
+    </div>
+    <div>
+      <h3>What you need</h3>
+      <p>Windows 11 (64-bit), virtualization turned on, ~10 GB free space, internet and a key for at least one AI
+        provider. <strong>Prepare WSL by hand before installing</strong> (<a href="#ch-install">chapter 2</a>).</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== 02 INSTALL ============================== -->
+<section class="chapter" id="ch-install">
+  <header class="chapter-head">
+    <div class="num">02</div>
+    <div>
+      <h2>Installing</h2>
+      <p>We recommend preparing WSL and Ubuntu by hand first. The setup wizard then does the rest.</p>
+    </div>
+  </header>
+
+  <div class="note warn" style="border-left-width: 1.6mm">
+    <b>Recommendation</b>
+    <p><strong>Prepare WSL and Ubuntu by hand before running the setup wizard.</strong> The wizard can install them
+      too, but this is the part that causes the most problems — most often creating the Linux user on Ubuntu's first
+      start. By hand it takes about 10 minutes, you see every message from Windows and Ubuntu, and the wizard then
+      detects that WSL and Ubuntu are ready and skips them.</p>
+  </div>
+
+  <h3>Step 1 (recommended): prepare WSL and Ubuntu by hand</h3>
+  <p>Run the commands in <strong>PowerShell</strong>. Where it says <em>"as administrator"</em>, right-click
+    PowerShell → <strong>Run as administrator</strong>.</p>
+  <ol class="steps">
+    <li><b>Check virtualization</b>
+      Open Task Manager → <strong>Performance</strong> → <strong>CPU</strong>. At the bottom it must say
+      <strong>Virtualization: Enabled</strong>. If it says "Disabled", turn on Intel VT-x or AMD-V (SVM) in the
+      computer's BIOS/UEFI.</li>
+    <li><b>Install WSL</b> <span class="kicker">as administrator</span>
+<pre class="cmd" data-shell="PowerShell"><span class="p">PS&gt;</span> wsl --install --no-distribution
+<span class="c"># restart the computer, then:</span>
+<span class="p">PS&gt;</span> wsl --update
+<span class="p">PS&gt;</span> wsl --status          <span class="c"># must say: Default Version: 2</span></pre></li>
+    <li><b>Install Ubuntu</b>
+<pre class="cmd" data-shell="PowerShell"><span class="p">PS&gt;</span> wsl --install -d Ubuntu</pre>
+      On its first start Ubuntu asks for a user name (<em>Enter new UNIX username</em>). Use <strong>lower-case
+      Latin letters, no spaces</strong> — for example <code>ivan</code>. Then type a password twice; nothing is shown
+      while you type — that is normal. Close Ubuntu with <code>exit</code>.</li>
+    <li><b>Check the result</b>
+<pre class="cmd" data-shell="PowerShell"><span class="p">PS&gt;</span> wsl -d Ubuntu whoami   <span class="c"># must be your name, not root</span>
+<span class="p">PS&gt;</span> wsl -l -v              <span class="c"># Ubuntu must show VERSION 2</span></pre>
+      If the version is 1: <code>wsl --set-version Ubuntu 2</code>. If the answer is <code>root</code>, see
+      <a href="#ch-trouble">chapter 11</a> before you continue.</li>
+  </ol>
+  <div class="note">
+    <b>Good to know</b>
+    <p>An Ubuntu you installed by hand stays yours: Sentry's uninstaller never offers to remove it.</p>
+  </div>
+
+  <h3>Step 2: the setup wizard</h3>
+  <p>Download <code>SentrySetup-&lt;version&gt;-windows-x64.exe</code> and double-click it. It installs for the
+    current user, so it doesn't ask for administrator rights at the start.</p>
+
+  <div class="note warn">
+    <b>Windows SmartScreen</b>
+    <p>If Windows shows "Windows protected your PC", click <strong>More info</strong> and then <strong>Run
+      anyway</strong>. The warning appears because the file is not yet signed with a paid publisher certificate, not
+      because it is dangerous.</p>
+  </div>
+
+  <div class="cols">
+    <figure class="shot">
+      <div class="frame" data-src="img/en/wiz-language.png">
+        <i class="pin" data-x="17.4" data-y="54.7" data-dx="-9" data-dy="9">1</i>
+        <i class="pin" data-x="53.7" data-y="84.2" data-dx="-16" data-dy="0">2</i>
+      </div>
+      <figcaption><b>Setup language.</b></figcaption>
+    </figure>
+    <ol class="legend">
+      <li><b>Choose the language</b> — English or Bulgarian. <span class="why">The whole wizard and its messages use this language.</span></li>
+      <li><b>OK</b> — goes on to the welcome page.</li>
+    </ol>
+  </div>
+
+  <div class="cols" style="grid-template-columns: repeat(3, 1fr); gap: 4mm">
+    <figure class="shot">
+      <div class="frame" data-src="img/en/wiz-welcome.png">
+        <i class="pin" data-x="70" data-y="45" data-dx="0" data-dy="13">1</i>
+        <i class="pin" data-x="71.2" data-y="91.7" data-dx="-10" data-dy="-9">2</i>
+      </div>
+      <figcaption><b>Welcome page.</b></figcaption>
+    </figure>
+    <figure class="shot">
+      <div class="frame" data-src="img/en/wiz-tasks.png">
+        <i class="pin" data-x="8.6" data-y="37" data-dx="6" data-dy="10">3</i>
+      </div>
+      <figcaption><b>Additional tasks.</b></figcaption>
+    </figure>
+    <figure class="shot">
+      <div class="frame" data-src="img/en/wiz-ready.png">
+        <i class="pin" data-x="71.4" data-y="91.7" data-dx="-10" data-dy="-9">4</i>
+      </div>
+      <figcaption><b>Ready to install.</b></figcaption>
+    </figure>
+  </div>
+  <ol class="legend two">
+    <li><b>What gets installed</b> — WSL2, Ubuntu, the Linux tools and the agents' tools. <span class="why">On a new PC it takes 10–30 minutes; Windows asks once for administrator approval and may need one restart.</span></li>
+    <li><b>Next</b> — to the next page.</li>
+    <li><b>Desktop shortcut</b> — leave it ticked if you want a shortcut on the desktop. <span class="why">A Start menu shortcut is always created.</span></li>
+    <li><b>Install</b> — starts the real work: the wizard shows 6 steps with plain messages.</li>
+  </ol>
+
+  <h4>The six steps after "Install"</h4>
+  <ol class="steps" style="columns: 2; column-gap: 8mm">
+    <li><b>Checking the computer</b>Windows 11, virtualization, free space (~10 GB).</li>
+    <li><b>Installing WSL2</b>One administrator approval; may ask for a restart.</li>
+    <li><b>Installing Ubuntu</b>A Linux user is created with your name.</li>
+    <li><b>Preparing the Linux tools</b></li>
+    <li><b>Installing the Sentry runtime</b></li>
+    <li><b>Installing the agents' tools</b></li>
+  </ol>
+
+  <div class="note">
+    <b>If the computer restarts</b>
+    <p>Sometimes Windows has to restart to finish WSL2. The wizard tells you, and once you sign in again it
+      <strong>continues by itself</strong> from where it stopped. Finished steps are also skipped if you run the
+      wizard again by hand.</p>
+  </div>
+  <p>At the end the wizard offers to open Sentry. A detailed log of every step is in
+    <code>%LOCALAPPDATA%\Sentry\logs\setup-wizard.log</code> — the first place to look if something goes wrong (see
+    <a href="#ch-trouble">chapter 11</a>).</p>
+
+  <h3>Uninstalling</h3>
+  <p>Open <strong>Settings → Apps → Installed apps → Sentry → Uninstall</strong>. The uninstaller always removes the
+    program, the shortcut and the <code>sentry</code> command, then asks up to three questions. <strong>All three
+    default to "No"</strong>, so you can't lose anything by accident:</p>
+  <table class="grid">
+    <tr><th>Question</th><th>If you answer "Yes"</th><th>When it appears</th></tr>
+    <tr><td>Also delete Sentry's data?</td><td>Deletes projects, runs, findings, the agents' tools and saved keys.</td><td>Always</td></tr>
+    <tr><td>Also remove Ubuntu?</td><td>Deletes the whole Ubuntu distribution, including your own files in it. Cannot be undone.</td><td>Only if Sentry installed Ubuntu</td></tr>
+    <tr><td>Also remove WSL?</td><td>Removes WSL from Windows (asks for administrator approval).</td><td>Only if Sentry installed WSL and no other distribution is left</td></tr>
+  </table>
+</section>
+
+<!-- ============================== 03 FIRST LOOK ============================== -->
+<section class="chapter" id="ch-tour">
+  <header class="chapter-head">
+    <div class="num">03</div>
+    <div>
+      <h2>A first look at the app</h2>
+      <p>The dashboard is the first thing you see — a summary of everything Sentry has checked so far.</p>
+    </div>
+  </header>
+
+  <figure class="shot pad">
+    <div class="frame" data-src="img/en/dashboard.jpg">
+      <i class="pin" data-x="2.2" data-y="12.1" data-dx="-8" data-dy="-4">1</i>
+      <i class="pin" data-x="2.2" data-y="16.7" data-dx="-8" data-dy="-1.3">2</i>
+      <i class="pin" data-x="2.2" data-y="21.5" data-dx="-8" data-dy="1.3">3</i>
+      <i class="pin" data-x="2.2" data-y="26.3" data-dx="-8" data-dy="4">4</i>
+      <i class="pin" data-x="80" data-y="2.8" data-dx="-9" data-dy="0">5</i>
+      <i class="pin" data-x="98" data-y="2.8" data-dx="7" data-dy="0">6</i>
+      <i class="pin" data-x="86.5" data-y="10.5" data-dx="-10" data-dy="0">7</i>
+      <i class="pin" data-x="52" data-y="18.6" data-dx="0" data-dy="-6">8</i>
+      <i class="pin" data-x="33" data-y="47" data-dx="0" data-dy="0">9</i>
+      <i class="pin" data-x="79" data-y="65.5" data-dx="0" data-dy="0">10</i>
+      <i class="pin" data-x="52" data-y="83.8" data-dx="0" data-dy="0">11</i>
+      <i class="pin" data-x="2.2" data-y="96" data-dx="-8" data-dy="0">12</i>
+    </div>
+    <figcaption><b>The dashboard.</b> The numbers come from the computer the guide was made on.</figcaption>
+  </figure>
+  <ol class="legend two">
+    <li><b>Dashboard</b> — this page.</li>
+    <li><b>Projects</b> — every project you added (<a href="#ch-project">chapter 4</a>).</li>
+    <li><b>Runtime</b> — whether the Linux runtime and the agents are ready (<a href="#ch-settings">chapter 10</a>).</li>
+    <li><b>Settings</b> — providers, runtime, toolchains, application.</li>
+    <li><b>Runtime status</b> — "Runtime connected" means everything works. <span class="why">If not, see <a href="#ch-trouble">chapter 11</a>.</span></li>
+    <li><b>Ctrl+K</b> — quick search and commands from any page.</li>
+    <li><b>Add Project</b> — start here.</li>
+    <li><b>Key numbers</b> — projects, runs, success rate, findings, typical run time, active QA.</li>
+    <li><b>Runs in the last 14 days</b> — completed and failed, per day.</li>
+    <li><b>Findings by severity</b> and by agent.</li>
+    <li><b>Active QA, recent runs and projects</b> — quick access to the latest work.</li>
+    <li><b>Active runs</b> — glows yellow while a run is going; click it to open the run.</li>
+  </ol>
+  <div class="note">
+    <b>Language and theme</b>
+    <p>The language (English or Bulgarian) and the theme (forest dark, midnight grey, daylight) are changed in
+      <strong>Settings → Application</strong>. All screenshots in this guide use English and the dark theme.</p>
+  </div>
+</section>
+
+<!-- ============================== 04 PROJECTS ============================== -->
+<section class="chapter" id="ch-project">
+  <header class="chapter-head">
+    <div class="num">04</div>
+    <div>
+      <h2>Adding a project</h2>
+      <p>A project is a folder of code. Sentry makes its own copy and works only on that.</p>
+    </div>
+  </header>
+
+  <figure class="shot">
+    <div class="frame" data-src="img/en/projects.jpg" data-crop="0,0,100,62" data-ratio="0.625">
+      <i class="pin" data-x="86.5" data-y="10.5" data-dx="-10" data-dy="0">1</i>
+    </div>
+    <figcaption><b>The Projects page.</b> Each card is one project.</figcaption>
+  </figure>
+  <div class="cols" style="grid-template-columns: 74mm 1fr; gap: 16mm">
+    <figure class="shot">
+      <div class="frame" data-src="img/en/projects.jpg" data-crop="6,16,24,20" data-ratio="0.625">
+        <i class="pin" data-x="27.4" data-y="20.3" data-dx="14" data-dy="0">2</i>
+        <i class="pin" data-x="23.9" data-y="24.6" data-dx="24" data-dy="0">3</i>
+        <i class="pin" data-x="21.6" data-y="28.1" data-dx="31" data-dy="0">4</i>
+        <i class="pin" data-x="12" data-y="34.2" data-dx="0" data-dy="9">5</i>
+        <i class="pin" data-x="27" data-y="32.4" data-dx="15" data-dy="0">6</i>
+      </div>
+    </figure>
+    <ol class="legend">
+      <li><b>Add Project</b> — opens the Windows folder picker. Choose the project's main folder (where <code>package.json</code>, <code>pom.xml</code> and so on live).</li>
+      <li><b>Status</b> — "Ready" once the copy is made and can be checked.</li>
+      <li><b>Revision</b> — the current version of the copy; the button next to it copies it.</li>
+      <li><b>Runs</b> — how many checks have been made on the project.</li>
+      <li><b>Open</b> — the project page (below).</li>
+      <li><b>Remove project</b> — removes the copy and its history from Sentry. <span class="why">Your folder is not touched.</span></li>
+    </ol>
+  </div>
+  <div class="note">
+    <b>Adding by path</b>
+    <p>If you prefer to paste a path, the ⓘ icon "Advanced: add by path" at the bottom right of the page opens a field
+      for a full path (for example <code>C:\Projects\online-shop</code>) — press <kbd>Enter</kbd>.</p>
+  </div>
+
+  <h3>The project page</h3>
+  <figure class="shot">
+    <div class="frame" data-src="img/en/project-head.jpg" data-crop="4,4,96,40" data-ratio="0.625">
+      <i class="pin" data-x="25" data-y="16.6" data-dx="8" data-dy="0">1</i>
+      <i class="pin" data-x="79.3" data-y="16.5" data-dx="0" data-dy="5">2</i>
+      <i class="pin" data-x="90.7" data-y="16.5" data-dx="0" data-dy="5">3</i>
+      <i class="pin" data-x="22" data-y="32" data-dx="0" data-dy="0">4</i>
+      <i class="pin" data-x="44.5" data-y="32" data-dx="0" data-dy="0">5</i>
+      <i class="pin" data-x="72" data-y="32" data-dx="0" data-dy="0">6</i>
+      <i class="pin" data-x="90" data-y="32" data-dx="0" data-dy="0">7</i>
+      <i class="pin" data-x="45" data-y="40.8" data-dx="0" data-dy="0">8</i>
+    </div>
+    <figcaption><b>The top of the project page.</b></figcaption>
+  </figure>
+  <ol class="legend two">
+    <li><b>Name and path</b> — where the project came from (the path as the Linux runtime sees it).</li>
+    <li><b>Update Project</b> — makes a new revision from the folder's current contents. <span class="why">Use it after every code change, before a new run.</span></li>
+    <li><b>Remove project</b> — as on the Projects page.</li>
+    <li><b>Project state</b> — whether the copy is ready. While a run is going, updating waits.</li>
+    <li><b>Readiness</b> — whether the project can be checked.</li>
+    <li><b>Current revision</b> — the newest copy.</li>
+    <li><b>QA runs</b> — number of runs.</li>
+    <li><b>Tabs</b> — <em>Run QA</em> (<a href="#ch-start">chapter 5</a>), <em>Findings</em> (<a href="#ch-results">chapter 9</a>), <em>Setup</em> (below) and <em>Activity</em> — the history of actions on the project.</li>
+  </ol>
+
+  <h3>Preparing the agents (the "Setup" tab)</h3>
+  <div class="cols wide-left">
+    <figure class="shot">
+      <div class="frame" data-src="img/en/project-setup.jpg" data-crop="6,5,46,92" data-ratio="0.764">
+        <i class="pin" data-x="33" data-y="19.1" data-dx="7" data-dy="0">1</i>
+        <i class="pin" data-x="18" data-y="40.7" data-dx="0" data-dy="7">2</i>
+        <i class="pin" data-x="25" data-y="52" data-dx="7" data-dy="0">3</i>
+        <i class="pin" data-x="33" data-y="67.9" data-dx="7" data-dy="0">4</i>
+        <i class="pin" data-x="25.5" data-y="89.4" data-dx="7" data-dy="0">5</i>
+      </div>
+      <figcaption><b>Project profile and needed toolchains.</b></figcaption>
+    </figure>
+    <ol class="legend">
+      <li><b>Project profile</b> — per agent: "Build" makes the agent read the project and write a short description. <span class="why">Then turn on "Use project profile" when you start — runs begin better informed.</span></li>
+      <li><b>Get to know the project (all agents)</b> — the same for all agents at once.</li>
+      <li><b>What this project's files ask for</b> — tool versions written in the project itself (for example <code>.nvmrc</code>).</li>
+      <li><b>Ask</b> — the agent says what must be installed to run the tests. <span class="why">Nothing is installed automatically — you decide in Settings → Toolchains.</span></li>
+      <li><b>Ask all agents</b> — the same for all agents.</li>
+    </ol>
+  </div>
+  <p style="margin-top:2mm; color: var(--ink-2)">Both steps are optional and use provider budget.</p>
+</section>
+
+<!-- ============================== 05 START A RUN ============================== -->
+<section class="chapter" id="ch-start">
+  <header class="chapter-head">
+    <div class="num">05</div>
+    <div>
+      <h2>Starting a QA run</h2>
+      <p>Everything is set in the project's "Run QA" tab — from top to bottom, then one button.</p>
+    </div>
+  </header>
+
+  <h3>Scope and agents</h3>
+  <figure class="shot pad">
+    <div class="frame" data-src="img/en/setup-scope.jpg" data-crop="7,4,93,62" data-ratio="0.625">
+      <i class="pin" data-x="10.9" data-y="19.3" data-dx="-6.5" data-dy="0">1</i>
+      <i class="pin" data-x="21.4" data-y="28.6" data-dx="9" data-dy="0">2</i>
+      <i class="pin" data-x="40" data-y="36.6" data-dx="0" data-dy="-6">3</i>
+      <i class="pin" data-x="50" data-y="46.5" data-dx="0" data-dy="0">4</i>
+      <i class="pin" data-x="69.5" data-y="17.5" data-dx="8" data-dy="0">5</i>
+      <i class="pin" data-x="68" data-y="27.4" data-dx="9" data-dy="0">6</i>
+      <i class="pin" data-x="86.4" data-y="17.2" data-dx="-7" data-dy="0">7</i>
+      <i class="pin" data-x="84.6" data-y="29.2" data-dx="-7" data-dy="0">8</i>
+    </div>
+    <figcaption><b>Scope and agents.</b> Only the OpenCode agent and depth "Fast" are selected.</figcaption>
+  </figure>
+  <ol class="legend two">
+    <li><b>QA mode</b> — <em>Full QA</em> (the whole project) or <em>Targeted QA</em> (only paths you name). <span class="why">The difference is in <a href="#ch-kinds">chapter 7</a>.</span></li>
+    <li><b>Run depth</b> — <em>Fast</em> or <em>Full</em>. <span class="why">The ⓘ icon explains the difference right in the app.</span></li>
+    <li><b>Revision</b> — which version of the project to check. <span class="why">The current one by default; an older revision is useful for comparison.</span></li>
+    <li><b>Revision details</b> — when it was made and whether it is current.</li>
+    <li><b>Selected agent</b> — green frame and dot. <span class="why">Click a card to turn it on or off.</span></li>
+    <li><b>Agent not selected</b> — will not take part. <span class="why">Every agent uses budget at its provider.</span></li>
+    <li><b>Readiness</b> — <em>Ready</em> (checked), <em>Configured</em> (has a key, not yet checked). <span class="why">An agent without a key can't be selected.</span></li>
+    <li><b>Reasoning effort</b> — how "long the model thinks"; changed in Settings → Providers.</li>
+  </ol>
+
+  <h3>Notes, options and start</h3>
+  <figure class="shot">
+    <div class="frame" data-src="img/en/setup-options.jpg" data-crop="7,13,93,80" data-ratio="0.625">
+      <i class="pin" data-x="28.5" data-y="24.6" data-dx="8" data-dy="0">1</i>
+      <i class="pin" data-x="72" data-y="37" data-dx="0" data-dy="0">2</i>
+      <i class="pin" data-x="25.4" data-y="62.5" data-dx="0" data-dy="0">3</i>
+      <i class="pin" data-x="46.5" data-y="62.5" data-dx="0" data-dy="0">4</i>
+      <i class="pin" data-x="67.6" data-y="62.5" data-dx="0" data-dy="0">5</i>
+      <i class="pin" data-x="88.6" data-y="62.5" data-dx="0" data-dy="0">6</i>
+      <i class="pin" data-x="80.6" data-y="78.6" data-dx="-9" data-dy="0">7</i>
+      <i class="pin" data-x="34" data-y="87.9" data-dx="0" data-dy="0">8</i>
+      <i class="pin" data-x="83.8" data-y="87.9" data-dx="-9" data-dy="0">9</i>
+    </div>
+    <figcaption><b>Notes for the agents, run options and the start button.</b></figcaption>
+  </figure>
+  <ol class="legend two">
+    <li><b>Different notes for each agent</b> — turn on to give each agent a different task.</li>
+    <li><b>Note for all agents</b> — optional: what matters to you, for example "focus on payments". <span class="why">The agents read it while planning.</span></li>
+    <li><b>Allow web access</b> — the agents may open web pages. <span class="why">Off by default for stronger isolation.</span></li>
+    <li><b>Use project profile</b> — reuses the project description from an earlier run. <span class="why">"Unavailable" until a profile exists.</span></li>
+    <li><b>Allow tool and SDK downloads</b> — Sentry installs what is needed (Node, Python, Java…) so the tests can run.</li>
+    <li><b>Check for secrets</b> — adds the check for passwords and keys in the code (<a href="#ch-inside">chapter 6</a>). <span class="why">On by default.</span></li>
+    <li><b>Packages &amp; toolchains</b> — explanation: installing the project's packages (npm, pip and so on) is always allowed; larger toolchains are managed in Settings → Toolchains.</li>
+    <li><b>Summary</b> — how many agents, which scope, and a reminder that it uses budget.</li>
+    <li><b>Start</b> — opens a confirmation window.</li>
+  </ol>
+
+  <div class="cols wide-left">
+    <figure class="shot">
+      <div class="frame" data-src="img/en/confirm.jpg">
+        <i class="pin" data-x="88" data-y="30" data-dx="0" data-dy="0">1</i>
+        <i class="pin" data-x="88" data-y="37.3" data-dx="0" data-dy="0">2</i>
+        <i class="pin" data-x="88" data-y="44.5" data-dx="0" data-dy="0">3</i>
+        <i class="pin" data-x="88" data-y="52.4" data-dx="0" data-dy="0">4</i>
+        <i class="pin" data-x="88" data-y="74" data-dx="0" data-dy="0">5</i>
+        <i class="pin" data-x="66.5" data-y="86.5" data-dx="-12" data-dy="0">6</i>
+      </div>
+      <figcaption><b>A last check before the start.</b></figcaption>
+    </figure>
+    <ol class="legend">
+      <li><b>Agents</b> — who will work.</li>
+      <li><b>Depth</b> — Fast or Full.</li>
+      <li><b>Revision</b> — which version of the project.</li>
+      <li><b>Network</b> — what is allowed: ✕ off, ✓ on. <span class="why">"Packages" are always allowed — without them the tests can't run.</span></li>
+      <li><b>Budget</b> — the run costs real money or subscription quota.</li>
+      <li><b>Start QA</b> — starts the run and opens its page (<a href="#ch-follow">chapter 8</a>).</li>
+    </ol>
+  </div>
+</section>
+
+<!-- ============================== 06 HOW A RUN WORKS ============================== -->
+<section class="chapter" id="ch-inside">
+  <header class="chapter-head">
+    <div class="num">06</div>
+    <div>
+      <h2>What an agent does during a run</h2>
+      <p>The stages on the agent card, the rounds of the investigation and why each one exists.</p>
+    </div>
+  </header>
+
+  <p>Every agent follows the same path, independently of the others. The path is written into Sentry's code, not
+    left to the agent: Sentry decides <em>when</em> each step starts, keeps the time and stops the agent when it goes
+    in circles. The agent decides <em>what</em> exactly to check and how.</p>
+
+  <h3>Before the agents start</h3>
+  <ol class="steps">
+    <li><b>Frozen copy (snapshot)</b>Sentry takes the selected revision and freezes it. Every agent checks exactly the
+      same state, and your original stays untouched.</li>
+    <li><b>Project profile</b> <span class="kicker">optional</span><br />If "Use project profile" is on, an agent
+      reads the project once and writes a short description. Later runs use it and start faster.</li>
+    <li><b>Packages &amp; toolchains</b> <span class="kicker">optional</span><br />If "Allow tool and SDK downloads" is
+      on, an agent lists what the project needs (for example Node, Python, Java), and Sentry installs it before the
+      investigation so the tests can really run.</li>
+  </ol>
+
+  <h3>The seven stages on the agent card</h3>
+  <p>Every agent card has a bar of 7 dots and a counter such as <span class="live">4/7 Commands / Tests</span>.
+    The stages go in this order:</p>
+  <figure class="diagram">
+    <svg viewBox="0 0 760 92" font-family="Segoe UI" font-size="11.5">
+      <g font-weight="700" text-anchor="middle">
+        <g transform="translate(0,0)"><rect x="2" y="16" width="98" height="40" rx="8" fill="#eef3ea" stroke="#8eae82"/><text x="51" y="41" fill="#2f4d2b">Preparation</text></g>
+        <g transform="translate(108,0)"><rect x="2" y="16" width="98" height="40" rx="8" fill="#eef3ea" stroke="#8eae82"/><text x="51" y="41" fill="#2f4d2b">Planning</text></g>
+        <g transform="translate(216,0)"><rect x="2" y="16" width="98" height="40" rx="8" fill="#0d100d"/><text x="51" y="41" fill="#d4c00b">Investigation</text></g>
+        <g transform="translate(324,0)"><rect x="2" y="16" width="98" height="40" rx="8" fill="#0d100d"/><text x="51" y="34" fill="#d4c00b">Commands /</text><text x="51" y="48" fill="#d4c00b">Tests</text></g>
+        <g transform="translate(432,0)"><rect x="2" y="16" width="98" height="40" rx="8" fill="#eef3ea" stroke="#8eae82"/><text x="51" y="41" fill="#2f4d2b">Reporting</text></g>
+        <g transform="translate(540,0)"><rect x="2" y="16" width="98" height="40" rx="8" fill="#eef3ea" stroke="#8eae82"/><text x="51" y="41" fill="#2f4d2b">Evidence</text></g>
+        <g transform="translate(648,0)"><rect x="2" y="16" width="108" height="40" rx="8" fill="#4e7d48"/><text x="56" y="41" fill="#fff">Completed</text></g>
+      </g>
+      <g stroke="#4e7d48" stroke-width="1.6"><path d="M100 36h8M208 36h8M316 36h8M424 36h8M532 36h8M640 36h8"/></g>
+      <g fill="#7b8478" font-size="10" text-anchor="middle">
+        <text x="51" y="72">1/7</text><text x="159" y="72">2/7</text><text x="267" y="72">3/7</text><text x="375" y="72">4/7</text><text x="483" y="72">5/7</text><text x="591" y="72">6/7</text><text x="702" y="72">7/7</text>
+      </g>
+      <text x="321" y="88" fill="#7b8478" font-size="10" text-anchor="middle">all rounds of the investigation happen here (next page)</text>
+    </svg>
+  </figure>
+  <p><strong>Evidence comes after the report</strong>, not before it: the agent sends its findings and evidence
+    together with the report, and only then does Sentry check and store them.</p>
+
+  <h3>Planning</h3>
+  <p>The agent reads the project's documentation and <strong>source code</strong> without running anything. From that
+    it builds three ordered lists — from the riskiest to the safest:</p>
+  <table class="grid">
+    <tr><th style="width:30mm">List</th><th>What it holds</th><th style="width:52mm">Example from the demo project</th></tr>
+    <tr><td>Critical flows</td><td>The main paths through the app that must work end to end.</td><td>cart → discount → total</td></tr>
+    <tr><td>Weak points</td><td>Places in the code that look fragile: complex logic, boundary values, comments saying "this can't happen".</td><td>path check on export</td></tr>
+    <tr><td>Checks</td><td>Concrete yes/no questions. Each names a file, a function and the input that should break it.</td><td>"addItem with quantity 0, −1, 1.5"</td></tr>
+  </table>
+  <p>Every critical flow gets at least one check that <em>runs</em> it with boundary values (zero, negative, empty,
+    missing). The number of checks depends on the depth: <strong>Full</strong> — up to 8 (about one per 25 minutes of
+    the time limit; 6 for 3 hours), <strong>Fast</strong> — up to 2. The plan is then <strong>frozen</strong> and
+    doesn't change until the end — so the result is traceable.</p>
+  <p class="live">▸ OpenCode is creating a frozen investigation plan.</p>
+</section>
+
+<section id="ch-rounds">
+  <h3>The rounds of the investigation</h3>
+  <p>After planning the agent investigates in rounds. Each round has its own goal, its own line on the card and its
+    own limit. The diagram shows the whole path of a <strong>Full</strong> run; <strong>Fast</strong> stops after the
+    second round.</p>
+
+  <figure class="diagram">
+    <svg viewBox="0 0 800 560" font-family="Segoe UI" font-size="11.5">
+      <defs>
+        <marker id="a2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#4e7d48"/></marker>
+        <marker id="a3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#b96462"/></marker>
+      </defs>
+      <g fill="none" stroke="#4e7d48" stroke-width="1.8" marker-end="url(#a2)">
+        <path d="M170 52v22"/><path d="M170 176v22"/><path d="M170 244v22"/><path d="M170 312v28"/><path d="M170 386v18"/><path d="M170 450v18"/><path d="M170 514v12"/>
+      </g>
+      <rect x="40" y="10" width="260" height="42" rx="9" fill="#eef3ea" stroke="#8eae82"/>
+      <text x="170" y="36" text-anchor="middle" font-weight="800" fill="#2f4d2b">Planning → frozen plan</text>
+      <rect x="40" y="76" width="260" height="100" rx="9" fill="#0d100d"/>
+      <text x="56" y="98" font-weight="800" fill="#d4c00b">ROUND 1 · The planned checks</text>
+      <text x="56" y="118" fill="#eef1eb">one turn per check: 1/N, 2/N …</text>
+      <text x="56" y="138" fill="#8eae82" font-size="10.5">the agent writes a probe, runs it and decides:</text>
+      <text x="56" y="154" fill="#8eae82" font-size="10.5">passed · failed · undecided</text>
+      <g font-size="10.5">
+        <rect x="330" y="76" width="200" height="30" rx="7" fill="#fbf7dc" stroke="#d4c00b"/>
+        <text x="342" y="95" fill="#5f5400"><tspan font-weight="800">Execution required</tspan> · once</text>
+        <rect x="330" y="112" width="200" height="30" rx="7" fill="#fbf7dc" stroke="#d4c00b"/>
+        <text x="342" y="131" fill="#5f5400"><tspan font-weight="800">Different approach</tspan> · up to 3 tries</text>
+        <rect x="330" y="148" width="200" height="30" rx="7" fill="#fbf7dc" stroke="#d4c00b"/>
+        <text x="342" y="167" fill="#5f5400"><tspan font-weight="800">Time share reached</tspan></text>
+      </g>
+      <path d="M300 126h28" stroke="#d4c00b" stroke-width="1.4" stroke-dasharray="3 3"/>
+      <text x="545" y="96" fill="#7b8478" font-size="10.5">Sentry steps in when the agent</text>
+      <text x="545" y="111" fill="#7b8478" font-size="10.5">only reads, repeats a failing command</text>
+      <text x="545" y="126" fill="#7b8478" font-size="10.5">or uses up the check's time.</text>
+      <rect x="40" y="200" width="260" height="44" rx="9" fill="#eef3ea" stroke="#8eae82"/>
+      <text x="56" y="219" font-weight="800" fill="#2f4d2b">Check for secrets</text>
+      <text x="56" y="235" fill="#4a5348" font-size="10.5">the last check, only reads the code</text>
+      <rect x="40" y="268" width="260" height="44" rx="9" fill="#0d100d"/>
+      <text x="56" y="287" font-weight="800" fill="#d4c00b">ROUND 2 · Second pass</text>
+      <text x="56" y="303" fill="#8eae82" font-size="10.5">up to 3 undecided checks · if ≥ 40% time is left</text>
+      <g>
+        <path d="M300 326 C360 326 380 326 420 326" stroke="#b96462" stroke-width="1.6" fill="none" marker-end="url(#a3)" stroke-dasharray="5 4"/>
+        <rect x="424" y="308" width="200" height="36" rx="8" fill="#f8ecea" stroke="#b96462"/>
+        <text x="436" y="330" font-weight="800" fill="#b96462">FAST: straight to the report</text>
+      </g>
+      <text x="40" y="333" fill="#7b8478" font-size="10" font-weight="700">FULL ONLY ↓</text>
+      <rect x="40" y="342" width="260" height="44" rx="9" fill="#0d100d"/>
+      <text x="56" y="361" font-weight="800" fill="#d4c00b">ROUND 3 · Extension</text>
+      <text x="56" y="377" fill="#8eae82" font-size="10.5">if ≥ 50% of the time is left</text>
+      <g font-size="10.5">
+        <rect x="318" y="350" width="112" height="30" rx="7" fill="#eef3ea" stroke="#8eae82"/><text x="374" y="369" text-anchor="middle" fill="#2f4d2b"><tspan font-weight="800">a) Leads</tspan> · up to 4</text>
+        <rect x="436" y="350" width="172" height="30" rx="7" fill="#eef3ea" stroke="#8eae82"/><text x="522" y="369" text-anchor="middle" fill="#2f4d2b"><tspan font-weight="800">b) Critical flows</tspan> · up to 5</text>
+        <rect x="614" y="350" width="162" height="30" rx="7" fill="#eef3ea" stroke="#8eae82"/><text x="695" y="369" text-anchor="middle" fill="#2f4d2b"><tspan font-weight="800">c) Deepening</tspan> · up to 3</text>
+      </g>
+      <path d="M300 364h18" stroke="#8eae82" stroke-width="1.4"/>
+      <rect x="40" y="406" width="260" height="44" rx="9" fill="#0d100d"/>
+      <text x="56" y="425" font-weight="800" fill="#d4c00b">ROUND 4 · Hazard sweep</text>
+      <text x="56" y="441" fill="#8eae82" font-size="10.5">files that delete, parse, compare paths</text>
+      <rect x="330" y="406" width="426" height="44" rx="8" fill="#fbfcfa" stroke="#dfe5db"/>
+      <text x="344" y="424" fill="#4a5348" font-size="10.5"><tspan font-weight="800">Early stop</tspan> (if turned on in Providers): rounds 3 and 4</text>
+      <text x="344" y="440" fill="#4a5348" font-size="10.5">stop after 2 turns in a row that find nothing new.</text>
+      <rect x="40" y="470" width="260" height="44" rx="9" fill="#4e7d48"/>
+      <text x="56" y="489" font-weight="800" fill="#fff">Report</text>
+      <text x="56" y="505" fill="#dfe7da" font-size="10.5">in a fresh session · 12 minutes kept for it</text>
+      <path d="M624 326 H792 V492 H304" stroke="#b96462" stroke-width="1.6" fill="none" marker-end="url(#a3)" stroke-dasharray="5 4"/>
+      <text x="170" y="548" text-anchor="middle" fill="#7b8478" font-size="10.5">→ Evidence → Completed</text>
+    </svg>
+    <figcaption><b>The full path of one agent.</b> Dark blocks are the investigation rounds; yellow ones are Sentry stepping in when the agent gets stuck.</figcaption>
+  </figure>
+
+  <div class="note">
+    <b>Why Sentry runs the steps, not the agent</b>
+    <p>Left to decide when to stop, an agent often stops too early ("everything looks fine") or gets stuck on one
+      check. So Sentry keeps the clock, the plan and the order of the rounds, and the agent is responsible for the
+      investigation itself. That way two runs of the same project are comparable.</p>
+  </div>
+</section>
+
+<section id="ch-rounds-2" style="break-before: page">
+  <h3>Every step — what it does and why</h3>
+  <p>The last column is what you will see on the agent card at that moment (see <a href="#ch-follow">chapter 8</a>).</p>
+  <table class="grid">
+    <tr><th style="width:30mm">Step</th><th>What it does and why</th><th style="width:44mm">Line on the card</th></tr>
+    <tr><td>Checks (round 1)</td><td>One turn per planned check. The agent writes a small probe (a test), runs it against the real code with a hostile or boundary input, and decides whether the check passed. <em>Why:</em> only a command that ran proves behaviour — reading is not enough.</td><td class="live">investigating check 3/6: …</td></tr>
+    <tr><td>Execution required</td><td>If the agent only read code for the check, Sentry makes it run a probe once. <em>Why:</em> without it, the check stays an opinion.</td><td class="live">(within the check)</td></tr>
+    <tr><td>Different approach</td><td>If the agent keeps repeating the same failing command or reads for too long, Sentry stops the turn and asks for another method — up to 3 tries. It is shown its failed commands so it doesn't repeat them. <em>Why:</em> agents sometimes go in circles.</td><td class="live">(within the check)</td></tr>
+    <tr><td>Time share reached</td><td>Every check has a share of the total time. When it is used up, the agent writes down what it established without starting anything new. <em>Why:</em> the other checks and the report must fit.</td><td class="live">(within the check)</td></tr>
+    <tr><td>Check for secrets</td><td>The last check, if turned on: looks for passwords, API keys and tokens written straight into the code. Read only. Its result is the <em>Secrets</em> light on the card.</td><td class="live">investigating check 7/7: Secrets in code…</td></tr>
+    <tr><td>Second pass (round 2)</td><td>Up to 3 checks that stayed undecided get another try in a fresh session — if at least 40% of the time is left. The agent sees what it already tried. <em>Why:</em> a decided check is better than "undecided" in the report.</td><td class="live">giving check 2 a second pass (1/3): …</td></tr>
+    <tr><td>Leads (round 3a)</td><td>Up to 4 suspicious things the agent noticed <em>outside</em> its checks. <em>Why:</em> checks are narrow, and the real problem is often next to them.</td><td class="live">following up lead 1/4: …</td></tr>
+    <tr><td>Critical flows (round 3b)</td><td>Up to 5 critical flows from the plan are run end to end, chaining the steps (the value from one step breaks the next). <em>Why:</em> finds bugs nobody suspected while reading.</td><td class="live">exploring critical flow 2/5: …</td></tr>
+    <tr><td>Deepening (round 3c)</td><td>Up to 3 checks that passed quickly are attacked from new angles — other entry points, concurrency, failure and clean-up paths. Those with the least proof first. The earlier verdict stands unless a defect is found.</td><td class="live">deepening check 4 (1/3): …</td></tr>
+    <tr><td>Hazard sweep (round 4)</td><td>Sentry itself scans the code for risky files — ones that <strong>delete files</strong>, <strong>rewrite paths or names</strong>, <strong>compare paths</strong>, <strong>parse text</strong> or <strong>hash content</strong> — ranks them, and the agent checks them one by one.</td><td class="live">running the hazard sweep (1/5): src/cleanup.js</td></tr>
+    <tr><td>Report</td><td>Everything is written into a report in a fresh session; 12 minutes of the time are kept for this. Every defect has a "Root cause" line — the file, the function and the logic that gives the wrong result.</td><td class="live">serializing the frozen investigation into a report.</td></tr>
+  </table>
+</section>
+
+<!-- ============================== 07 DIFFERENCES ============================== -->
+<section class="chapter" id="ch-kinds">
+  <header class="chapter-head">
+    <div class="num">07</div>
+    <div>
+      <h2>The kinds of runs compared</h2>
+      <p>Two independent choices — mode and depth — plus re-testing specific findings.</p>
+    </div>
+  </header>
+
+  <h3>QA mode: what gets checked</h3>
+  <div class="cols">
+    <div class="card"><h4>Full QA</h4><p>The agents get the whole project. Use it for a first check or before a
+      release.</p></div>
+    <div class="card"><h4>Targeted QA</h4><p>You name paths (folders or files). The agents check only those and what
+      they depend on — with the same depth. Use it after a change in one part of the project.</p></div>
+  </div>
+
+  <h3>Depth: how thorough</h3>
+  <table class="grid">
+    <tr><th>Step</th><th style="width:28mm">Full</th><th style="width:28mm">Fast</th><th style="width:34mm">Re-test</th></tr>
+    <tr><td>Planned checks</td><td><span class="yes">up to 8</span></td><td><span class="part">up to 2</span></td><td><span class="part">1 per finding</span></td></tr>
+    <tr><td>Check for secrets</td><td><span class="yes">yes</span></td><td><span class="yes">yes</span></td><td><span class="no">no</span></td></tr>
+    <tr><td>Second pass</td><td><span class="yes">yes</span></td><td><span class="yes">yes</span></td><td><span class="yes">yes</span></td></tr>
+    <tr><td>Leads</td><td><span class="yes">up to 4</span></td><td><span class="no">no</span></td><td><span class="no">no</span></td></tr>
+    <tr><td>Critical flows</td><td><span class="yes">up to 5</span></td><td><span class="no">no</span></td><td><span class="no">no</span></td></tr>
+    <tr><td>Deepening</td><td><span class="yes">up to 3</span></td><td><span class="no">no</span></td><td><span class="no">no</span></td></tr>
+    <tr><td>Hazard sweep</td><td><span class="yes">yes</span></td><td><span class="no">no</span></td><td><span class="no">no</span></td></tr>
+    <tr><td>Typical time</td><td>up to the limit (3 h by default)</td><td>minutes</td><td>minutes</td></tr>
+  </table>
+
+  <div class="cols">
+    <div class="note">
+      <b>When to use Fast</b>
+      <p>When you want a quick answer — after a small change, or to see how Sentry works. On the demo project a Fast run finished in <strong>under 3 minutes</strong> with 5 findings.</p>
+    </div>
+    <div class="note">
+      <b>When to use Full</b>
+      <p>Before a release or a hand-in. Rounds 3 and 4 find problems nobody suspected. On the same demo project a Full run took <strong>11 minutes</strong> and found <strong>8 findings</strong> with 29 pieces of evidence, one of them critical.</p>
+    </div>
+  </div>
+
+  <h3>Re-test</h3>
+  <p>After fixing problems you don't need to run everything again. A re-test takes findings from an <strong>older
+    revision</strong> and checks whether they are still there in the <strong>current</strong> one:</p>
+  <ol class="steps">
+    <li><b>Fix the code and press "Update Project"</b>This makes a new (current) revision.</li>
+    <li><b>Open the "Findings" tab and pick the older revision</b>Tick up to 12 findings you want to check again.</li>
+    <li><b>Choose who checks and press "Re-test N selected"</b>The agent that reported each finding, or all selected agents. Confirm in the window.</li>
+  </ol>
+  <div class="cols" style="grid-template-columns: 62mm 1fr">
+    <figure class="shot">
+      <div class="frame" data-src="img/en/retest-result.jpg">
+        <i class="pin" data-x="42" data-y="58" data-dx="0" data-dy="-6">1</i>
+        <i class="pin" data-x="33" data-y="74.6" data-dx="7" data-dy="0">2</i>
+      </div>
+      <div class="frame" data-src="img/en/retest-result-2.jpg" style="margin-top:2mm">
+        <i class="pin" data-x="42.3" data-y="14.4" data-dx="7" data-dy="0">3</i>
+        <i class="pin" data-x="57" data-y="90.6" data-dx="7" data-dy="0">4</i>
+      </div>
+      <figcaption><b>The re-test result</b> on the demo project. Top: the tab and the first verdict; bottom: the last verdict and the summary. It took 2 minutes.</figcaption>
+    </figure>
+    <div>
+      <figure class="shot">
+        <div class="frame" data-src="img/en/retest-confirm.png"></div>
+        <figcaption><b>Confirmation before the start</b> — a re-test also uses budget.</figcaption>
+      </figure>
+      <ol class="legend">
+        <li><b>Re-test (3)</b> — a tab in the agent's details, one row per finding.</li>
+        <li><b>Passed</b> — the problem is fixed. Here: the quantity rule and the single-use discount code, which we fixed in the code.</li>
+        <li><b>Not passed</b> — the problem is still there, with an explanation. Here: the API key, which we didn't touch.</li>
+        <li><b>Summary</b> — "2 resolved · 1 not resolved".</li>
+      </ol>
+      <div class="note">
+        <b>Good to know</b>
+        <p>A re-test finds no new problems and doesn't change the original findings — it only answers whether each
+          one is still true. For new problems, start a new Fast or Full run.</p>
+      </div>
+    </div>
+  </div>
+  <p>The agent gets one question per finding — <em>"is it fixed in this revision?"</em> — and answers
+    <span class="yes">resolved</span>, <span class="no">not resolved</span> (and why) or "could not be determined".
+    It looks for no new problems and doesn't change the original finding.</p>
+</section>
+
+<!-- ============================== 08 FOLLOWING A RUN ============================== -->
+<section class="chapter" id="ch-follow">
+  <header class="chapter-head">
+    <div class="num">08</div>
+    <div>
+      <h2>Following a run</h2>
+      <p>The run page updates live — you see what every agent is doing right now.</p>
+    </div>
+  </header>
+
+  <figure class="shot">
+    <div class="frame" data-src="img/en/run-live.jpg">
+      <i class="pin" data-x="29.5" data-y="15.7" data-dx="13" data-dy="0">1</i>
+      <i class="pin" data-x="90.5" data-y="18.5" data-dx="0" data-dy="7">2</i>
+      <i class="pin" data-x="48" data-y="27.4" data-dx="14" data-dy="0">3</i>
+      <i class="pin" data-x="71.5" data-y="22.8" data-dx="-12" data-dy="0">4</i>
+      <i class="pin" data-x="15" data-y="62" data-dx="9" data-dy="-6">5</i>
+      <i class="pin" data-x="18" data-y="75.2" data-dx="10" data-dy="4">6</i>
+      <i class="pin" data-x="51.6" data-y="46.7" data-dx="-10" data-dy="0">7</i>
+      <i class="pin" data-x="32" data-y="60" data-dx="-8" data-dy="-8">8</i>
+      <i class="pin" data-x="66" data-y="46" data-dx="0" data-dy="8">9</i>
+      <i class="pin" data-x="86" data-y="52" data-dx="0" data-dy="10">10</i>
+    </div>
+    <figcaption><b>A run in progress.</b> A Fast run of the demo project "online-shop" with the OpenCode agent, half a minute in.</figcaption>
+  </figure>
+  <ol class="legend two">
+    <li><b>Kind and status</b> — "Running", "Completed", "Failed" or "Cancelled".</li>
+    <li><b>Cancel run</b> — stops all agents. <span class="why">What was already found is kept.</span></li>
+    <li><b>Results</b> — number of agents, findings and evidence, updated live.</li>
+    <li><b>Identifiers</b> — the run and snapshot IDs. <span class="why">The button next to them copies them, for example for a bug report.</span></li>
+    <li><b>Overview</b> — mode, depth and time limit. <span class="why">The « button hides the panel and gives the canvas more room.</span></li>
+    <li><b>Add-ons</b> — which options are on: web access, downloads, secrets, profile.</li>
+    <li><b>Project → Revision → Snapshot</b> — where the code the agents check comes from.</li>
+    <li><b>The agent card</b> — one per agent (see below). Click it to see the details.</li>
+    <li><b>Zoom</b> — zoom in, zoom out, fit all (<kbd>F</kbd>) and re-layout. <span class="why">Cards can also be dragged.</span></li>
+    <li><b>Details</b> — the details of the selected card: overview, findings, activity, evidence, diagnostics.</li>
+  </ol>
+
+  <h3>The agent card</h3>
+  <div class="cols wide-left">
+    <figure class="shot">
+      <div class="frame" data-src="img/en/node-anatomy.jpg">
+        <i class="pin" data-x="45" data-y="12.8" data-dx="0" data-dy="0">1</i>
+        <i class="pin" data-x="41" data-y="31.1" data-dx="0" data-dy="0">2</i>
+        <i class="pin" data-x="61" data-y="38.6" data-dx="9" data-dy="0">3</i>
+        <i class="pin" data-x="46" data-y="45.6" data-dx="0" data-dy="0">4</i>
+        <i class="pin" data-x="58" data-y="60.8" data-dx="9" data-dy="0">5</i>
+        <i class="pin" data-x="26" data-y="73.6" data-dx="9" data-dy="0">6</i>
+        <i class="pin" data-x="47" data-y="87.2" data-dx="8" data-dy="0">7</i>
+      </div>
+      <figcaption><b>The agent investigating check 2 of 3</b> (here in a re-test).</figcaption>
+    </figure>
+    <ol class="legend">
+      <li><b>Agent and model</b> — which agent and which AI model it uses.</li>
+      <li><b>Status and time</b> — how long the agent has been working.</li>
+      <li><b>The stage bar</b> — 7 dots for the 7 stages (<a href="#ch-inside">chapter 6</a>). <span class="why">The yellow dot is the current stage.</span></li>
+      <li><b>Stage</b> — "4/7 Commands / Tests": how many stages are done and what the current one is called.</li>
+      <li><b>The current step</b> — what the agent is doing right now: which check, flow or file.</li>
+      <li><b>Show more</b> — appears when the step is longer than two lines.</li>
+      <li><b>Findings and evidence</b> — how much the agent has found so far.</li>
+    </ol>
+  </div>
+
+  <div class="note">
+    <b>"Show more"</b>
+    <p>The step description is often long — the agent names the file, the function and the input values it tries.
+      "Show more" opens a window with the <strong>whole text</strong> of the step. The window keeps the step you
+      clicked even after the agent moves on, and the <strong>Copy</strong> button copies the text. Close it with
+      <strong>Close</strong>, <kbd>Esc</kbd> or a click outside it.</p>
+  </div>
+
+  <h3>The card through the rounds of one Full run</h3>
+  <p>This is how the OpenCode card looked at different moments of the Full run on the demo project. Compare the line
+    under the bar with the table in <a href="#ch-rounds-2">chapter 6</a>.</p>
+  <div class="cols" style="grid-template-columns: repeat(3, 1fr); gap: 4mm 5mm">
+    <figure class="shot"><div class="frame" data-src="img/en/node-planning.jpg"></div>
+      <figcaption><b>Planning</b> · 2/7 · the first seconds.</figcaption></figure>
+    <figure class="shot"><div class="frame" data-src="img/en/node-full-check.jpg"></div>
+      <figcaption><b>Round 1 — checks</b> · check 1 of 7.</figcaption></figure>
+    <figure class="shot"><div class="frame" data-src="img/en/node-flow.jpg"></div>
+      <figcaption><b>Round 3 — critical flow</b> 1 of 4.</figcaption></figure>
+    <figure class="shot"><div class="frame" data-src="img/en/node-deep.jpg"></div>
+      <figcaption><b>Round 3 — deepening</b> check 1.</figcaption></figure>
+    <figure class="shot"><div class="frame" data-src="img/en/node-hazard.jpg"></div>
+      <figcaption><b>Round 4 — hazard sweep:</b> <code>src/cleanup.js</code>, which deletes files.</figcaption></figure>
+    <figure class="shot"><div class="frame" data-src="img/en/node-report.jpg"></div>
+      <figcaption><b>Report</b> · 5/7 · after 9½ minutes.</figcaption></figure>
+  </div>
+
+  <h3>When the agent finishes</h3>
+  <div class="cols wide-left">
+    <figure class="shot">
+      <div class="frame" data-src="img/en/node-done.jpg">
+      <i class="pin" data-x="15" data-y="72" data-dx="0" data-dy="-10">1</i>
+      <i class="pin" data-x="59.5" data-y="71.5" data-dx="10" data-dy="-6">2</i>
+      <i class="pin" data-x="39" data-y="87.6" data-dx="0" data-dy="-9">3</i>
+    </div>
+      <figcaption><b>A finished agent after a Full run.</b> 8 findings, 29 pieces of evidence, and secrets found.</figcaption>
+    </figure>
+    <ol class="legend">
+      <li><b>Findings and evidence</b> — the final count.</li>
+      <li><b>Secrets</b> — the light from the secrets check: <span class="yes">green</span> none found, <span class="no" style="background:#f8ecea;color:#b96462">red</span> found, <span class="part">yellow</span> not fully checked.</li>
+      <li><b>The severity bar</b> — the findings by colour: critical, high, medium, low. <span class="why">One look tells you whether anything is serious.</span></li>
+    </ol>
+  </div>
+</section>
+
+<!-- ============================== 09 RESULTS ============================== -->
+<section class="chapter" id="ch-results">
+  <header class="chapter-head">
+    <div class="num">09</div>
+    <div>
+      <h2>Results</h2>
+      <p>What was found, how sure it is and how to export it.</p>
+    </div>
+  </header>
+
+  <p>Results appear in two places: in the <strong>agent's details</strong> on the run page (this run only) and in the
+    project's <strong>Findings</strong> tab (all runs, grouped by revision).</p>
+
+  <h3>The agent's details</h3>
+  <p>Click the agent card. The panel on the right has several tabs:</p>
+  <div class="cols" style="grid-template-columns: repeat(4, 1fr); gap: 3.5mm">
+    <figure class="shot"><div class="frame" data-src="img/en/insp-overview.jpg"></div>
+      <figcaption><b>Overview</b> — model, stage and the Secrets light with what was searched.</figcaption></figure>
+    <figure class="shot"><div class="frame" data-src="img/en/insp-findings.jpg"></div>
+      <figcaption><b>Findings</b> — with a severity filter and the place in the code.</figcaption></figure>
+    <figure class="shot"><div class="frame" data-src="img/en/insp-activity.jpg"></div>
+      <figcaption><b>Activity</b> — everything the agent did, by time: files, commands, tests.</figcaption></figure>
+    <figure class="shot"><div class="frame" data-src="img/en/insp-evidence.jpg"></div>
+      <figcaption><b>Evidence</b> — which finding each piece belongs to and how strong it is.</figcaption></figure>
+  </div>
+  <p>If <strong>Developer mode</strong> is on in <strong>Settings → Application</strong>, there is also a
+    <strong>Diagnostics</strong> tab with the technical details of the agent's run — useful if something went wrong.</p>
+
+  <h3>The project's "Findings" tab</h3>
+  <figure class="shot pad">
+    <div class="frame" data-src="img/en/findings-list.jpg" data-crop="6,8,92,88" data-ratio="0.694">
+      <i class="pin" data-x="33.9" data-y="25.4" data-dx="8" data-dy="0">1</i>
+      <i class="pin" data-x="9.7" data-y="30.1" data-dx="-4" data-dy="0">2</i>
+      <i class="pin" data-x="46.3" data-y="30.1" data-dx="8" data-dy="0">3</i>
+      <i class="pin" data-x="9.7" data-y="34.8" data-dx="-4" data-dy="0">4</i>
+      <i class="pin" data-x="60.7" data-y="34.8" data-dx="8" data-dy="0">5</i>
+      <i class="pin" data-x="39.2" data-y="46" data-dx="10" data-dy="0">6</i>
+      <i class="pin" data-x="10.7" data-y="49.7" data-dx="-4.5" data-dy="0">7</i>
+      <i class="pin" data-x="14.4" data-y="82.5" data-dx="0" data-dy="6">8</i>
+      <i class="pin" data-x="20.9" data-y="82.5" data-dx="3" data-dy="6">9</i>
+      <i class="pin" data-x="61.6" data-y="82.5" data-dx="10" data-dy="0">10</i>
+    </div>
+    <figcaption><b>The findings of the Full run</b> on the demo project, three of them ticked for a re-test.</figcaption>
+  </figure>
+  <ol class="legend two">
+    <li><b>Revision</b> — whose findings to show.</li>
+    <li><b>Re-test with</b> — the agent that reported each finding, or all selected agents. <span class="why">Appears for an older revision (<a href="#ch-kinds">chapter 7</a>).</span></li>
+    <li><b>Re-test N selected</b> — checks the ticked findings in the current revision.</li>
+    <li><b>Export as</b> — Markdown (a readable report), JSON (for scripts and other programs) or plain text.</li>
+    <li><b>Export</b> — only the ticked ones or all in the revision. <span class="why">The file is made without AI, nothing is sent anywhere and nothing is written into the project.</span></li>
+    <li><b>The run</b> — when, which kind, status; "Open run" goes to its page.</li>
+    <li><b>Tick box</b> — selects the finding for export or re-test.</li>
+    <li><b>Severity</b> — how serious the problem is (table below).</li>
+    <li><b>Confidence</b> — how well the problem is proven (table below).</li>
+    <li><b>Title and place</b> — what is wrong and in which file and line.</li>
+  </ol>
+
+  <div class="cols">
+    <div>
+      <h4>Severity</h4>
+      <table class="grid">
+        <tr><th style="width:26mm">Level</th><th>What it means</th></tr>
+        <tr><td>Critical</td><td>Data loss, a security breach, or a core flow broken for most users.</td></tr>
+        <tr><td>High</td><td>A main flow is broken or gives a wrong result for an ordinary input.</td></tr>
+        <tr><td>Medium</td><td>Wrong behaviour on a realistic edge case.</td></tr>
+        <tr><td>Low</td><td>A cosmetic, rare or easily recoverable problem.</td></tr>
+        <tr><td>Info</td><td>A remark, not a defect.</td></tr>
+      </table>
+    </div>
+    <div>
+      <h4>Confidence</h4>
+      <table class="grid">
+        <tr><th style="width:26mm">Level</th><th>What it means</th></tr>
+        <tr><td>Confirmed</td><td>The agent reproduced the problem with a command.</td></tr>
+        <tr><td>Strong</td><td>Strong evidence in the code, without a full reproduction.</td></tr>
+        <tr><td>Probable</td><td>It looks that way but is not fully proven.</td></tr>
+        <tr><td>Speculative</td><td>A suspicion worth checking by hand.</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="note warn">
+    <b>Before you fix</b>
+    <p>Findings are agent reports. They are backed by evidence, but review each one before changing the code —
+      especially those with low confidence.</p>
+  </div>
+
+  <h3>Exporting a whole run</h3>
+  <p>On a finished run's page, top right, there is <strong>Export JSON</strong> (all the run's data — findings,
+    evidence, stages) and <strong>Export log</strong> (the detailed log). They unlock once the analysis is done.</p>
+</section>
+
+<!-- ============================== 10 SETTINGS ============================== -->
+<section class="chapter" id="ch-settings">
+  <header class="chapter-head">
+    <div class="num">10</div>
+    <div>
+      <h2>Settings and runtime</h2>
+      <p>Four pages under "Settings" and one for the runtime's health.</p>
+    </div>
+  </header>
+
+  <figure class="shot">
+    <div class="frame" data-src="img/en/settings.jpg" data-crop="4,6,96,26" data-ratio="0.625">
+      <i class="pin" data-x="16.2" data-y="24.2" data-dx="0" data-dy="-7">1</i>
+      <i class="pin" data-x="39.4" data-y="24.2" data-dx="0" data-dy="-7">2</i>
+      <i class="pin" data-x="62.6" data-y="24.2" data-dx="0" data-dy="-7">3</i>
+      <i class="pin" data-x="85.6" data-y="24.2" data-dx="0" data-dy="-7">4</i>
+    </div>
+  </figure>
+  <ol class="legend two">
+    <li><b>Providers</b> — the agents' keys and models. <span class="why">Required before the first run.</span></li>
+    <li><b>Runtime</b> — which Linux distribution Sentry uses.</li>
+    <li><b>Toolchains</b> — languages and tools installed for the agents.</li>
+    <li><b>Application</b> — language, theme, time limit and more.</li>
+  </ol>
+
+  <h3>Providers</h3>
+  <figure class="shot">
+    <div class="frame" data-src="img/en/providers.jpg" data-crop="4,22,96,70" data-ratio="0.625">
+      <i class="pin" data-x="50" data-y="46.6" data-dx="0" data-dy="0">1</i>
+      <i class="pin" data-x="77" data-y="51.2" data-dx="0" data-dy="0">2</i>
+      <i class="pin" data-x="50" data-y="65.3" data-dx="0" data-dy="0">3</i>
+      <i class="pin" data-x="77" data-y="65.3" data-dx="0" data-dy="0">4</i>
+      <i class="pin" data-x="50" data-y="78" data-dx="0" data-dy="0">5</i>
+      <i class="pin" data-x="16.5" data-y="87.9" data-dx="7" data-dy="0">6</i>
+      <i class="pin" data-x="93.8" data-y="32.4" data-dx="0" data-dy="5">7</i>
+    </div>
+    <figcaption><b>The OpenCode settings.</b> The key is never shown — only "Stored securely".</figcaption>
+  </figure>
+  <ol class="legend two">
+    <li><b>Provider</b> — for example OpenCode Go (monthly subscription), OpenCode Zen or OpenRouter (pay per use).</li>
+    <li><b>Model</b> — which AI model the agent uses. <span class="why">"Update list" fetches the newest models.</span></li>
+    <li><b>API key</b> — paste the key and press "Save". <span class="why">It is kept encrypted on this computer.</span></li>
+    <li><b>Second key</b> — for another provider, if you use one.</li>
+    <li><b>Reasoning effort</b> — higher is more thorough but slower and more expensive.</li>
+    <li><b>Stop extra rounds when idle</b> — the early stop from <a href="#ch-rounds">chapter 6</a>. <span class="why">Off by default.</span></li>
+    <li><b>Ready</b> — the agent is checked and can be selected.</li>
+  </ol>
+
+  <h3>Application</h3>
+  <div class="cols wide-left">
+    <figure class="shot">
+      <div class="frame" data-src="img/en/app-settings.jpg" data-crop="2,9,98,89" data-ratio="1.0556">
+        <i class="pin" data-x="99" data-y="22.1" data-dx="0" data-dy="0">1</i>
+        <i class="pin" data-x="99" data-y="29" data-dx="0" data-dy="0">2</i>
+        <i class="pin" data-x="99" data-y="35.5" data-dx="0" data-dy="0">3</i>
+        <i class="pin" data-x="99" data-y="42.3" data-dx="0" data-dy="0">4</i>
+        <i class="pin" data-x="99" data-y="55.4" data-dx="0" data-dy="0">5</i>
+        <i class="pin" data-x="99" data-y="62" data-dx="0" data-dy="0">6</i>
+        <i class="pin" data-x="99" data-y="79.9" data-dx="0" data-dy="0">7</i>
+        <i class="pin" data-x="99" data-y="92.7" data-dx="0" data-dy="0">8</i>
+      </div>
+    </figure>
+    <ol class="legend">
+      <li><b>Appearance &amp; Theme</b> — dark, grey or light.</li>
+      <li><b>Language</b> — English or Bulgarian.</li>
+      <li><b>Local CLI Broker</b> — lets the <code>sentry</code> command in a terminal control the app.</li>
+      <li><b>CLI command reference</b> — downloads every command as a file.</li>
+      <li><b>Confirm Before Paid QA Runs</b> — the window from <a href="#ch-start">chapter 5</a>. <span class="why">Leave it on.</span></li>
+      <li><b>Developer mode</b> — shows the Diagnostics tab and raw data.</li>
+      <li><b>Run time limit</b> — 3 hours (default), 6 hours, no limit or custom. <span class="why">It also sets how many checks a Full run plans.</span></li>
+      <li><b>Note length limit</b> — how long the note to the agents may be.</li>
+    </ol>
+  </div>
+
+  <h3>Runtime, WSL and toolchains</h3>
+  <figure class="shot">
+    <div class="frame" data-src="img/en/environment.jpg" data-crop="4,15,96,85" data-ratio="0.625">
+      <i class="pin" data-x="36" data-y="25.4" data-dx="0" data-dy="0">1</i>
+      <i class="pin" data-x="45" data-y="30.2" data-dx="0" data-dy="0">2</i>
+      <i class="pin" data-x="32" data-y="47.2" data-dx="0" data-dy="0">3</i>
+      <i class="pin" data-x="14.6" data-y="66.3" data-dx="6" data-dy="0">4</i>
+      <i class="pin" data-x="39.6" data-y="66.3" data-dx="6" data-dy="0">5</i>
+    </div>
+    <figcaption><b>The "Runtime" page</b> from the left menu.</figcaption>
+  </figure>
+  <ol class="legend two">
+    <li><b>Runtime health</b> — whether the Linux runtime is connected and which distribution is used.</li>
+    <li><b>Versions</b> — Node, protocol and Sentry version in the runtime.</li>
+    <li><b>Local CLI</b> — whether the <code>sentry</code> command can connect.</li>
+    <li><b>Ready agent</b> — the key is saved, the program is present and the runtime is checked.</li>
+    <li><b>Configured agent</b> — has a key, but its runtime isn't tested yet. <span class="why">It is tested on the first run.</span></li>
+  </ol>
+
+  <div class="cols">
+    <figure class="shot">
+      <div class="frame" data-src="img/en/runtime.jpg" data-crop="4,6,96,60" data-ratio="0.625">
+        <i class="pin" data-x="34" data-y="41.6" data-dx="10" data-dy="0">1</i>
+        <i class="pin" data-x="32" data-y="60" data-dx="10" data-dy="0">2</i>
+      </div>
+      <figcaption><b>Settings → Runtime.</b></figcaption>
+    </figure>
+    <figure class="shot">
+      <div class="frame" data-src="img/en/toolchains.jpg" data-crop="4,6,96,72" data-ratio="0.625">
+        <i class="pin" data-x="34" data-y="27.4" data-dx="0" data-dy="-6">3</i>
+        <i class="pin" data-x="41" data-y="35.6" data-dx="8" data-dy="0">4</i>
+        <i class="pin" data-x="47" data-y="75" data-dx="0" data-dy="0">5</i>
+      </div>
+      <figcaption><b>Settings → Toolchains.</b></figcaption>
+    </figure>
+  </div>
+  <ol class="legend two">
+    <li><b>Distribution</b> — which Linux distribution Sentry uses. <span class="why">A change applies after the app restarts.</span></li>
+    <li><b>Free up Windows disk space</b> — gives back to Windows the space freed inside WSL (for example after removing projects). Nothing in use is deleted.</li>
+    <li><b>Search</b> — by name, version or purpose; "Installed only" hides the rest.</li>
+    <li><b>Categories</b> — languages, package managers, build tools, QA and security, databases… Open a category to install or remove a version.</li>
+    <li><b>Custom add-ons</b> — your own tool with your own install command.</li>
+  </ol>
+</section>
+
+<!-- ============================== 11 TROUBLESHOOTING ============================== -->
+<section class="chapter" id="ch-trouble">
+  <header class="chapter-head">
+    <div class="num">11</div>
+    <div>
+      <h2>When something goes wrong</h2>
+      <p>Common problems, and what to do when Ubuntu opens as root.</p>
+    </div>
+  </header>
+
+  <table class="grid">
+    <tr><th style="width:52mm">What you see</th><th>What to do</th></tr>
+    <tr><td>Top right says the runtime is not connected</td><td>Open <strong>Runtime</strong> from the left menu and see which check is red. It often helps to close Sentry, run <code>wsl --shutdown</code> in PowerShell and open Sentry again.</td></tr>
+    <tr><td>An agent is not "Ready", or its run fails at once</td><td>The provider key is missing or wrong: <strong>Settings → Providers</strong>. Save the key and choose a model.</td></tr>
+    <tr><td>The agents can't run the tests (Node, Python, Java… missing)</td><td>Turn on "Allow tool and SDK downloads" before starting, or add the tool in <strong>Settings → Toolchains</strong>.</td></tr>
+    <tr><td>A run takes too long</td><td>Choose depth <strong>Fast</strong> or lower the time limit in <strong>Settings → Application</strong>. You can also cancel the run — partial results are kept.</td></tr>
+    <tr><td>Error <code>SANDBOX_INIT_FAIL</code> about "nested user namespaces"</td><td>Ubuntu restricts nested user namespaces. In Ubuntu: <code>sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0</code>, then start again.</td></tr>
+    <tr><td>The setup wizard stops with an error</td><td>Read <code>%LOCALAPPDATA%\Sentry\logs\setup-wizard.log</code>. The most common cause is creating the Linux user on Ubuntu's first start — prepare WSL and Ubuntu by hand (<a href="#ch-install">chapter 2</a>) and run the wizard again.</td></tr>
+  </table>
+
+  <h3>Ubuntu opens as root</h3>
+  <p>First go through the manual preparation in <a href="#ch-install">chapter 2</a> — it fixes most WSL problems. If
+    <code>wsl -d Ubuntu whoami</code> still answers <code>root</code>, creating the user failed. Fix it like this:</p>
+  <ol class="steps">
+    <li><b>Open Ubuntu as root</b>
+<pre class="cmd" data-shell="PowerShell"><span class="p">PS&gt;</span> wsl -d Ubuntu -u root</pre></li>
+    <li><b>Create the user and make it an administrator</b>
+<pre class="cmd" data-shell="Ubuntu"><span class="p">#</span> adduser ivan
+<span class="p">#</span> usermod -aG sudo ivan
+<span class="p">#</span> nano /etc/wsl.conf</pre>
+      The file must contain these two sections (keep any other lines). Save with <kbd>Ctrl</kbd>+<kbd>O</kbd>,
+      <kbd>Enter</kbd> and exit with <kbd>Ctrl</kbd>+<kbd>X</kbd>:
+<pre class="cmd" data-shell="/etc/wsl.conf">[boot]
+systemd=true
+
+[user]
+default=ivan</pre></li>
+    <li><b>Restart Ubuntu and check</b>
+<pre class="cmd" data-shell="Ubuntu → PowerShell"><span class="p">#</span> exit
+<span class="p">PS&gt;</span> wsl --terminate Ubuntu
+<span class="p">PS&gt;</span> wsl -d Ubuntu whoami   <span class="c"># must now be your name</span></pre></li>
+    <li><b>Finish installing Sentry</b>
+      Run <code>SentrySetup.exe</code> again. It detects that WSL and Ubuntu are ready, skips those steps and goes on
+      with the Linux tools, the Sentry runtime and the agents' tools.</li>
+  </ol>
+
+  <div class="note danger">
+    <b>Warning</b>
+    <p>Don't run <code>wsl --unregister Ubuntu</code> if Ubuntu holds your own files — it deletes the whole
+      distribution without asking. It is useful only for a freshly installed Ubuntu that doesn't start properly:
+      delete it and install it again (<a href="#ch-install">chapter 2</a>, step 1).</p>
+  </div>
+</section>
+
+<!-- ============================== 12 GLOSSARY ============================== -->
+<section class="chapter" id="ch-glossary">
+  <header class="chapter-head">
+    <div class="num">12</div>
+    <div>
+      <h2>Glossary</h2>
+      <p>The terms you will meet in the app.</p>
+    </div>
+  </header>
+  <dl class="glossary">
+    <dt>Agent</dt><dd>An AI model (OpenCode, DeepSeek, GLM, ChatGPT, Claude) that checks the project on its own, in its own isolated environment.</dd>
+    <dt>Provider</dt><dd>The service that supplies the agent's model (for example OpenCode Go). Keys are entered in Settings → Providers and stored encrypted.</dd>
+    <dt>Project</dt><dd>A folder of code added to Sentry. Sentry keeps its own copy; the original is not changed.</dd>
+    <dt>Revision</dt><dd>One state of the project's copy. "Update Project" makes a new revision from the folder's current contents.</dd>
+    <dt>Snapshot</dt><dd>The frozen revision the agents check during one run.</dd>
+    <dt>Run (QA run)</dt><dd>One check of the project by one or more agents.</dd>
+    <dt>Check</dt><dd>One concrete question from the agent's plan, answered with a probe that ran: passed, failed or undecided.</dd>
+    <dt>Frozen plan</dt><dd>The plan made during planning. It doesn't change until the run ends.</dd>
+    <dt>Critical flow</dt><dd>A main path through the app that must work end to end (for example "cart → discount → total").</dd>
+    <dt>Weak point</dt><dd>A place in the code that looks fragile when read, so it gets a check.</dd>
+    <dt>Lead</dt><dd>Something suspicious noticed outside the checks. In a Full run it is followed up in round 3.</dd>
+    <dt>Hazard</dt><dd>A file Sentry flags by itself: it deletes files, rewrites paths, compares paths, parses text or hashes content.</dd>
+    <dt>Finding</dt><dd>A problem found: title, description, severity, place in the code and evidence.</dd>
+    <dt>Evidence</dt><dd>A command that ran and its output, which confirm the finding.</dd>
+    <dt>Severity</dt><dd>Critical, high, medium, low or info — how big the problem's impact is and how easily it is reached.</dd>
+    <dt>Secrets</dt><dd>Passwords, API keys and tokens written straight into the code. The Secrets light is green (none), red (found) or yellow (not fully checked).</dd>
+    <dt>Project profile</dt><dd>A short description of the project, written once by an agent and used by later runs.</dd>
+    <dt>Full / Targeted QA</dt><dd>The whole project, or only chosen paths and what they depend on.</dd>
+    <dt>Full / Fast</dt><dd>The depth: all rounds, or only the checks and the second pass.</dd>
+    <dt>Re-test</dt><dd>A run that only answers "is it fixed?" for chosen findings.</dd>
+    <dt>WSL / Ubuntu</dt><dd>The Windows Subsystem for Linux and the Linux distribution in which the agents work in isolation.</dd>
+  </dl>
+</section>
+
+</body>
+<script src="annotate.js"></script>
+</html>

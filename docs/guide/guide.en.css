@@ -1,0 +1,6 @@
+/* English edition: the page footer text (everything else comes from guide.css). */
+@page {
+  @bottom-left {
+    content: 'Sentry · User Guide';
+  }
+}
