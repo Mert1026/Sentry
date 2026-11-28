@@ -4,19 +4,29 @@
   margin: 18mm 17mm 20mm 17mm;
   @bottom-left {
     content: 'Sentry · Ръководство за потребителя';
-    font: 500 8pt 'Segoe UI', system-ui, sans-serif;
+    font:
+      500 8pt 'Segoe UI',
+      system-ui,
+      sans-serif;
     color: #8a9386;
   }
   @bottom-right {
     content: counter(page);
-    font: 700 9pt 'Segoe UI', system-ui, sans-serif;
+    font:
+      700 9pt 'Segoe UI',
+      system-ui,
+      sans-serif;
     color: #4e7d48;
   }
 }
 @page cover {
   margin: 0;
-  @bottom-left { content: none; }
-  @bottom-right { content: none; }
+  @bottom-left {
+    content: none;
+  }
+  @bottom-right {
+    content: none;
+  }
 }
 
 :root {
@@ -36,17 +46,31 @@
   --night-2: #171d17;
 }
 
-* { box-sizing: border-box; }
-html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+* {
+  box-sizing: border-box;
+}
+html {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
 body {
   margin: 0;
-  font: 10pt/1.5 'Segoe UI', system-ui, sans-serif;
+  font:
+    10pt/1.5 'Segoe UI',
+    system-ui,
+    sans-serif;
   color: var(--ink);
   hyphens: auto;
 }
-p { margin: 0 0 2.6mm; }
-strong { font-weight: 650; }
-code, kbd, .mono {
+p {
+  margin: 0 0 2.6mm;
+}
+strong {
+  font-weight: 650;
+}
+code,
+kbd,
+.mono {
   font-family: 'Cascadia Mono', 'Consolas', monospace;
   font-size: 0.88em;
 }
@@ -71,8 +95,7 @@ kbd {
   width: 210mm;
   background:
     radial-gradient(120mm 90mm at 50% 30%, rgba(78, 125, 72, 0.32), transparent 70%),
-    radial-gradient(90mm 70mm at 50% 100%, rgba(212, 192, 11, 0.08), transparent 70%),
-    var(--night);
+    radial-gradient(90mm 70mm at 50% 100%, rgba(212, 192, 11, 0.08), transparent 70%), var(--night);
   color: #eef1eb;
   padding: 24mm 22mm 20mm;
   display: flex;
@@ -82,16 +105,37 @@ kbd {
   overflow: hidden;
   break-after: page;
 }
-.cover .brand { display: flex; align-items: center; gap: 4mm; }
-.cover .brand img { width: 14mm; height: 14mm; }
-.cover .brand span { font: 700 13pt 'Segoe UI'; letter-spacing: 0.3em; color: var(--green-light); }
+.cover .brand {
+  display: flex;
+  align-items: center;
+  gap: 4mm;
+}
+.cover .brand img {
+  width: 14mm;
+  height: 14mm;
+}
+.cover .brand span {
+  font: 700 13pt 'Segoe UI';
+  letter-spacing: 0.3em;
+  color: var(--green-light);
+}
 .cover h1 {
   margin: auto 0 7mm;
-  font: 800 42pt/1.05 'Segoe UI', system-ui;
+  font:
+    800 42pt/1.05 'Segoe UI',
+    system-ui;
   letter-spacing: -0.02em;
 }
-.cover h1 em { font-style: normal; color: var(--green-light); }
-.cover .lead { font-size: 13pt; color: #b8c2b4; max-width: 140mm; margin: 0; }
+.cover h1 em {
+  font-style: normal;
+  color: var(--green-light);
+}
+.cover .lead {
+  font-size: 13pt;
+  color: #b8c2b4;
+  max-width: 140mm;
+  margin: 0;
+}
 .cover .grid {
   width: 92mm;
   margin: 14mm 0 auto;
@@ -107,12 +151,26 @@ kbd {
   border-top: 1px solid rgba(160, 190, 160, 0.2);
   padding-top: 5mm;
 }
-.cover .meta b { display: block; color: #eef1eb; font-size: 10.5pt; }
+.cover .meta b {
+  display: block;
+  color: #eef1eb;
+  font-size: 10.5pt;
+}
 
 /* ---------- Contents ---------- */
-.toc { break-after: page; }
-.toc h2 { font: 800 24pt 'Segoe UI'; margin: 0 0 8mm; }
-.toc ol { list-style: none; margin: 0; padding: 0; counter-reset: toc; }
+.toc {
+  break-after: page;
+}
+.toc h2 {
+  font: 800 24pt 'Segoe UI';
+  margin: 0 0 8mm;
+}
+.toc ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  counter-reset: toc;
+}
 .toc li {
   display: grid;
   grid-template-columns: 14mm 1fr;
@@ -125,11 +183,19 @@ kbd {
   font: 800 13pt 'Segoe UI';
   color: var(--green);
 }
-.toc li b { display: block; font-size: 11.5pt; }
-.toc li span { color: var(--ink-3); font-size: 9pt; }
+.toc li b {
+  display: block;
+  font-size: 11.5pt;
+}
+.toc li span {
+  color: var(--ink-3);
+  font-size: 9pt;
+}
 
 /* ---------- Chapters ---------- */
-.chapter { break-before: page; }
+.chapter {
+  break-before: page;
+}
 .chapter-head {
   display: grid;
   grid-template-columns: 26mm 1fr;
@@ -144,15 +210,27 @@ kbd {
   color: var(--green);
   letter-spacing: -0.04em;
 }
-.chapter-head h2 { margin: 0; font: 800 19pt/1.15 'Segoe UI'; letter-spacing: -0.01em; }
-.chapter-head p { margin: 1.5mm 0 0; color: var(--ink-2); font-size: 10.5pt; }
+.chapter-head h2 {
+  margin: 0;
+  font: 800 19pt/1.15 'Segoe UI';
+  letter-spacing: -0.01em;
+}
+.chapter-head p {
+  margin: 1.5mm 0 0;
+  color: var(--ink-2);
+  font-size: 10.5pt;
+}
 h3 {
   font: 750 13pt/1.25 'Segoe UI';
   margin: 5.5mm 0 2mm;
   break-after: avoid;
   color: var(--green-dark);
 }
-h4 { font: 700 10.5pt 'Segoe UI'; margin: 4mm 0 1.5mm; break-after: avoid; }
+h4 {
+  font: 700 10.5pt 'Segoe UI';
+  margin: 4mm 0 1.5mm;
+  break-after: avoid;
+}
 
 /* ---------- Annotated screenshots ---------- */
 .shot {
@@ -177,7 +255,10 @@ h4 { font: 700 10.5pt 'Segoe UI'; margin: 4mm 0 1.5mm; break-after: avoid; }
   border-radius: 1.6mm;
   position: relative;
 }
-.shot .frame.crop > .viewport > img { display: block; position: relative; }
+.shot .frame.crop > .viewport > img {
+  display: block;
+  position: relative;
+}
 .shot svg.arrows {
   position: absolute;
   inset: 0;
@@ -197,7 +278,9 @@ h4 { font: 700 10.5pt 'Segoe UI'; margin: 4mm 0 1.5mm; break-after: avoid; }
   font: 900 8.6pt/5.6mm 'Segoe UI';
   text-align: center;
   font-style: normal;
-  box-shadow: 0 0 0 1.1mm rgba(13, 16, 13, 0.75), 0 0 0 1.6mm rgba(212, 192, 11, 0.55);
+  box-shadow:
+    0 0 0 1.1mm rgba(13, 16, 13, 0.75),
+    0 0 0 1.6mm rgba(212, 192, 11, 0.55);
   z-index: 2;
 }
 .arrow {
@@ -229,14 +312,20 @@ h4 { font: 700 10.5pt 'Segoe UI'; margin: 4mm 0 1.5mm; break-after: avoid; }
 }
 /* Room for badges that sit outside the screenshot: Chrome clips anything in the page margin and
    shrinks every page when something sticks out on the right. */
-.shot.pad { padding: 0 8.5mm; }
-.shot.pad figcaption { margin-left: -8.5mm; }
+.shot.pad {
+  padding: 0 8.5mm;
+}
+.shot.pad figcaption {
+  margin-left: -8.5mm;
+}
 .shot figcaption {
   margin-top: 2mm;
   font-size: 8.6pt;
   color: var(--ink-3);
 }
-.shot figcaption b { color: var(--ink-2); }
+.shot figcaption b {
+  color: var(--ink-2);
+}
 
 ol.legend {
   list-style: none;
@@ -246,7 +335,10 @@ ol.legend {
   display: grid;
   gap: 1.6mm;
 }
-ol.legend.two { grid-template-columns: 1fr 1fr; column-gap: 6mm; }
+ol.legend.two {
+  grid-template-columns: 1fr 1fr;
+  column-gap: 6mm;
+}
 ol.legend li {
   position: relative;
   padding-left: 8.5mm;
@@ -267,8 +359,12 @@ ol.legend li::before {
   font: 900 8.5pt/5.6mm 'Segoe UI';
   text-align: center;
 }
-ol.legend li b { color: var(--ink); }
-ol.legend li .why { color: var(--ink-2); }
+ol.legend li b {
+  color: var(--ink);
+}
+ol.legend li .why {
+  color: var(--ink-2);
+}
 
 /* ---------- Notes ---------- */
 .note {
@@ -288,18 +384,44 @@ ol.legend li .why { color: var(--ink-2); }
   color: var(--green);
   margin-bottom: 0.8mm;
 }
-.note.warn { border-color: var(--yellow); background: var(--yellow-wash); }
-.note.warn > b:first-child { color: #8a7a00; }
-.note.danger { border-color: var(--red); background: var(--red-wash); }
-.note.danger > b:first-child { color: var(--red); }
-.note p:last-child { margin: 0; }
+.note.warn {
+  border-color: var(--yellow);
+  background: var(--yellow-wash);
+}
+.note.warn > b:first-child {
+  color: #8a7a00;
+}
+.note.danger {
+  border-color: var(--red);
+  background: var(--red-wash);
+}
+.note.danger > b:first-child {
+  color: var(--red);
+}
+.note p:last-child {
+  margin: 0;
+}
 
 /* ---------- Layout helpers ---------- */
-.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; align-items: start; }
-.cols.wide-left { grid-template-columns: 1.35fr 1fr; }
-.avoid { break-inside: avoid; }
-.page-break { break-before: page; }
-.lede { font-size: 11.5pt; color: var(--ink-2); }
+.cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6mm;
+  align-items: start;
+}
+.cols.wide-left {
+  grid-template-columns: 1.35fr 1fr;
+}
+.avoid {
+  break-inside: avoid;
+}
+.page-break {
+  break-before: page;
+}
+.lede {
+  font-size: 11.5pt;
+  color: var(--ink-2);
+}
 .kicker {
   font: 800 7.8pt 'Segoe UI';
   letter-spacing: 0.14em;
@@ -308,7 +430,12 @@ ol.legend li .why { color: var(--ink-2); }
 }
 
 /* Purpose cards on the intro page */
-.cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4mm; margin: 4mm 0; }
+.cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4mm;
+  margin: 4mm 0;
+}
 .card {
   border: 1px solid var(--rule);
   border-radius: 2.4mm;
@@ -325,12 +452,27 @@ ol.legend li .why { color: var(--ink-2); }
   place-items: center;
   margin-bottom: 2.4mm;
 }
-.card .ico svg { width: 5mm; height: 5mm; stroke: var(--green-light); }
-.card h4 { margin: 0 0 1mm; }
-.card p { font-size: 9pt; color: var(--ink-2); margin: 0; }
+.card .ico svg {
+  width: 5mm;
+  height: 5mm;
+  stroke: var(--green-light);
+}
+.card h4 {
+  margin: 0 0 1mm;
+}
+.card p {
+  font-size: 9pt;
+  color: var(--ink-2);
+  margin: 0;
+}
 
 /* Numbered steps */
-ol.steps { list-style: none; counter-reset: step; padding: 0; margin: 3mm 0; }
+ol.steps {
+  list-style: none;
+  counter-reset: step;
+  padding: 0;
+  margin: 3mm 0;
+}
 ol.steps > li {
   position: relative;
   padding: 0 0 2.6mm 11mm;
@@ -359,8 +501,13 @@ ol.steps > li::after {
   width: 0.3mm;
   background: var(--rule);
 }
-ol.steps > li:last-child::after { display: none; }
-ol.steps > li > b:first-child { display: block; font-size: 10.5pt; }
+ol.steps > li:last-child::after {
+  display: none;
+}
+ol.steps > li > b:first-child {
+  display: block;
+  font-size: 10.5pt;
+}
 
 /* Command blocks */
 pre.cmd {
@@ -369,13 +516,21 @@ pre.cmd {
   border-radius: 1.8mm;
   padding: 2.8mm 3.6mm;
   margin: 1.6mm 0 2.6mm;
-  font: 8.8pt/1.5 'Cascadia Mono', Consolas, monospace;
+  font:
+    8.8pt/1.5 'Cascadia Mono',
+    Consolas,
+    monospace;
   white-space: pre-wrap;
   break-inside: avoid;
   position: relative;
 }
-pre.cmd .p { color: var(--green-light); user-select: none; }
-pre.cmd .c { color: #7b8478; }
+pre.cmd .p {
+  color: var(--green-light);
+  user-select: none;
+}
+pre.cmd .c {
+  color: #7b8478;
+}
 pre.cmd[data-shell]::before {
   content: attr(data-shell);
   position: absolute;
@@ -408,9 +563,15 @@ table.grid td {
   padding: 1.6mm 2mm;
   vertical-align: top;
 }
-table.grid tr { break-inside: avoid; }
-table.grid td:first-child { font-weight: 650; }
-.yes, .no, .part {
+table.grid tr {
+  break-inside: avoid;
+}
+table.grid td:first-child {
+  font-weight: 650;
+}
+.yes,
+.no,
+.part {
   display: inline-block;
   min-width: 14mm;
   text-align: center;
@@ -418,9 +579,18 @@ table.grid td:first-child { font-weight: 650; }
   padding: 0.3mm 1.5mm;
   font: 700 7.6pt 'Segoe UI';
 }
-.yes { background: var(--green-wash); color: var(--green-dark); }
-.no { background: #f1f1ef; color: #9aa196; }
-.part { background: var(--yellow-wash); color: #7a6c00; }
+.yes {
+  background: var(--green-wash);
+  color: var(--green-dark);
+}
+.no {
+  background: #f1f1ef;
+  color: #9aa196;
+}
+.part {
+  background: var(--yellow-wash);
+  color: #7a6c00;
+}
 .live {
   font-family: 'Cascadia Mono', Consolas, monospace;
   font-size: 8pt;
@@ -428,16 +598,44 @@ table.grid td:first-child { font-weight: 650; }
 }
 
 /* Diagrams */
-figure.diagram { margin: 3mm 0 4mm; break-inside: avoid; }
-figure.diagram svg { width: 100%; height: auto; display: block; }
-figure.diagram figcaption { font-size: 8.6pt; color: var(--ink-3); margin-top: 1.5mm; }
+figure.diagram {
+  margin: 3mm 0 4mm;
+  break-inside: avoid;
+}
+figure.diagram svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+figure.diagram figcaption {
+  font-size: 8.6pt;
+  color: var(--ink-3);
+  margin-top: 1.5mm;
+}
 
 /* Glossary */
-dl.glossary { display: grid; grid-template-columns: 38mm 1fr; gap: 1.6mm 5mm; margin: 3mm 0; font-size: 9.6pt; }
-dl.glossary dt { font-weight: 700; }
-dl.glossary dd { margin: 0; color: var(--ink-2); }
+dl.glossary {
+  display: grid;
+  grid-template-columns: 38mm 1fr;
+  gap: 1.6mm 5mm;
+  margin: 3mm 0;
+  font-size: 9.6pt;
+}
+dl.glossary dt {
+  font-weight: 700;
+}
+dl.glossary dd {
+  margin: 0;
+  color: var(--ink-2);
+}
 
 /* The purpose chapter is one page: keep its last block from spilling a margin onto the next. */
-#ch-purpose .lede { font-size: 11pt; }
-#ch-purpose > .cols:last-child { margin-bottom: 0; }
-#ch-purpose > .cols:last-child p { margin-bottom: 0; }
+#ch-purpose .lede {
+  font-size: 11pt;
+}
+#ch-purpose > .cols:last-child {
+  margin-bottom: 0;
+}
+#ch-purpose > .cols:last-child p {
+  margin-bottom: 0;
+}

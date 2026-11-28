@@ -29,7 +29,7 @@ function mountSettings(initialEntry = '/settings', setEnabled = vi.fn()) {
       system: {
         info: vi
           .fn()
-          .mockResolvedValue({ dataRoot: '/data/sentry', versions: { runtime: '2.0.4' } }),
+          .mockResolvedValue({ dataRoot: '/data/sentry', versions: { runtime: '2.0.5' } }),
       },
       cli: {
         status: vi.fn().mockResolvedValue({

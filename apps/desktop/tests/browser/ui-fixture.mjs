@@ -88,7 +88,7 @@ export function installUiFixture() {
   };
   const hello = {
     protocolVersion: 1,
-    runtimeVersion: '2.0.4',
+    runtimeVersion: '2.0.5',
     platform: 'linux',
     isWsl: true,
     nodeVersion: 'v22.16.0',
@@ -136,7 +136,7 @@ export function installUiFixture() {
         window.__ui.empty
           ? []
           : [{ runId: run.id, projectId: run.projectId, status: run.status, mode: run.mode }],
-      info: async () => ({ dataRoot: '/fixture/sentry', versions: { sentry: '2.0.4' } }),
+      info: async () => ({ dataRoot: '/fixture/sentry', versions: { sentry: '2.0.5' } }),
     },
     doctors: {
       environment: async () => ({

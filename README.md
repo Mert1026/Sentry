@@ -5,7 +5,7 @@ investigate the same immutable snapshot of your project on their own and report
 findings, evidence, token usage and a persistent run history. Findings are never
 merged or ranked across agents, so you can compare what each one found.
 
-**Stable release:** [Sentry v2.0.4 — Windows](https://github.com/Mert1026/Sentry/releases/tag/v2.0.4)
+**Stable release:** [Sentry v2.0.5 — Windows](https://github.com/Mert1026/Sentry/releases/tag/v2.0.5)
 for **Windows 11 x64 with WSL2** (Ubuntu preferred). The ZIP is unsigned and uses an
 online Linux runtime bootstrap. Native Linux Desktop is deferred.
 Version 2.0 removes the 1.x merge, verification and issue features and keeps your
@@ -52,12 +52,17 @@ What changed: [What's new](#whats-new).
 - Provider accounts for the agents you want to use. Third-party accounts and
   provider charges may apply.
 
-There is no automatic updater and no signed installer. To move to a newer release, download its ZIP and
-`.sha256` file and run `sentry update <archive.zip>`.
+There is no automatic updater, and the setup wizard and ZIP are unsigned. To move to a newer release, download
+its ZIP and `.sha256` file and run `sentry update <archive.zip>`.
 
 ## Install and start
 
-Use the PowerShell download/install block on the stable Release page to obtain the
+**Easiest on a new computer:** download `SentrySetup-<version>-<id>-windows-x64.exe` from the Release page and
+click through it. It installs WSL2, Ubuntu, the Linux tools, the Sentry runtime and the agents' tools, in English
+or Bulgarian, continues by itself after a restart, and comes with a full uninstaller. We recommend preparing WSL
+and Ubuntu by hand first; see chapter 2 of the [Bulgarian user guide](docs/guide/Sentry-ръководство.pdf).
+
+**Or install the ZIP by hand.** Use the PowerShell download/install block on the stable Release page to obtain the
 Windows ZIP and its SHA256 sidecar from any working directory.
 [Verify the checksum and extract into a new directory](docs/setup/distribution.md),
 then run from the extracted archive:
@@ -77,14 +82,14 @@ it, run `.\sentry.ps1 register-command` there.
 More detail: [getting started](docs/getting-started.md) and the
 [installation and maintenance guide](docs/setup/distribution.md).
 
-## Updating from 2.0.3
+## Updating from 2.0.4
 
 There is no automatic updater. Finish or cancel active runs, then download the release ZIP and its `.sha256` file
-from the [v2.0.4 Release page](https://github.com/Mert1026/Sentry/releases/tag/v2.0.4) into one folder and run
+from the [v2.0.5 Release page](https://github.com/Mert1026/Sentry/releases/tag/v2.0.5) into one folder and run
 `sentry update <path-to-the-zip>`: it verifies the ZIP, backs up your data and sets up the new version. Your
 projects, runs, history and provider settings are kept (no database migration). Afterwards check `sentry version`
-shows 2.0.4. Updating from 2.0.2 or earlier: use the Release page's **Update an existing installation** block.
-Full steps: [release notes](docs/releases/v2.0.4.md#updating-from-v203).
+shows 2.0.5. Updating from 2.0.1 or earlier: use the Release page's **Update an existing installation** block.
+Full steps: [release notes](docs/releases/v2.0.5.md#updating-from-v204).
 
 ## Configuration
 
@@ -218,6 +223,14 @@ Read the [threat model](docs/security/V1_THREAT_MODEL.md), the
 The original beta executable is not an approved credential downgrade target.
 
 ## What's new
+
+### 2.0.5
+
+- **Setup wizard (`SentrySetup.exe`):** a click-through installer in English or Bulgarian that installs everything,
+  including WSL2 and Ubuntu, continues after a restart, and has a full uninstaller that never removes an Ubuntu or
+  WSL you installed yourself.
+- **Show more** opens the agent's whole current step in a dialog, with a Copy button.
+- A **Bulgarian user guide** with annotated screenshots: [docs/guide](docs/guide/Sentry-ръководство.pdf).
 
 ### 2.0.4
 

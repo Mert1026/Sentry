@@ -1,6 +1,6 @@
 # Getting started with Windows Stable
 
-1. Run the PowerShell download/install commands on the [v2.0.4 Release](https://github.com/Mert1026/Sentry/releases/tag/v2.0.4). They use absolute paths and verify the downloaded ZIP against its SHA256 sidecar.
+1. On a new computer, run `SentrySetup.exe` from the [v2.0.5 Release](https://github.com/Mert1026/Sentry/releases/tag/v2.0.5); it installs everything, including WSL2 and Ubuntu. Or run the PowerShell download/install commands on that Release page. They use absolute paths and verify the downloaded ZIP against its SHA256 sidecar.
 2. Follow the [installation guide](setup/distribution.md): verify the checksum,
    extract into a new version/source directory, install WSL prerequisites, and run
    setup/tools/open from that directory. Windows11 x64 + WSL2 is required; Ubuntu

@@ -1,7 +1,11 @@
 # Beta compatibility
 
-What changes for an existing 1.0.2 install when it moves to 2.0.x, and what 2.0.4 changes for a 2.0.3
-install. The product version is `2.0.4`; the runtime protocol stays 1.
+What changes for an existing 1.0.2 install when it moves to 2.0.x, and what 2.0.5 changes for a 2.0.4
+install. The product version is `2.0.5`; the runtime protocol stays 1.
+
+**2.0.4 to 2.0.5:** no database migration, no schema change, no change to credentials or provider pins. The new
+setup wizard installs the same archive layout as the ZIP, so an install made with either can be updated with
+`sentry update`. Going back to 2.0.4 needs no backup.
 
 **2.0.3 to 2.0.4:** no database migration, no change to credentials or provider pins. The schemas change only
 by optional additions: an optional per-agent `stopIdle` on `runtime.configure`, and five optional provider-store

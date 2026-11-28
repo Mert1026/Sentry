@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+## [2.0.5] - 2026-11-28
+
+Update from 2.0.4. A click-through setup wizard with a full uninstaller, the agent's whole live line in a dialog,
+and a Bulgarian user guide. No database migration and no schema change; the runtime protocol stays 1. See the
+[release notes](docs/releases/v2.0.5.md).
+
+- **Setup wizard (`SentrySetup.exe`):** language choice (English or Bulgarian), per-user install, six steps with
+  plain status lines (check, WSL2, Ubuntu and the Linux user, Linux tools, Sentry runtime, agents' tools), resume
+  after a WSL restart, skipping of steps already done, Sentry-logo shortcuts, and a log at
+  `%LOCALAPPDATA%\Sentry\logs\setup-wizard.log`. Built and attested by the distribution workflow next to the ZIP.
+- **Uninstaller:** always removes the program, shortcuts and the `sentry` command; asks, each defaulting to No,
+  whether to delete Sentry's data, the Ubuntu the wizard installed, and the WSL the wizard installed.
+- **Show more** opens the agent's whole current step in a dialog that keeps the clicked step and has a Copy button.
+- **Bulgarian user guide** (`docs/guide`, PDF with annotated screenshots); not part of the installed app.
+
 ## [2.0.4] - 2026-11-26
 
 Update from 2.0.3. Sharper planning and investigation, a per-agent switch that ends the extra rounds once they stop
